@@ -1,6 +1,6 @@
 # EventCapture (BeerReal splash)
 
-Expo Router app showing the BeerReal splash screen (orange gradient, card, beer/camera icon, welcome CTA).
+Expo Router app showing the BeerReal/BearReal mobile UI: splash, auth, feeds, events, camera, crowns, profile, settings, filters, and supporting modals.
 
 ## Get started
 1) Install dependencies
@@ -14,9 +14,10 @@ npm start
 Pick iOS/Android/Web in Expo CLI.
 
 ## Notes
-- Splash screen lives in `app/index.tsx`; router stack hides headers via `app/_layout.tsx`.
-- Button `onPress` is a placeholder; wire it to your navigator or next screen.
-- Colors: primary `#f68c1f`, dark accent `#ec7c0e` (also set in `app.json` splash background).
+- Splash: `app/index.tsx` → routes to `app/auth/login.tsx`.
+- Main tabs: `app/(tabs)` (home feed, events, camera, crowns, profile).
+- Extra screens: filters (`app/filters`), menu (`app/menu`), likes/comments, notifications, FAQ/help, contact, terms, event create/detail, profile create/edit, password reset, onboarding, camera review success/fail.
+- Colors: primary `#f68c1f`, dark accent `#ec7c0e`.
 
 ## Useful scripts
 - `npm start` – start Expo dev server

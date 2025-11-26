@@ -1,31 +1,27 @@
 import React from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 const ORANGE = '#f68c1f';
 const ORANGE_DARK = '#ec7c0e';
 
 export default function SplashScreen() {
+  const router = useRouter();
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
       <LinearGradient colors={[ORANGE, ORANGE_DARK]} style={styles.background}>
         <View style={styles.card}>
           <View style={styles.logoOuter}>
-            <View style={styles.crownWrap}>
-              <MaterialCommunityIcons name="crown-outline" size={28} color={ORANGE_DARK} />
-            </View>
-            <View style={styles.iconStack}>
-              <MaterialCommunityIcons name="beer" size={72} color="#ffffff" />
-              <MaterialCommunityIcons
-                name="camera-iris"
-                size={26}
-                color={ORANGE_DARK}
-                style={styles.cameraIcon}
-              />
-            </View>
+            <Image
+              source={require('@/assets/images/splash-icon.png')}
+              style={styles.logo}
+              contentFit="contain"
+              transition={200}
+            />
           </View>
 
           <Text style={styles.title}>
@@ -33,7 +29,10 @@ export default function SplashScreen() {
             <Text style={styles.titleMain}>Real</Text>
           </Text>
 
-          <TouchableOpacity style={styles.button} activeOpacity={0.9} onPress={() => {}}>
+          <TouchableOpacity
+            style={styles.button}
+            activeOpacity={0.9}
+            onPress={() => router.push('/auth/login')}>
             <Text style={styles.buttonText}>WELCOME</Text>
           </TouchableOpacity>
         </View>
@@ -48,40 +47,41 @@ const styles = StyleSheet.create({
   card: {
     width: '78%',
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    paddingVertical: 36,
+    borderRadius: 18,
+    paddingVertical: 42,
+    paddingHorizontal: 24,
     alignItems: 'center',
     shadowColor: '#000000',
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
     elevation: 12,
+    gap: 18,
   },
   logoOuter: {
-    backgroundColor: ORANGE,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 140,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
     shadowColor: '#000000',
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.18,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
-  crownWrap: { position: 'absolute', top: -16, left: '50%', marginLeft: -14 },
-  iconStack: { alignItems: 'center', justifyContent: 'center' },
-  cameraIcon: { position: 'absolute', bottom: 12, right: 12 },
-  title: { marginTop: 24, marginBottom: 20, fontSize: 32, fontWeight: '600', color: '#222' },
-  titleAccent: { color: ORANGE_DARK, fontWeight: '700' },
-  titleMain: { color: '#222222', fontWeight: '700' },
+  logo: {
+    width: 180,
+    height: 180,
+    borderRadius: 16,
+  },
+  title: { fontSize: 34, fontWeight: '700', color: '#222', letterSpacing: 0.5 },
+  titleAccent: { color: ORANGE_DARK, fontWeight: '800' },
+  titleMain: { color: '#222222', fontWeight: '800' },
   button: {
+    marginTop: 6,
     backgroundColor: ORANGE,
-    paddingVertical: 12,
-    paddingHorizontal: 36,
-    borderRadius: 8,
+    paddingVertical: 13,
+    paddingHorizontal: 46,
+    borderRadius: 10,
     shadowColor: '#000000',
     shadowOpacity: 0.16,
     shadowRadius: 10,
