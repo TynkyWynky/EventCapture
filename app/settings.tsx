@@ -3,8 +3,6 @@ import { SafeAreaView, ScrollView, View, Text, StyleSheet, Switch, TouchableOpac
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
-
 export default function SettingsScreen() {
   const router = useRouter();
   const [push, setPush] = useState(true);

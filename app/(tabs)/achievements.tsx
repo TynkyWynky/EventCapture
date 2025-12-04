@@ -1,7 +1,6 @@
 import React from 'react';
 import { SafeAreaView, ScrollView, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 
 import { Colors } from '@/constants/theme';
 

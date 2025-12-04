@@ -1,11 +1,8 @@
 import React from 'react';
 import { SafeAreaView, ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-
 import { Colors } from '@/constants/theme';
 
 export default function ContactScreen() {
-  const router = useRouter();
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>

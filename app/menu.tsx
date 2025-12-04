@@ -3,8 +3,6 @@ import { SafeAreaView, ScrollView, View, Text, StyleSheet, TouchableOpacity, Pre
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
-
 const menuItems = [
   { label: 'My Profile', icon: 'person-outline', route: '/profile' },
   { label: 'Edit Profile', icon: 'create-outline', route: '/profile/edit' },
@@ -19,28 +17,30 @@ export default function MenuScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <Pressable style={styles.backdrop} onPress={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Menu</Text>
-        <View style={styles.langRow}>
-          {['EN', 'NL', 'FR'].map(code => (
-            <View key={code} style={[styles.lang, code === 'NL' && { backgroundColor: '#ffd60a' }]}>
-              <Text style={{ color: '#111', fontWeight: '800' }}>{code}</Text>
-            </View>
+      <View style={styles.sheet}>
+        <ScrollView contentContainerStyle={styles.container}>
+          <Text style={styles.title}>Menu</Text>
+          <View style={styles.langRow}>
+            {['EN', 'NL', 'FR'].map(code => (
+              <View key={code} style={[styles.lang, code === 'NL' && { backgroundColor: '#ffd60a' }]}>
+                <Text style={{ color: '#111', fontWeight: '800' }}>{code}</Text>
+              </View>
+            ))}
+          </View>
+
+          {menuItems.map(item => (
+            <TouchableOpacity key={item.label} style={styles.menuItem}>
+              <Ionicons name={item.icon as any} size={20} color="#333" />
+              <Text style={styles.menuLabel}>{item.label}</Text>
+            </TouchableOpacity>
           ))}
-        </View>
 
-        {menuItems.map(item => (
-          <TouchableOpacity key={item.label} style={styles.menuItem}>
-            <Ionicons name={item.icon as any} size={20} color="#333" />
-            <Text style={styles.menuLabel}>{item.label}</Text>
+          <TouchableOpacity style={styles.signOut}>
+            <Ionicons name="log-out-outline" size={20} color="#d9534f" />
+            <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
-        ))}
-
-        <TouchableOpacity style={styles.signOut}>
-          <Ionicons name="log-out-outline" size={20} color="#d9534f" />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -55,16 +55,19 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
   },
-  container: {
+  sheet: {
     width: '75%',
-    padding: 16,
-    gap: 12,
+    height: '100%',
     backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOpacity: 0.16,
     shadowRadius: 12,
     shadowOffset: { width: -4, height: 0 },
     elevation: 12,
+  },
+  container: {
+    padding: 16,
+    gap: 12,
   },
   title: { textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#111' },
   langRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 4 },

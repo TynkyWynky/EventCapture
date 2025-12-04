@@ -2,8 +2,6 @@ import React from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { Colors } from '@/constants/theme';
-
 const genres = ['Jazz', 'Country', 'Metal'];
 
 export default function FiltersScreen() {

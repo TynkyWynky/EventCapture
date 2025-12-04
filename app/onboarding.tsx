@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { Colors } from '@/constants/theme';
+import { LogoMark } from '@/components/logo-mark';
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.card}>
         <View style={styles.logoWrap}>
-          <Ionicons name="beer-outline" size={32} color="#111" />
+          <LogoMark size={48} />
         </View>
         <Text style={styles.body}>
           Explanation on BierReal fffffffffffffffffffffff gggggggggggggggggggggggg gggggggggggggggggg
