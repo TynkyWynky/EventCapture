@@ -1,8 +1,9 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Image } from 'expo-image';
+import { usePosts } from '@/context/PostContext';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
@@ -10,6 +11,8 @@ const avatar = 'https://i.pravatar.cc/120?img=64';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { posts, crowns } = usePosts();
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -29,8 +32,8 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.statsRow}>
             {[
-              { label: 'Posts', value: '5' },
-              { label: 'Crowns', value: '3' },
+              { label: 'Posts', value: posts.length.toString() },
+              { label: 'Crowns', value: crowns.toString() },
               { label: 'Events', value: '3' },
             ].map(stat => (
               <View key={stat.label} style={styles.stat}>
@@ -49,15 +52,15 @@ export default function ProfileScreen() {
         <View style={styles.crownsCard}>
           <View style={styles.crownHeader}>
             <Text style={styles.crownsTitle}>Your Crowns</Text>
-            <Text style={styles.crownsMeta}>3/9</Text>
+            <Text style={styles.crownsMeta}>{crowns}/9</Text>
           </View>
           <View style={styles.crownGrid}>
             {Array.from({ length: 9 }).map((_, i) => (
-              <View key={i} style={[styles.crownBadge, i < 3 ? styles.crownEarned : null]}>
+              <View key={i} style={[styles.crownBadge, i < crowns ? styles.crownEarned : null]}>
                 <Ionicons
-                  name={i < 3 ? 'medal' : 'medal-outline'}
+                  name={i < crowns ? 'medal' : 'medal-outline'}
                   size={24}
-                  color={i < 3 ? Colors.light.tint : '#999'}
+                  color={i < crowns ? Colors.light.tint : '#999'}
                 />
               </View>
             ))}

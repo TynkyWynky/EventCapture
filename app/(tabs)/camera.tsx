@@ -1,28 +1,88 @@
-import React from 'react';
-import { SafeAreaView, View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { analyzeBeer } from '@/services/beerDetection';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
-const samplePhoto =
-  'https://images.unsplash.com/photo-1527169402691-feff5539e52c?auto=format&fit=crop&w=900&q=80';
-
 export default function CameraScreen() {
   const router = useRouter();
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  if (!permission) {
+    // Camera permissions are still loading.
+    return <View />;
+  }
+
+  if (!permission.granted) {
+    // Camera permissions are not granted yet.
+    return (
+      <View style={styles.container}>
+        <Text style={{ textAlign: 'center', marginBottom: 20 }}>We need your permission to show the camera</Text>
+        <TouchableOpacity onPress={requestPermission} style={styles.permissionBtn}>
+          <Text style={styles.permissionBtnText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const takePicture = async () => {
+    if (cameraRef.current && !isProcessing) {
+      setIsProcessing(true);
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.8,
+          base64: false,
+          exif: false,
+        });
+
+        if (photo?.uri) {
+          // Analyze the beer
+          const isBeerFinished = await analyzeBeer(photo.uri);
+
+          if (isBeerFinished) {
+            router.push({
+              pathname: '/camera/review-success',
+              params: { photoUri: photo.uri },
+            });
+          } else {
+            router.push({
+              pathname: '/camera/review-fail',
+              params: { photoUri: photo.uri },
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to take picture:', error);
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.photoFrame}>
-          <Image source={{ uri: samplePhoto }} style={styles.photo} contentFit="cover" />
+          <CameraView style={styles.camera} facing="back" ref={cameraRef} />
+          {isProcessing && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={Colors.light.tint} />
+              <Text style={styles.loadingText}>Analyzing Beer...</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.controlBar}>
           <Ionicons name="image-outline" size={22} color="#555" />
           <TouchableOpacity
-            style={styles.shutter}
-            onPress={() => router.push('/camera/review-success')}>
+            style={[styles.shutter, isProcessing && { opacity: 0.5 }]}
+            onPress={takePicture}
+            disabled={isProcessing}>
             <View style={styles.shutterInner} />
           </TouchableOpacity>
           <Ionicons name="refresh-outline" size={22} color="#555" />
@@ -53,8 +113,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
     marginBottom: 14,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  photo: { flex: 1, borderRadius: 14 },
+  camera: { flex: 1, borderRadius: 14 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontWeight: '700',
+    color: Colors.light.tint,
+  },
   controlBar: {
     width: '90%',
     backgroundColor: '#fff',
@@ -84,5 +158,14 @@ const styles = StyleSheet.create({
     height: 34,
     backgroundColor: Colors.light.tint,
     borderRadius: 17,
+  },
+  permissionBtn: {
+    backgroundColor: Colors.light.tint,
+    padding: 15,
+    borderRadius: 10,
+  },
+  permissionBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });

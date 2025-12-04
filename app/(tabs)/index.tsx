@@ -1,8 +1,10 @@
-import React from 'react';
-import { SafeAreaView, View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { Image } from 'expo-image';
+import { usePosts } from '@/context/PostContext';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
@@ -31,11 +33,16 @@ const sampleEvents = [
 
 export default function HomeFeed() {
   const router = useRouter();
+  const { posts } = usePosts();
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.topBar}>
+        <LinearGradient
+          colors={[Colors.light.tint, '#ec7c0e']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.topBar, { padding: 16, marginHorizontal: -16, marginTop: -16, paddingTop: 60 }]}>
           <Image source={{ uri: avatar }} style={styles.avatar} />
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color="#666" />
@@ -47,11 +54,11 @@ export default function HomeFeed() {
           <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/menu')}>
             <Ionicons name="menu" size={24} color="#111" />
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
 
         <View style={styles.tabRow}>
           {['Feeds', 'Events', 'My Posts'].map((label, i) => {
-            const active = i === 1;
+            const active = i === 0; // Default to Feeds for now
             return (
               <TouchableOpacity key={label} style={[styles.pill, active && styles.pillActive]}>
                 <Text style={[styles.pillText, active && styles.pillTextActive]}>{label}</Text>
@@ -59,6 +66,27 @@ export default function HomeFeed() {
             );
           })}
         </View>
+
+        {/* User Posts Section */}
+        {posts.length > 0 && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={[styles.sectionTitle, { marginBottom: 10 }]}>Recent Posts</Text>
+            {posts.map((post) => (
+              <View key={post.id} style={styles.card}>
+                <Image source={{ uri: post.imageUri }} style={styles.cardImage} contentFit="cover" />
+                <View style={styles.cardBody}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={styles.cardTitle}>{post.eventTitle}</Text>
+                    {post.isBeerFinished && (
+                      <Ionicons name="ribbon" size={24} color="#d4af37" />
+                    )}
+                  </View>
+                  <Text style={styles.infoText}>{post.date}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <View>

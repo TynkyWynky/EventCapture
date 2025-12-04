@@ -1,14 +1,27 @@
-import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Image } from 'expo-image';
+import { usePosts } from '@/context/PostContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-
-const samplePhoto =
-  'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=800&q=80';
+import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React from 'react';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ReviewSuccessScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const photoUri = params.photoUri as string;
+  const { addPost } = usePosts();
+
+  const handlePost = () => {
+    if (photoUri) {
+      addPost({
+        imageUri: photoUri,
+        isBeerFinished: true,
+        eventTitle: 'Unknown Event', // In a real app, user would select this
+      });
+      router.push('/(tabs)');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -16,7 +29,7 @@ export default function ReviewSuccessScreen() {
           Perfect, you are eligible to win the crown. Please share to win the crown.
         </Text>
         <Ionicons name="ribbon" size={32} color="#d4af37" style={{ marginBottom: 6 }} />
-        <Image source={{ uri: samplePhoto }} style={styles.photo} contentFit="cover" />
+        <Image source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
 
         <View style={styles.selectRow}>
           <TouchableOpacity style={styles.select}>
@@ -26,10 +39,10 @@ export default function ReviewSuccessScreen() {
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={[styles.btn, styles.post]}>
+          <TouchableOpacity style={[styles.btn, styles.post]} onPress={handlePost}>
             <Text style={styles.btnText}>Post</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.retake]} onPress={() => router.push('/(tabs)/camera')}>
+          <TouchableOpacity style={[styles.btn, styles.retake]} onPress={() => router.back()}>
             <Text style={[styles.btnText, { color: '#111' }]}>Retake</Text>
           </TouchableOpacity>
         </View>
