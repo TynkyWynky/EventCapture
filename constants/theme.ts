@@ -1,56 +1,53 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
-const primary = '#f68c1f';
-const primaryDark = '#ec7c0e';
-const accent = '#6c63ff';
+const primary = '#f47b20';
+const primaryDark = '#cb5e12';
+const accent = '#0f766e';
 const success = '#2fbf71';
-const danger = '#ff4d4f';
+const danger = '#e45b5b';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#ffffff',
+    text: '#191512',
+    background: '#f6efe7',
     tint: primary,
+    tintDark: primaryDark,
     accent,
     success,
     danger,
-    muted: '#8c8c8c',
-    card: '#ffffff',
-    surface: '#f7f7f7',
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    muted: '#81776f',
+    card: '#fffaf5',
+    surface: '#efe3d5',
+    border: '#ead7c2',
+    panel: '#231b17',
+    icon: '#81776f',
+    tabIconDefault: '#81776f',
     tabIconSelected: primary,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: '#f7f1eb',
+    background: '#18110e',
     tint: primary,
+    tintDark: primaryDark,
     accent,
     success,
     danger,
-    muted: '#9BA1A6',
-    card: '#1f1f1f',
-    surface: '#1b1b1b',
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    muted: '#b8ada5',
+    card: '#261d19',
+    surface: '#342822',
+    border: '#44352d',
+    panel: '#f6ebe0',
+    icon: '#b8ada5',
+    tabIconDefault: '#b8ada5',
     tabIconSelected: primary,
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
@@ -60,9 +57,9 @@ export const Fonts = Platform.select({
     mono: 'monospace',
   },
   web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    sans: "'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif",
     serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
+    rounded: "'Trebuchet MS', 'Avenir Next', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
 });

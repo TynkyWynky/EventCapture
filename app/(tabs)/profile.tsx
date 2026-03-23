@@ -15,64 +15,72 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>
             <Image source={{ uri: avatar }} style={styles.avatar} />
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>Username</Text>
-              <Text style={styles.sub}>Full Name</Text>
+              <Text style={styles.sub}>Full name · Brussels</Text>
             </View>
-            <TouchableOpacity style={styles.bell} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={20} color="#111" />
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/notifications')}>
+              <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.bell} onPress={() => router.push('/menu')}>
-              <Ionicons name="menu" size={22} color="#111" />
+            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/menu')}>
+              <Ionicons name="menu" size={22} color="#1f1a17" />
             </TouchableOpacity>
           </View>
+
+          <Text style={styles.bio}>Capturing nights, collecting crowns and keeping the best event memories close.</Text>
+
           <View style={styles.statsRow}>
             {[
               { label: 'Posts', value: posts.length.toString() },
               { label: 'Crowns', value: crowns.toString() },
               { label: 'Events', value: '3' },
-            ].map(stat => (
+            ].map((stat) => (
               <View key={stat.label} style={styles.stat}>
                 <Text style={styles.statValue}>{stat.value}</Text>
                 <Text style={styles.statLabel}>{stat.label}</Text>
               </View>
             ))}
           </View>
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => router.push('/profile/edit')}>
-            <Text style={styles.editText}>Edit Profile</Text>
+
+          <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/profile/edit')}>
+            <Text style={styles.editText}>Edit profile</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.crownsCard}>
-          <View style={styles.crownHeader}>
-            <Text style={styles.crownsTitle}>Your Crowns</Text>
-            <Text style={styles.crownsMeta}>{crowns}/9</Text>
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Reward progress</Text>
+            <Text style={styles.sectionMeta}>{crowns}/9</Text>
           </View>
+
+          <View style={styles.progressOuter}>
+            <View style={[styles.progressFill, { width: `${Math.min((crowns / 9) * 100, 100)}%` }]} />
+          </View>
+
           <View style={styles.crownGrid}>
             {Array.from({ length: 9 }).map((_, i) => (
-              <View key={i} style={[styles.crownBadge, i < crowns ? styles.crownEarned : null]}>
+              <View key={i} style={[styles.crownBadge, i < crowns && styles.crownEarned]}>
                 <Ionicons
                   name={i < crowns ? 'medal' : 'medal-outline'}
-                  size={24}
-                  color={i < crowns ? Colors.light.tint : '#999'}
+                  size={22}
+                  color={i < crowns ? Colors.light.tint : '#9d938b'}
                 />
               </View>
             ))}
           </View>
-          <TouchableOpacity style={styles.viewAll} onPress={() => router.push('/achievements')}>
-            <Text style={styles.viewAllText}>View All Achievements</Text>
+
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push('/achievements')}>
+            <Text style={styles.secondaryBtnText}>See all rewards</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ paddingHorizontal: 4, marginTop: 16 }}>
-          <Text style={styles.aboutLabel}>About me</Text>
-          <Text style={styles.aboutText}>Tap to add a short bio about yourself.</Text>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>About</Text>
+          <Text style={styles.aboutText}>Tap to add a short bio about yourself, your favourite event types and what kind of nights you never miss.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -80,85 +88,63 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f7f7f7' },
-  container: { padding: 16, paddingBottom: 120 },
+  safe: { flex: 1, backgroundColor: Colors.light.background },
+  container: { padding: 16, paddingBottom: 152, gap: 18 },
   headerCard: {
-    backgroundColor: Colors.light.tint,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#231b17',
+    borderRadius: 26,
+    padding: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: '#fff' },
-  name: { color: '#fff', fontWeight: '800', fontSize: 18 },
-  sub: { color: '#ffe1c4' },
-  bell: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff',
+  avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: 'rgba(255,255,255,0.14)' },
+  name: { color: '#fff7ef', fontWeight: '800', fontSize: 22 },
+  sub: { color: '#decfc2', marginTop: 2 },
+  bio: { color: '#decfc2', lineHeight: 21, marginTop: 14 },
+  actionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#fffaf5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statsRow: { flexDirection: 'row', marginTop: 14, gap: 12 },
-  stat: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  statValue: { fontWeight: '800', fontSize: 16, color: Colors.light.tint },
-  statLabel: { color: '#777', fontSize: 12 },
-  editBtn: {
-    marginTop: 14,
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  editText: { color: Colors.light.tint, fontWeight: '700' },
-  crownsCard: {
-    marginTop: 18,
-    backgroundColor: '#fff6df',
-    borderRadius: 16,
-    padding: 16,
+  statsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  stat: { flex: 1, backgroundColor: '#fffaf5', borderRadius: 16, paddingVertical: 12, alignItems: 'center' },
+  statValue: { color: Colors.light.tint, fontWeight: '800', fontSize: 18 },
+  statLabel: { color: '#7f756d', fontSize: 12, marginTop: 4 },
+  editBtn: { marginTop: 14, backgroundColor: Colors.light.tint, borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
+  editText: { color: '#fff', fontWeight: '800' },
+  sectionCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 24,
+    padding: 18,
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowRadius: 12,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  crownHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  crownsTitle: { fontWeight: '800', fontSize: 16, color: '#b5690d' },
-  crownsMeta: { fontWeight: '700', color: '#b5690d' },
-  crownGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 12,
-  },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
+  sectionMeta: { color: '#8a7f77', fontWeight: '700' },
+  progressOuter: { height: 10, backgroundColor: '#efe3d5', borderRadius: 999, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: Colors.light.tint, borderRadius: 999 },
+  crownGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
   crownBadge: {
     width: '30%',
     aspectRatio: 1,
-    borderRadius: 12,
-    backgroundColor: '#f0e6d4',
+    borderRadius: 14,
+    backgroundColor: '#f4ece3',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  crownEarned: { backgroundColor: '#ffe1c4' },
-  viewAll: {
-    marginTop: 12,
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  viewAllText: { fontWeight: '700', color: '#b5690d' },
-  aboutLabel: { fontWeight: '700', color: '#222', marginBottom: 4 },
-  aboutText: { color: '#666', fontSize: 13.5 },
+  crownEarned: { backgroundColor: '#fff0de' },
+  secondaryBtn: { marginTop: 14, borderRadius: 16, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#ead7c2' },
+  secondaryBtnText: { color: '#1f1a17', fontWeight: '700' },
+  aboutText: { color: '#81776f', lineHeight: 22, marginTop: 10 },
 });

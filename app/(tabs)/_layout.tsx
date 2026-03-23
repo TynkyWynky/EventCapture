@@ -1,57 +1,177 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const colorScheme = useColorScheme();
+  const palette = Colors[colorScheme ?? 'light'];
+
+  return (
+    <View pointerEvents="box-none" style={styles.wrapper}>
+      <View style={[styles.bar, { backgroundColor: '#ffffff', borderColor: palette.border }]}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const label =
+            typeof options.tabBarLabel === 'string'
+              ? options.tabBarLabel
+              : typeof options.title === 'string'
+                ? options.title
+                : route.name;
+
+          const isFocused = state.index === index;
+          const isCapture = route.name === 'camera';
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name, route.params);
+            }
+          };
+
+          const iconColor = isCapture ? '#fff' : isFocused ? '#1f1a17' : palette.muted;
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              testID={options.tabBarButtonTestID}
+              activeOpacity={0.92}
+              onPress={onPress}
+              style={[styles.item, isFocused && !isCapture && styles.itemFocused, isCapture && styles.captureItem]}>
+              <View style={[styles.iconWrap, isFocused && !isCapture && styles.iconWrapFocused, isCapture && styles.captureWrap]}>
+                {options.tabBarIcon?.({
+                  focused: isFocused,
+                  color: iconColor,
+                  size: isCapture ? 26 : 24,
+                })}
+              </View>
+              {!isCapture && isFocused ? <Text style={styles.label}>{String(label)}</Text> : null}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const tint = Colors[colorScheme ?? 'light'].tint;
+  const palette = Colors[colorScheme ?? 'light'];
 
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: tint,
-        tabBarInactiveTintColor: Colors[colorScheme ?? 'light'].muted,
+        sceneStyle: { backgroundColor: palette.background },
         headerShown: false,
-        tabBarStyle: { paddingTop: 6, paddingBottom: 10, height: 68 },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />,
+          title: 'Feed',
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="events"
         options={{
           title: 'Events',
-          tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="camera"
         options={{
-          title: 'Camera',
-          tabBarIcon: ({ color }) => <Ionicons name="camera-outline" size={26} color={color} />,
+          title: 'Capture',
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'camera' : 'camera-outline'} size={26} color={color} />,
         }}
       />
       <Tabs.Screen
         name="achievements"
         options={{
-          title: 'Crowns',
-          tabBarIcon: ({ color }) => <Ionicons name="medal-outline" size={24} color={color} />,
+          title: 'Rewards',
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'medal' : 'medal-outline'} size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person-circle-outline" size={26} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={26} color={color} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  wrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 14,
+    alignItems: 'center',
+  },
+  bar: {
+    width: '88%',
+    minHeight: 84,
+    borderRadius: 30,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  item: {
+    flex: 1,
+    minHeight: 58,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    borderRadius: 22,
+    paddingVertical: 6,
+    gap: 3,
+  },
+  itemFocused: { backgroundColor: '#f7f4ef' },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapFocused: { backgroundColor: '#f7f4ef' },
+  captureItem: { marginTop: -18 },
+  captureWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: Colors.light.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  label: { fontSize: 11, fontWeight: '700', color: '#1f1a17' },
+});

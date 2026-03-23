@@ -1,162 +1,124 @@
 import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/theme';
 import { LogoMark } from '@/components/logo-mark';
 
 export default function LoginScreen() {
   const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.card}>
-        <View style={styles.logoWrap}>
-          <LogoMark size={52} />
-        </View>
-        <Text style={styles.title}>
-          <Text style={{ color: Colors.light.tint }}>Bear</Text>
-          <Text>Real</Text>
-        </Text>
-        <Text style={styles.subtitle}>Sign in to continue your beer journey</Text>
-
-        <View style={styles.inputRow}>
-          <Ionicons name="mail-outline" size={18} color="#777" />
-          <TextInput placeholder="abc@email.com" style={styles.input} placeholderTextColor="#777" />
-        </View>
-        <View style={styles.inputRow}>
-          <Ionicons name="lock-closed-outline" size={18} color="#777" />
-          <TextInput
-            placeholder="Your password"
-            style={styles.input}
-            placeholderTextColor="#777"
-            secureTextEntry
-          />
-          <Ionicons name="eye-outline" size={18} color="#777" />
-        </View>
-
-        <View style={styles.inline}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={styles.toggle} />
-            <Text style={styles.inlineText}>Remember Me</Text>
+      <LinearGradient colors={['#1f1612', '#352016', Colors.light.tintDark]} style={styles.background}>
+        <View style={styles.panel}>
+          <View style={styles.logoWrap}>
+            <LogoMark size={56} />
           </View>
-          <TouchableOpacity onPress={() => router.push('/auth/reset')}>
-            <Text style={[styles.inlineText, { color: Colors.light.tint }]}>Forgot password?</Text>
+
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to keep capturing events and moments that matter.</Text>
+
+          <View style={styles.inputRow}>
+            <Ionicons name="mail-outline" size={18} color="#81776f" />
+            <TextInput
+              defaultValue="demo@eventcapture.app"
+              placeholder="Email"
+              placeholderTextColor="#9a9189"
+              style={styles.input}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputRow}>
+            <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
+            <TextInput
+              defaultValue="eventcapture123"
+              placeholder="Password"
+              placeholderTextColor="#9a9189"
+              style={styles.input}
+              secureTextEntry
+            />
+          </View>
+
+          <View style={styles.metaRow}>
+            <Text style={styles.metaText}>Test login available</Text>
+            <TouchableOpacity onPress={() => router.push('/auth/reset')}>
+              <Text style={styles.metaLink}>Forgot password?</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.primary} onPress={() => router.push('/(tabs)')}>
+            <Text style={styles.primaryText}>Sign in</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondary} onPress={() => router.push('/profile/create')}>
+            <Text style={styles.secondaryText}>Create account</Text>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.primary}
-          onPress={() => router.push('/(tabs)')}>
-          <Text style={styles.primaryText}>Sign In</Text>
-        </TouchableOpacity>
-
-        <View style={styles.divider}>
-          <Text style={styles.inlineText}>Don&apos;t have an account?</Text>
-        </View>
-
-        <TouchableOpacity style={styles.secondary}>
-          <Text style={styles.secondaryText}>Create Account</Text>
-        </TouchableOpacity>
-
-        <Text style={[styles.inlineText, { marginTop: 12 }]}>OR</Text>
-        <View style={styles.oauthRow}>
-          <TouchableOpacity style={styles.oauthBtn}>
-            <Ionicons name="logo-google" size={18} color="#111" />
-            <Text style={styles.oauthText}>Login with Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.oauthBtn}>
-            <Ionicons name="logo-facebook" size={18} color="#1877f2" />
-            <Text style={styles.oauthText}>Login with Facebook</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.tint, alignItems: 'center', justifyContent: 'center' },
-  card: {
-    width: '88%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
+  safe: { flex: 1, backgroundColor: '#1f1612' },
+  background: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
+  panel: {
+    backgroundColor: '#fffaf5',
+    borderRadius: 30,
+    paddingHorizontal: 22,
+    paddingVertical: 30,
+    gap: 14,
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 8,
   },
   logoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: Colors.light.tint,
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    alignSelf: 'center',
+    backgroundColor: '#fce7d7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 2,
   },
-  title: { fontSize: 28, fontWeight: '800', color: '#111' },
-  subtitle: { color: '#555', textAlign: 'center', marginBottom: 14 },
+  title: { color: '#1f1a17', fontWeight: '800', fontSize: 30, textAlign: 'center' },
+  subtitle: { color: '#7d726a', textAlign: 'center', lineHeight: 22, marginBottom: 6 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#f6f6f6',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 10,
-    width: '100%',
-  },
-  input: { flex: 1, color: '#111' },
-  inline: {
-    width: '100%',
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  toggle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 15,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#ead7c2',
   },
-  inlineText: { color: '#666', fontWeight: '600' },
+  input: { flex: 1, color: '#1f1a17', fontWeight: '600' },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  metaText: { color: '#8d827a', fontSize: 12.5 },
+  metaLink: { color: Colors.light.tint, fontWeight: '700', fontSize: 12.5 },
   primary: {
-    marginTop: 12,
-    width: '100%',
     backgroundColor: Colors.light.tint,
-    paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 18,
+    paddingVertical: 16,
     alignItems: 'center',
+    marginTop: 4,
   },
-  primaryText: { color: '#fff', fontWeight: '800' },
-  divider: { marginTop: 10 },
+  primaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   secondary: {
-    marginTop: 8,
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    borderRadius: 18,
+    paddingVertical: 14,
     alignItems: 'center',
-  },
-  secondaryText: { fontWeight: '800', color: '#111' },
-  oauthRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  oauthBtn: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
-    paddingVertical: 12,
-    alignItems: 'center',
-    gap: 6,
+    borderColor: '#ead7c2',
   },
-  oauthText: { fontWeight: '700', color: '#111' },
+  secondaryText: { color: '#1f1a17', fontWeight: '700', fontSize: 14 },
 });
