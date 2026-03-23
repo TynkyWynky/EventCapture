@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -13,16 +13,11 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View pointerEvents="box-none" style={styles.wrapper}>
-      <View style={[styles.bar, { backgroundColor: '#ffffff', borderColor: palette.border }]}>
+      <View style={[styles.bar, { borderColor: palette.border }]}>
+        <View style={styles.barGlow} />
+
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label =
-            typeof options.tabBarLabel === 'string'
-              ? options.tabBarLabel
-              : typeof options.title === 'string'
-                ? options.title
-                : route.name;
-
           const isFocused = state.index === index;
           const isCapture = route.name === 'camera';
 
@@ -38,7 +33,11 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             }
           };
 
-          const iconColor = isCapture ? Colors.light.tint : isFocused ? '#1f1a17' : palette.muted;
+          const iconColor = isCapture
+            ? Colors.light.tint
+            : isFocused
+              ? '#1f1a17'
+              : palette.muted;
 
           return (
             <TouchableOpacity
@@ -47,17 +46,21 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel}
               testID={options.tabBarButtonTestID}
-              activeOpacity={0.92}
+              activeOpacity={0.9}
               onPress={onPress}
-              style={[styles.item, isFocused && !isCapture && styles.itemFocused]}>
-              <View style={[styles.iconWrap, isFocused && !isCapture && styles.iconWrapFocused]}>
+              style={[
+                styles.item,
+                isFocused && !isCapture && styles.itemFocused,
+                isCapture && styles.captureItem,
+              ]}>
+              <View style={[styles.inner, isFocused && !isCapture && styles.innerFocused]}>
                 {options.tabBarIcon?.({
                   focused: isFocused,
                   color: iconColor,
-                  size: isCapture ? 26 : 24,
+                  size: isCapture ? 25 : 22,
                 })}
+
               </View>
-              {!isCapture && isFocused ? <Text style={styles.label}>{String(label)}</Text> : null}
             </TouchableOpacity>
           );
         })}
@@ -81,35 +84,45 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="events"
         options={{
-          title: 'Events',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={24} color={color} />,
+          title: 'Explore',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'globe' : 'globe-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="camera"
         options={{
           title: 'Capture',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'camera' : 'camera-outline'} size={26} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'camera' : 'camera-outline'} size={25} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="achievements"
         options={{
           title: 'Rewards',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'medal' : 'medal-outline'} size={24} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'medal' : 'medal-outline'} size={22} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={26} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={24} color={color} />
+          ),
         }}
       />
     </Tabs>
@@ -125,39 +138,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bar: {
-    width: '88%',
-    minHeight: 84,
-    borderRadius: 30,
+    width: '90%',
+    minHeight: 82,
+    borderRadius: 32,
     borderWidth: 1,
+    backgroundColor: '#ffffff',
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingVertical: 10,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
+    overflow: 'hidden',
+  },
+  barGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 14,
+    borderBottomLeftRadius: 999,
+    borderBottomRightRadius: 999,
+    backgroundColor: '#fff7ef',
   },
   item: {
     flex: 1,
-    minHeight: 58,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    borderRadius: 22,
-    paddingVertical: 6,
-    gap: 3,
-  },
-  itemFocused: { backgroundColor: '#f7f4ef' },
-  iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapFocused: { backgroundColor: '#f7f4ef' },
-  label: { fontSize: 11, fontWeight: '700', color: '#1f1a17' },
+  itemFocused: {
+    backgroundColor: '#f0f0f0',
+  },
+  captureItem: {
+    flex: 1.08,
+  },
+  inner: {
+    minHeight: 44,
+    minWidth: 44,
+    borderRadius: 22,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerFocused: {
+    backgroundColor: '#f7f1ea',
+  },
 });
