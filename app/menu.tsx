@@ -29,7 +29,10 @@ export default function MenuScreen() {
           </View>
 
           {menuItems.map(item => (
-            <TouchableOpacity key={item.label} style={styles.menuItem}>
+            <TouchableOpacity
+              key={item.label}
+              style={styles.menuItem}
+              onPress={() => router.push(item.route as any)}>
               <Ionicons name={item.icon as any} size={20} color="#333" />
               <Text style={styles.menuLabel}>{item.label}</Text>
             </TouchableOpacity>
