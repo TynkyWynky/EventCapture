@@ -38,7 +38,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             }
           };
 
-          const iconColor = isCapture ? '#fff' : isFocused ? '#1f1a17' : palette.muted;
+          const iconColor = isCapture ? Colors.light.tint : isFocused ? '#1f1a17' : palette.muted;
 
           return (
             <TouchableOpacity
@@ -49,8 +49,8 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               testID={options.tabBarButtonTestID}
               activeOpacity={0.92}
               onPress={onPress}
-              style={[styles.item, isFocused && !isCapture && styles.itemFocused, isCapture && styles.captureItem]}>
-              <View style={[styles.iconWrap, isFocused && !isCapture && styles.iconWrapFocused, isCapture && styles.captureWrap]}>
+              style={[styles.item, isFocused && !isCapture && styles.itemFocused]}>
+              <View style={[styles.iconWrap, isFocused && !isCapture && styles.iconWrapFocused]}>
                 {options.tabBarIcon?.({
                   focused: isFocused,
                   color: iconColor,
@@ -159,19 +159,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapFocused: { backgroundColor: '#f7f4ef' },
-  captureItem: { marginTop: -18 },
-  captureWrap: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: Colors.light.tint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
   label: { fontSize: 11, fontWeight: '700', color: '#1f1a17' },
 });
