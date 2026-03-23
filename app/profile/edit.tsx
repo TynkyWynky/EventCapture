@@ -1,115 +1,166 @@
 import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { Colors } from '@/constants/theme';
 
 export default function EditProfileScreen() {
+  const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Edit Your Profile</Text>
-        <Text style={styles.subtitle}>Tell us about yourself</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eyebrow}>PROFILE</Text>
+            <Text style={styles.title}>Edit profile</Text>
+          </View>
+        </View>
+
+        <View style={styles.heroCard}>
+          <Text style={styles.heroTitle}>Keep your profile fresh</Text>
+          <Text style={styles.heroText}>Update your public details, bio and account presence in one clean flow.</Text>
+        </View>
 
         <View style={styles.avatarWrap}>
-          <View style={styles.avatar} />
-          <View style={styles.cameraBadge} />
-        </View>
-
-        <View style={styles.inputRow}>
-          <TextInput placeholder="Username" placeholderTextColor="#888" style={styles.input} />
-        </View>
-        <View style={styles.inputRow}>
-          <TextInput placeholder="Full name" placeholderTextColor="#888" style={styles.input} />
-        </View>
-        <View style={[styles.inputRow, { height: 100 }]}>
-          <TextInput
-            placeholder="Tell us about yourself"
-            placeholderTextColor="#888"
-            style={[styles.input, { height: '100%' }]}
-            multiline
-          />
-        </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={[styles.cta, styles.success]}>
-            <Text style={styles.ctaText}>Save Profile</Text>
+          <View style={styles.avatar}>
+            <Ionicons name="person-outline" size={42} color="#9d938b" />
+          </View>
+          <TouchableOpacity style={styles.avatarBadge}>
+            <Ionicons name="camera-outline" size={16} color="#fff" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.cta, styles.secondary]}>
-            <Text style={[styles.ctaText, { color: '#fff' }]}>Change Password</Text>
+        </View>
+
+        <View style={styles.sectionCard}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Username</Text>
+            <TextInput placeholder="Update username" placeholderTextColor="#91867f" style={styles.input} />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Full name</Text>
+            <TextInput placeholder="Update full name" placeholderTextColor="#91867f" style={styles.input} />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>About you</Text>
+            <TextInput
+              placeholder="Update your bio"
+              placeholderTextColor="#91867f"
+              style={[styles.input, styles.textArea]}
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
+
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.primaryBtn}>
+            <Text style={styles.primaryText}>Save profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryBtn}>
+            <Text style={styles.secondaryText}>Change password</Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.deleteBtn}>
-          <Text style={styles.deleteText}>Delete Account</Text>
+          <Text style={styles.deleteText}>Delete account</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.tint, alignItems: 'center', justifyContent: 'center' },
-  card: {
-    width: '88%',
-    backgroundColor: '#fff',
+  safe: { flex: 1, backgroundColor: Colors.light.background },
+  container: { padding: 16, paddingBottom: 152, gap: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconButton: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    padding: 20,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
     alignItems: 'center',
-    gap: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    justifyContent: 'center',
   },
-  title: { fontSize: 24, fontWeight: '800', color: '#111' },
-  subtitle: { color: '#555', marginBottom: 4 },
-  avatarWrap: { alignItems: 'center', justifyContent: 'center' },
+  eyebrow: { color: '#857a72', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  title: { color: '#1f1a17', fontSize: 26, fontWeight: '800' },
+  heroCard: { backgroundColor: '#231b17', borderRadius: 24, padding: 18 },
+  heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800' },
+  heroText: { color: '#d7c7bb', marginTop: 8, lineHeight: 21 },
+  avatarWrap: { alignSelf: 'center', marginVertical: 6 },
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#dcdcdc',
-    borderWidth: 3,
-    borderColor: '#f68c1f',
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#f3e7da',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#fff',
   },
-  cameraBadge: {
+  avatarBadge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#f68c1f',
+    right: 4,
+    bottom: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.light.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: Colors.light.background,
   },
-  inputRow: {
-    width: '100%',
-    backgroundColor: '#f6f6f6',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  sectionCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 24,
+    padding: 18,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  fieldGroup: { gap: 8 },
+  fieldLabel: { color: '#81776f', fontWeight: '700', fontSize: 12.5 },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 15,
     borderWidth: 1,
-    borderColor: '#ededed',
+    borderColor: Colors.light.border,
+    color: '#1f1a17',
   },
-  input: { color: '#111' },
-  buttonRow: { flexDirection: 'row', gap: 10, width: '100%' },
-  cta: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+  textArea: { minHeight: 110 },
+  actionRow: { gap: 12 },
+  primaryBtn: { backgroundColor: Colors.light.tint, borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
+  primaryText: { color: '#fff', fontWeight: '800' },
+  secondaryBtn: {
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 18,
+    paddingVertical: 15,
     alignItems: 'center',
   },
-  success: { backgroundColor: '#26c281' },
-  secondary: { backgroundColor: '#f68c1f' },
-  ctaText: { color: '#fff', fontWeight: '800' },
+  secondaryText: { color: '#1f1a17', fontWeight: '700' },
   deleteBtn: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ff4d4f',
+    borderColor: '#efb6ae',
+    backgroundColor: '#fff1ee',
+    borderRadius: 18,
+    paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 6,
   },
-  deleteText: { color: '#ff4d4f', fontWeight: '800' },
+  deleteText: { color: '#c64d3a', fontWeight: '800' },
 });

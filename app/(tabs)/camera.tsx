@@ -67,6 +67,17 @@ export default function CameraScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
+        <View style={styles.topBar}>
+          <View>
+            <Text style={styles.eyebrow}>CAPTURE</Text>
+            <Text style={styles.title}>Frame the moment</Text>
+          </View>
+
+          <TouchableOpacity style={styles.topButton} onPress={() => router.push('/notifications')}>
+            <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.photoFrame}>
           <CameraView style={styles.camera} facing="back" ref={cameraRef} />
           {isProcessing && (
@@ -97,9 +108,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingTop: 12,
+    paddingBottom: 132,
+  },
+  topBar: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  eyebrow: {
+    color: '#fff0e1',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 1.2,
+  },
+  title: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 24,
+    marginTop: 2,
+  },
+  topButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fffaf5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photoFrame: {
     backgroundColor: '#fff',

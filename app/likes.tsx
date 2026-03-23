@@ -1,25 +1,41 @@
 import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-const users = ['Username', 'Username', 'Username', 'Username'];
+import { Colors } from '@/constants/theme';
+
+const users = ['Emma', 'Lucas', 'Mila', 'Noah'];
 
 export default function LikesScreen() {
+  const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>Likes</Text>
-        <Text style={styles.subtitle}>Username</Text>
-        <TouchableOpacity style={styles.close}>
-          <Ionicons name="close" size={18} color="#d9534f" />
+        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={20} color="#1f1a17" />
         </TouchableOpacity>
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>ENGAGEMENT</Text>
+          <Text style={styles.title}>Likes</Text>
+        </View>
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
-        {users.map((name, idx) => (
-          <View key={idx} style={styles.card}>
-            <View style={styles.avatar} />
-            <Text style={styles.name}>{name}</Text>
-            <Ionicons name="heart" size={18} color="#e74c3c" />
+
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+        {users.map((name) => (
+          <View key={name} style={styles.card}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{name}</Text>
+              <Text style={styles.meta}>Liked your latest capture</Text>
+            </View>
+            <View style={styles.heartBadge}>
+              <Ionicons name="heart" size={16} color="#e45b5b" />
+            </View>
           </View>
         ))}
       </ScrollView>
@@ -28,32 +44,59 @@ export default function LikesScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  safe: { flex: 1, backgroundColor: Colors.light.background },
   header: {
-    paddingTop: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderColor: '#eee',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
-  title: { fontSize: 18, fontWeight: '800', color: '#111' },
-  subtitle: { color: '#666', marginTop: 2 },
-  close: { position: 'absolute', right: 12, top: 12 },
-  list: { padding: 16, gap: 12 },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eyebrow: { color: '#857a72', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  title: { color: '#1f1a17', fontSize: 26, fontWeight: '800' },
+  list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   card: {
-    backgroundColor: '#f6f6f6',
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: Colors.light.card,
+    borderRadius: 22,
+    paddingVertical: 14,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#d0d0d0' },
-  name: { flex: 1, fontWeight: '700', color: '#333' },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#f3e7da',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#1f1a17', fontWeight: '800' },
+  name: { color: '#1f1a17', fontWeight: '800' },
+  meta: { color: '#81776f', fontSize: 12.5, marginTop: 4 },
+  heartBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#fdeeed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

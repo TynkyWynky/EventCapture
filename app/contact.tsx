@@ -1,71 +1,127 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+
 import { Colors } from '@/constants/theme';
 
 export default function ContactScreen() {
+  const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>We’d love to hear from you!</Text>
-          <Text style={styles.cardText}>
-            Your feedback helps us improve BeerReal for everyone.
-          </Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.eyebrow}>SUPPORT</Text>
+            <Text style={styles.title}>Contact</Text>
+          </View>
         </View>
 
-        <Text style={styles.label}>Your message</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Type your feedback..."
-          placeholderTextColor="#999"
-          multiline
-          textAlignVertical="top"
-        />
+        <View style={styles.heroCard}>
+          <Text style={styles.heroTitle}>We'd love to hear from you</Text>
+          <Text style={styles.heroText}>Questions, bug reports or feedback about the experience all belong here.</Text>
+        </View>
 
-        <TouchableOpacity style={styles.submit}>
-          <Text style={styles.submitText}>Submit</Text>
-        </TouchableOpacity>
+        <View style={styles.sectionCard}>
+          <Text style={styles.label}>Your message</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Tell us what happened, what you need, or what we can improve."
+            placeholderTextColor="#91867f"
+            multiline
+            textAlignVertical="top"
+          />
+
+          <TouchableOpacity style={styles.submit}>
+            <Text style={styles.submitText}>Send message</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  container: { padding: 16, gap: 14, paddingBottom: 120 },
-  card: {
-    backgroundColor: '#fff4d8',
-    borderRadius: 14,
-    padding: 14,
+  safe: { flex: 1, backgroundColor: Colors.light.background },
+  container: { padding: 16, gap: 16, paddingBottom: 152 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eyebrow: {
+    color: '#857a72',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 1.2,
+  },
+  title: {
+    color: '#1f1a17',
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  heroCard: {
+    backgroundColor: '#231b17',
+    borderRadius: 24,
+    padding: 18,
+  },
+  heroTitle: {
+    color: '#fff7ef',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  heroText: {
+    color: '#d7c7bb',
+    marginTop: 8,
+    lineHeight: 21,
+  },
+  sectionCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 24,
+    padding: 18,
+    gap: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  cardTitle: { fontWeight: '800', color: '#222', marginBottom: 4 },
-  cardText: { color: '#555' },
-  label: { fontWeight: '700', color: '#222' },
+  label: {
+    color: '#1f1a17',
+    fontWeight: '800',
+    fontSize: 18,
+  },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    height: 180,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 15,
+    minHeight: 180,
     borderWidth: 1,
-    borderColor: '#eee',
-    color: '#111',
+    borderColor: Colors.light.border,
+    color: '#1f1a17',
   },
   submit: {
-    marginTop: 12,
+    marginTop: 6,
     backgroundColor: Colors.light.tint,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 18,
+    paddingVertical: 15,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
   },
-  submitText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  submitText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });
