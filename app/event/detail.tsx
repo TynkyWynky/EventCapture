@@ -18,7 +18,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
   const { getEventById } = useEvents();
-  const { getEventSocial, toggleEventLike, toggleEventSave } = useSocial();
+  const { getEventSocial, toggleEventLike, toggleEventSave, setEventPlanStatus } = useSocial();
   const event = getEventById(eventId);
   const social = getEventSocial(eventId);
   const insets = useSafeAreaInsets();
@@ -136,6 +136,50 @@ export default function EventDetailScreen() {
                 </View>
               ))}
             </View>
+          </SurfaceCard>
+
+          <SurfaceCard style={styles.card}>
+            <View style={styles.plannerHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>My night</Text>
+                <Text style={styles.plannerText}>
+                  Turn this into a real plan instead of just saving it.
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/event/my')}>
+                <Text style={styles.plannerLink}>Open planner</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.planActionRow}>
+              <TouchableOpacity
+                style={[styles.planActionChip, social?.planStatus === 'going' && styles.planActionChipActive]}
+                onPress={() => setEventPlanStatus(event.id, event.title, social?.planStatus === 'going' ? null : 'going')}>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={16}
+                  color={social?.planStatus === 'going' ? '#fff7ef' : Colors.light.tint}
+                />
+                <Text style={[styles.planActionText, social?.planStatus === 'going' && styles.planActionTextActive]}>
+                  Going
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.planActionChip, social?.planStatus === 'maybe' && styles.planActionChipActive]}
+                onPress={() => setEventPlanStatus(event.id, event.title, social?.planStatus === 'maybe' ? null : 'maybe')}>
+                <Ionicons
+                  name="time-outline"
+                  size={16}
+                  color={social?.planStatus === 'maybe' ? '#fff7ef' : Colors.light.tint}
+                />
+                <Text style={[styles.planActionText, social?.planStatus === 'maybe' && styles.planActionTextActive]}>
+                  Maybe
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {social?.planNote ? <Text style={styles.plannerNote}>Note: {social.planNote}</Text> : null}
           </SurfaceCard>
 
           <SurfaceCard style={styles.card}>
@@ -270,6 +314,25 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
   tag: { backgroundColor: '#f2e4d5', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   tagText: { color: '#4b4038', fontWeight: '700', fontSize: 12.5 },
+  plannerHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
+  plannerText: { color: '#6f655e', lineHeight: 20, marginTop: 6, maxWidth: 250 },
+  plannerLink: { color: Colors.light.tint, fontWeight: '800', marginTop: 4 },
+  planActionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  planActionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#fff1e0',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  planActionChipActive: {
+    backgroundColor: '#231b17',
+  },
+  planActionText: { color: Colors.light.tint, fontWeight: '800', fontSize: 12.5 },
+  planActionTextActive: { color: '#fff7ef' },
+  plannerNote: { color: '#7a6f67', lineHeight: 20, marginTop: 2 },
   detailRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
   detailIconWrap: {
     width: 40,

@@ -11,6 +11,12 @@ import { Colors } from '@/constants/theme';
 
 const menuItems = [
   {
+    label: 'My Night',
+    subtitle: 'See saved events, your plan and quick notes for tonight',
+    icon: 'calendar-outline',
+    route: '/event/my',
+  },
+  {
     label: 'Edit profile',
     subtitle: 'Update your bio, interests and public details',
     icon: 'create-outline',

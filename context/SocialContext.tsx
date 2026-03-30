@@ -16,6 +16,8 @@ export interface EventComment {
   time: string;
 }
 
+export type EventPlanStatus = 'going' | 'maybe' | 'skip' | null;
+
 export interface ActivityItem {
   id: string;
   user: string;
@@ -31,16 +33,26 @@ interface EventSocialState {
   saved: boolean;
   likes: SocialUser[];
   comments: EventComment[];
+  planStatus: EventPlanStatus;
+  planNote: string;
 }
 
 interface SocialContextType {
   getEventSocial: (eventId?: string | string[]) => EventSocialState | undefined;
   toggleEventLike: (eventId: string, eventTitle: string) => void;
   toggleEventSave: (eventId: string, eventTitle: string) => void;
+  setEventPlanStatus: (eventId: string, eventTitle: string, status: EventPlanStatus) => void;
+  setEventPlanNote: (eventId: string, note: string) => void;
   addEventComment: (eventId: string, eventTitle: string, text: string) => { ok: boolean; error?: string };
   addActivity: (item: Omit<ActivityItem, 'id' | 'createdAt' | 'time'>) => void;
   notifications: ActivityItem[];
   getLikedEvents: () => Array<{ eventId: string; eventTitle: string; likedBy: SocialUser[] }>;
+  getPlannedEvents: () => Array<{
+    eventId: string;
+    saved: boolean;
+    planStatus: EventPlanStatus;
+    planNote: string;
+  }>;
 }
 
 type SocialStateMap = Record<string, EventSocialState>;
@@ -79,6 +91,13 @@ function createSeedState(): SocialStateMap {
       liked: index === 0 || index === 2,
       saved: index === 0 || index === 3,
       likes: seedUsers.slice(0, Math.min(seedUsers.length, 2 + (index % 3))),
+      planStatus: index === 0 ? 'going' : index === 3 ? 'maybe' : null,
+      planNote:
+        index === 0
+          ? 'Meet the crew near the entrance around 21:15.'
+          : index === 3
+            ? 'Good backup if the rooftop plan fills up.'
+            : '',
       comments: [
         {
           id: `comment-${event.id}-1`,
@@ -230,7 +249,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       },
       toggleEventLike: (eventId, eventTitle) => {
         setSocialState((prev) => {
-          const current = prev[eventId] ?? { liked: false, saved: false, likes: [], comments: [] };
+          const current = prev[eventId] ?? {
+            liked: false,
+            saved: false,
+            likes: [],
+            comments: [],
+            planStatus: null,
+            planNote: '',
+          };
           const nextLiked = !current.liked;
           const nextLikes = nextLiked
             ? [...current.likes, { id: user.username, name: user.username }]
@@ -255,13 +281,23 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       },
       toggleEventSave: (eventId, eventTitle) => {
         setSocialState((prev) => {
-          const current = prev[eventId] ?? { liked: false, saved: false, likes: [], comments: [] };
+          const current = prev[eventId] ?? {
+            liked: false,
+            saved: false,
+            likes: [],
+            comments: [],
+            planStatus: null,
+            planNote: '',
+          };
+          const nextSaved = !current.saved;
 
           return {
             ...prev,
             [eventId]: {
               ...current,
-              saved: !current.saved,
+              saved: nextSaved,
+              planStatus: nextSaved ? current.planStatus : null,
+              planNote: nextSaved ? current.planNote : '',
             },
           };
         });
@@ -271,6 +307,60 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           text: `${!socialState[eventId]?.saved ? 'saved' : 'unsaved'} ${eventTitle}`,
           icon: 'bookmark-outline',
           color: '#f47b20',
+        });
+      },
+      setEventPlanStatus: (eventId, eventTitle, status) => {
+        setSocialState((prev) => {
+          const current = prev[eventId] ?? {
+            liked: false,
+            saved: false,
+            likes: [],
+            comments: [],
+            planStatus: null,
+            planNote: '',
+          };
+
+          return {
+            ...prev,
+            [eventId]: {
+              ...current,
+              saved: status ? true : current.saved,
+              planStatus: status,
+            },
+          };
+        });
+
+        pushNotification({
+          user: user.username,
+          text:
+            status === 'going'
+              ? `is going to ${eventTitle}`
+              : status === 'maybe'
+                ? `added ${eventTitle} as maybe`
+                : `removed ${eventTitle} from the night plan`,
+          icon: status === 'going' ? 'calendar' : status === 'maybe' ? 'time-outline' : 'close-circle-outline',
+          color: status === 'going' ? '#0f766e' : status === 'maybe' ? '#f47b20' : '#857a72',
+        });
+      },
+      setEventPlanNote: (eventId, note) => {
+        setSocialState((prev) => {
+          const current = prev[eventId] ?? {
+            liked: false,
+            saved: false,
+            likes: [],
+            comments: [],
+            planStatus: null,
+            planNote: '',
+          };
+
+          return {
+            ...prev,
+            [eventId]: {
+              ...current,
+              saved: true,
+              planNote: note.trim(),
+            },
+          };
         });
       },
       addEventComment: (eventId, eventTitle, text) => {
@@ -283,7 +373,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         const createdAt = Date.now();
 
         setSocialState((prev) => {
-          const current = prev[eventId] ?? { liked: false, saved: false, likes: [], comments: [] };
+          const current = prev[eventId] ?? {
+            liked: false,
+            saved: false,
+            likes: [],
+            comments: [],
+            planStatus: null,
+            planNote: '',
+          };
 
           return {
             ...prev,
@@ -321,6 +418,15 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           eventTitle: event.title,
           likedBy: socialState[event.id]?.likes ?? [],
         })).filter((entry) => entry.likedBy.length > 0),
+      getPlannedEvents: () =>
+        Object.entries(socialState)
+          .map(([eventId, state]) => ({
+            eventId,
+            saved: state.saved,
+            planStatus: state.planStatus,
+            planNote: state.planNote,
+          }))
+          .filter((entry) => entry.saved || entry.planStatus),
     };
   }, [notifications, socialState, user.username]);
 
