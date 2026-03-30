@@ -4,6 +4,7 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { AppImage } from '@/components/ui/app-image';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { getActiveCrownReward, getCrownLevelProgress, getNextCrownReward } from '@/constants/crowns';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
 import { usePosts } from '@/context/PostContext';
@@ -26,7 +27,7 @@ const discoveryPresets = [
 
 export default function HomeFeed() {
   const router = useRouter();
-  const { posts } = usePosts();
+  const { posts, crowns } = usePosts();
   const { events, featuredEventId } = useEvents();
   const {
     filteredEvents,
@@ -44,6 +45,9 @@ export default function HomeFeed() {
   const featuredEvent =
     feedEvents.find((event) => event.id === featuredEventId) ?? feedEvents[0];
   const trendingEvents = feedEvents.slice(0, 3);
+  const activeReward = getActiveCrownReward(crowns);
+  const nextReward = getNextCrownReward(crowns);
+  const crownLevel = getCrownLevelProgress(crowns);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -170,6 +174,54 @@ export default function HomeFeed() {
               style={styles.featuredButton}
             />
           </LinearGradient>
+        ) : null}
+
+        {activeReward ? (
+          <SurfaceCard style={styles.crownSpotlightCard}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Crown spotlight</Text>
+                <Text style={styles.sectionSubtitle}>Your unlocked perk is now live</Text>
+              </View>
+              <View style={styles.crownSpotlightIcon}>
+                <Ionicons name={activeReward.reward.icon} size={18} color={Colors.light.tint} />
+              </View>
+            </View>
+
+            <Text style={styles.crownSpotlightTitle}>
+              Crown {activeReward.crownNumber} · {activeReward.reward.perk}
+            </Text>
+            <Text style={styles.crownSpotlightText}>{activeReward.reward.detail}</Text>
+
+            <View style={styles.crownLevelBox}>
+              <View style={styles.crownLevelHeader}>
+                <Text style={styles.crownLevelTitle}>
+                  Level {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
+                </Text>
+                <Text style={styles.crownLevelMeta}>
+                  {crownLevel.nextLevel
+                    ? `${crownLevel.crownsToNextLevel} to Level ${crownLevel.nextLevel.level}`
+                    : 'Maxed'}
+                </Text>
+              </View>
+              <View style={styles.crownLevelProgressOuter}>
+                <View style={[styles.crownLevelProgressFill, { width: `${crownLevel.progressWithinLevel}%` }]} />
+              </View>
+            </View>
+
+            <View style={styles.crownSpotlightMeta}>
+              <View style={styles.crownMetaChip}>
+                <Ionicons name="sparkles-outline" size={14} color={Colors.light.tint} />
+                <Text style={styles.crownMetaText}>{activeReward.milestone}</Text>
+              </View>
+              <View style={styles.crownMetaChip}>
+                <Ionicons name="arrow-forward-outline" size={14} color={Colors.light.tint} />
+                <Text style={styles.crownMetaText}>Next: {nextReward.reward.perk}</Text>
+              </View>
+            </View>
+
+            <AppButton label="Open crown vault" variant="secondary" onPress={() => router.push('/achievements')} />
+          </SurfaceCard>
         ) : null}
 
         {latestPost ? (
@@ -372,6 +424,48 @@ const styles = StyleSheet.create({
   liveBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 0.8 },
   featuredMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   featuredButton: { marginTop: 2 },
+  crownSpotlightCard: { marginBottom: 20, gap: 12, backgroundColor: '#fff7ef' },
+  crownSpotlightIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
+    backgroundColor: '#fff1e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crownSpotlightTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 18 },
+  crownSpotlightText: { color: '#756b64', lineHeight: 21 },
+  crownLevelBox: {
+    gap: 8,
+    backgroundColor: '#fff2e4',
+    borderRadius: 16,
+    padding: 12,
+  },
+  crownLevelHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'center' },
+  crownLevelTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 14.5 },
+  crownLevelMeta: { color: '#8a6e55', fontWeight: '700', fontSize: 12.5 },
+  crownLevelProgressOuter: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#ead8c5',
+    overflow: 'hidden',
+  },
+  crownLevelProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: Colors.light.tint,
+  },
+  crownSpotlightMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  crownMetaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: '#f7ede3',
+  },
+  crownMetaText: { color: '#6d635d', fontWeight: '700', fontSize: 12.5 },
   postCard: { marginBottom: 20, gap: 12 },
   rewardBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f766e', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   rewardText: { color: '#fff', fontWeight: '700', fontSize: 12 },

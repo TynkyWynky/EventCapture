@@ -1,7 +1,9 @@
 import { AppButton } from '@/components/ui/app-button';
+import { CrownProgressBar } from '@/components/ui/crown-progress-bar';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
 import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
@@ -20,6 +22,8 @@ export default function ProfileScreen() {
   const { events } = useEvents();
   const { user } = useUser();
   const rewardProgress = Math.min((crowns / 9) * 100, 100);
+  const activeReward = getActiveCrownReward(crowns);
+  const crownLevel = getCrownLevelProgress(crowns);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -27,7 +31,14 @@ export default function ProfileScreen() {
         <LinearGradient colors={['#231b17', '#4b2d1f']} style={styles.headerCard}>
           <View style={styles.headerTop}>
             <View style={styles.profileWrap}>
-              <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+              <View style={styles.avatarWrap}>
+                <Image source={{ uri: user.avatarUri }} style={[styles.avatar, activeReward && styles.avatarRewarded]} />
+                {activeReward ? (
+                  <View style={styles.crownAuraBadge}>
+                    <Ionicons name={activeReward.reward.icon} size={14} color={Colors.light.tint} />
+                  </View>
+                ) : null}
+              </View>
               <View style={styles.identity}>
                 <Text style={styles.name}>{user.username}</Text>
                 <Text style={styles.sub}>
@@ -50,6 +61,38 @@ export default function ProfileScreen() {
             <StatChip label="events" value={events.length.toString()} tone="dark" />
           </View>
 
+          {activeReward ? (
+            <View style={styles.rewardStrip}>
+              <View style={styles.rewardStripIcon}>
+                <Ionicons name={activeReward.reward.icon} size={18} color={Colors.light.tint} />
+              </View>
+              <View style={styles.rewardStripCopy}>
+                <Text style={styles.rewardStripTitle}>
+                  Active crown perk: {activeReward.reward.perk}
+                </Text>
+                <Text style={styles.rewardStripText}>{activeReward.reward.detail}</Text>
+              </View>
+            </View>
+          ) : null}
+
+          <View style={styles.levelCard}>
+            <View style={styles.levelHeader}>
+              <View>
+                <Text style={styles.levelEyebrow}>Crown level</Text>
+                <Text style={styles.levelTitle}>
+                  Level {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
+                </Text>
+              </View>
+              <Text style={styles.levelMeta}>
+                {crownLevel.nextLevel
+                  ? `${crownLevel.crownsToNextLevel} crown${crownLevel.crownsToNextLevel === 1 ? '' : 's'} to Level ${crownLevel.nextLevel.level}`
+                  : 'Max level reached'}
+              </Text>
+            </View>
+
+            <CrownProgressBar progress={crownLevel.progressWithinLevel} tone="dark" />
+          </View>
+
           <AppButton label="Edit profile" onPress={() => router.push('/profile/edit')} style={styles.editButton} />
         </LinearGradient>
 
@@ -59,9 +102,7 @@ export default function ProfileScreen() {
             <Text style={styles.sectionMeta}>{crowns}/9</Text>
           </View>
 
-          <View style={styles.progressOuter}>
-            <View style={[styles.progressFill, { width: `${rewardProgress}%` }]} />
-          </View>
+          <CrownProgressBar progress={rewardProgress} />
 
           <View style={styles.crownGrid}>
             {Array.from({ length: 9 }).map((_, i) => (
@@ -125,20 +166,70 @@ const styles = StyleSheet.create({
   },
   headerTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   profileWrap: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  avatarWrap: { position: 'relative' },
   avatar: { width: 76, height: 76, borderRadius: 38, borderWidth: 2, borderColor: 'rgba(255,255,255,0.14)' },
+  avatarRewarded: {
+    borderColor: 'rgba(244,123,32,0.72)',
+    shadowColor: '#f7b06a',
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  crownAuraBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff4e6',
+    borderWidth: 1,
+    borderColor: '#ffd3a5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   identity: { flex: 1 },
   name: { color: '#fff7ef', fontWeight: '800', fontSize: 24 },
   sub: { color: '#decfc2', marginTop: 4 },
   bio: { color: '#decfc2', lineHeight: 21 },
   headerActions: { gap: 10 },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  rewardStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255,247,239,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,210,169,0.14)',
+    borderRadius: 18,
+    padding: 12,
+  },
+  rewardStripIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 16,
+    backgroundColor: '#fff6ee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardStripCopy: { flex: 1, gap: 2 },
+  rewardStripTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 14.5 },
+  rewardStripText: { color: '#d9c6b8', lineHeight: 18, fontSize: 12.5 },
+  levelCard: {
+    gap: 10,
+    backgroundColor: 'rgba(255,247,239,0.1)',
+    borderRadius: 18,
+    padding: 12,
+  },
+  levelHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-end' },
+  levelEyebrow: { color: '#d6c4b7', fontSize: 11, fontWeight: '800', letterSpacing: 1.1, textTransform: 'uppercase' },
+  levelTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 16, marginTop: 4 },
+  levelMeta: { color: '#d9c6b8', fontSize: 12.5, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
   editButton: { marginTop: 2 },
   sectionCard: { gap: 14 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
   sectionMeta: { color: '#8a7f77', fontWeight: '700' },
-  progressOuter: { height: 10, backgroundColor: '#efe3d5', borderRadius: 999, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: Colors.light.tint, borderRadius: 999 },
   crownGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   crownBadge: {
     width: '30%',

@@ -2,15 +2,16 @@ import { AppImage } from '@/components/ui/app-image';
 import { useEvents } from '@/context/EventContext';
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface CaptureReviewScreenProps {
   photoUri: string;
   isBeerFinished: boolean;
-  onPost: (eventId: string, eventTitle: string) => void;
+  onPost: (eventId: string, eventTitle: string) => void | Promise<void>;
 }
 
 export function CaptureReviewScreen({
@@ -21,6 +22,7 @@ export function CaptureReviewScreen({
   const router = useRouter();
   const { events } = useEvents();
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [isPosting, setIsPosting] = useState(false);
 
   useEffect(() => {
     if (!selectedEventId && events.length) {
@@ -33,17 +35,29 @@ export function CaptureReviewScreen({
     [events, selectedEventId]
   );
 
-  const badgeColor = isBeerFinished ? '#0f766e' : '#7d726a';
-  const accentColor = isBeerFinished ? Colors.light.tint : '#1f1a17';
+  const badgeColor = isBeerFinished ? '#0f766e' : '#8a6a52';
+  const accentColor = isBeerFinished ? Colors.light.tint : '#8a6a52';
+  const title = isBeerFinished ? 'Crown-worthy capture' : 'Still a moment worth posting';
   const message = isBeerFinished
-    ? 'Nice shot. Post it to lock in your crown attempt for tonight.'
-    : 'The crown is not unlocked this time, but the capture still deserves to be shared.';
+    ? 'Nice shot. Post it to lock in your crown attempt and let the moment land with a little celebration.'
+    : 'No crown this time, but the photo still carries the night. Share it anyway and keep the memory in your feed.';
+  const eventHint = isBeerFinished
+    ? 'Pick the event that should get the crown attempt.'
+    : 'Pick the event this memory belongs to.';
+
+  const handleSubmit = async () => {
+    if (!selectedEvent || isPosting) {
+      return;
+    }
+
+    setIsPosting(true);
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    await Promise.resolve(onPost(selectedEvent.id, selectedEvent.title));
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={20} color="#1f1a17" />
@@ -66,28 +80,51 @@ export function CaptureReviewScreen({
           </View>
         </View>
 
-        <View style={styles.heroCard}>
-          <AppImage source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
+        <LinearGradient
+          colors={isBeerFinished ? ['#fff8f0', '#fff2e3'] : ['#fffaf5', '#f5ece3']}
+          style={styles.heroCard}>
+          <View style={styles.heroVisual}>
+            {isBeerFinished ? <View style={styles.heroSparkle} /> : null}
+            <AppImage source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
+            <View style={[styles.photoBadge, isBeerFinished ? styles.photoBadgeSuccess : styles.photoBadgeSoft]}>
+              <Ionicons
+                name={isBeerFinished ? 'ribbon' : 'images-outline'}
+                size={18}
+                color="#fff"
+              />
+            </View>
+          </View>
 
           <View style={styles.heroBody}>
-            <Text style={styles.message}>{message}</Text>
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroTitle}>{title}</Text>
+              <Text style={styles.message}>{message}</Text>
+            </View>
 
             <View style={styles.metaRow}>
-              <View style={styles.metaPill}>
-                <Ionicons name="beer-outline" size={14} color={accentColor} />
+              <View style={[styles.metaPill, isBeerFinished ? styles.metaPillWarm : styles.metaPillSoft]}>
+                <Ionicons
+                  name={isBeerFinished ? 'sparkles-outline' : 'heart-outline'}
+                  size={14}
+                  color={accentColor}
+                />
                 <Text style={styles.metaText}>
-                  {isBeerFinished ? 'Eligible for reward' : 'Reward not unlocked'}
+                  {isBeerFinished ? 'Eligible for reward' : 'Still worth sharing'}
+                </Text>
+              </View>
+              <View style={[styles.metaPill, isBeerFinished ? styles.metaPillWarm : styles.metaPillSoft]}>
+                <Ionicons name="albums-outline" size={14} color={accentColor} />
+                <Text style={styles.metaText}>
+                  {isBeerFinished ? '+1 crown if accepted' : 'Goes to your event story'}
                 </Text>
               </View>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Post this photo to</Text>
-          <Text style={styles.sectionSubtitle}>
-            Pick the event people should see this capture under.
-          </Text>
+          <Text style={styles.sectionSubtitle}>{eventHint}</Text>
 
           <View style={styles.eventList}>
             {events.map((event) => {
@@ -99,14 +136,26 @@ export function CaptureReviewScreen({
                   activeOpacity={0.92}
                   style={[styles.eventCard, isSelected && styles.eventCardSelected]}
                   onPress={() => setSelectedEventId(event.id)}>
-                  <View style={styles.eventDateBadge}>
-                    <Text style={styles.eventDateText}>{event.date}</Text>
-                  </View>
+                  <LinearGradient
+                    colors={isSelected ? ['#f7a24d', '#f47b20'] : ['#f6eee4', '#f6eee4']}
+                    style={styles.eventDateBadge}>
+                    <Text style={[styles.eventDateText, isSelected && styles.eventDateTextSelected]}>{event.date}</Text>
+                  </LinearGradient>
+
+                  <AppImage source={{ uri: event.heroImage }} style={styles.eventThumb} contentFit="cover" />
 
                   <View style={styles.eventBody}>
-                    <Text style={styles.eventTitle}>{event.title}</Text>
+                    <View style={styles.eventTopRow}>
+                      <Text style={styles.eventTitle}>{event.title}</Text>
+                      {isSelected ? (
+                        <View style={styles.selectedPill}>
+                          <Text style={styles.selectedPillText}>Selected</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text style={styles.eventMeta}>{event.place}</Text>
                     <Text style={styles.eventMeta}>{event.attendees}</Text>
+                    <Text style={styles.eventTagline}>{event.vibe}</Text>
                   </View>
 
                   <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
@@ -127,23 +176,27 @@ export function CaptureReviewScreen({
           </View>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.secondaryAction}
-              onPress={() => router.back()}>
+            <TouchableOpacity style={styles.secondaryAction} onPress={() => router.back()}>
               <Text style={styles.secondaryActionText}>Retake</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.primaryAction,
                 !selectedEvent && styles.primaryActionDisabled,
+                isPosting && styles.primaryActionDisabled,
               ]}
-              disabled={!selectedEvent}
-              onPress={() => {
-                if (selectedEvent) {
-                  onPost(selectedEvent.id, selectedEvent.title);
-                }
-              }}>
-              <Text style={styles.primaryActionText}>Post capture</Text>
+              disabled={!selectedEvent || isPosting}
+              onPress={handleSubmit}>
+              {isPosting ? (
+                <View style={styles.postingRow}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.primaryActionText}>Posting...</Text>
+                </View>
+              ) : (
+                <Text style={styles.primaryActionText}>
+                  {isBeerFinished ? 'Celebrate and post' : 'Share capture'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -198,7 +251,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   heroCard: {
-    backgroundColor: Colors.light.card,
     borderRadius: 28,
     padding: 14,
     shadowColor: '#000',
@@ -207,15 +259,54 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
   },
+  heroVisual: {
+    position: 'relative',
+  },
+  heroSparkle: {
+    position: 'absolute',
+    top: -8,
+    right: -4,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(244,123,32,0.12)',
+    zIndex: 1,
+  },
   photo: {
     width: '100%',
     aspectRatio: 3 / 4,
     borderRadius: 22,
     backgroundColor: '#e8ddd2',
   },
+  photoBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.68)',
+  },
+  photoBadgeSuccess: {
+    backgroundColor: '#0f766e',
+  },
+  photoBadgeSoft: {
+    backgroundColor: '#8a6a52',
+  },
   heroBody: {
     marginTop: 14,
     gap: 12,
+  },
+  heroCopy: {
+    gap: 6,
+  },
+  heroTitle: {
+    color: '#1f1a17',
+    fontSize: 22,
+    fontWeight: '800',
   },
   message: {
     color: '#514942',
@@ -223,15 +314,22 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   metaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     borderRadius: 999,
-    backgroundColor: '#fff3e6',
     paddingHorizontal: 12,
     paddingVertical: 9,
+  },
+  metaPillWarm: {
+    backgroundColor: '#fff3e6',
+  },
+  metaPillSoft: {
+    backgroundColor: '#f3ece5',
   },
   metaText: {
     color: '#1f1a17',
@@ -258,7 +356,7 @@ const styles = StyleSheet.create({
   },
   eventCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: 12,
     borderRadius: 22,
     borderWidth: 1,
@@ -273,28 +371,58 @@ const styles = StyleSheet.create({
   eventDateBadge: {
     minWidth: 62,
     borderRadius: 16,
-    backgroundColor: '#f6eee4',
     paddingHorizontal: 10,
     paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   eventDateText: {
     color: '#6f655e',
     fontWeight: '800',
     fontSize: 12,
   },
+  eventDateTextSelected: {
+    color: '#fff',
+  },
+  eventThumb: {
+    width: 64,
+    borderRadius: 16,
+  },
   eventBody: {
     flex: 1,
+  },
+  eventTopRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
   eventTitle: {
     color: '#1f1a17',
     fontWeight: '800',
     fontSize: 16,
+    flex: 1,
   },
   eventMeta: {
     color: '#81776f',
     fontSize: 12.5,
     marginTop: 2,
+  },
+  eventTagline: {
+    color: '#8a6a52',
+    fontSize: 12.5,
+    marginTop: 6,
+    fontWeight: '700',
+  },
+  selectedPill: {
+    borderRadius: 999,
+    backgroundColor: '#fff1e0',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  selectedPillText: {
+    color: Colors.light.tint,
+    fontSize: 11,
+    fontWeight: '800',
   },
   radioOuter: {
     width: 22,
@@ -304,6 +432,7 @@ const styles = StyleSheet.create({
     borderColor: '#c8b8a8',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   radioOuterSelected: {
     borderColor: Colors.light.tint,
@@ -360,5 +489,10 @@ const styles = StyleSheet.create({
   primaryActionText: {
     color: '#fff',
     fontWeight: '800',
+  },
+  postingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

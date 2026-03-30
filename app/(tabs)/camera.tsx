@@ -92,10 +92,15 @@ export default function CameraScreen() {
         <View style={styles.photoFrame}>
           <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
           <View style={styles.frameGuide} pointerEvents="none" />
+          <View style={styles.frameHint} pointerEvents="none">
+            <Ionicons name="scan-outline" size={14} color="#fff7ef" />
+            <Text style={styles.frameHintText}>Center the glass inside the guide</Text>
+          </View>
           {isProcessing && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={Colors.light.tint} />
-              <Text style={styles.loadingText}>Analyzing Beer...</Text>
+              <Text style={styles.loadingTitle}>Checking your capture</Text>
+              <Text style={styles.loadingText}>Looking for the best reward match and preparing the review.</Text>
             </View>
           )}
         </View>
@@ -193,6 +198,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.5)',
   },
+  frameHint: {
+    position: 'absolute',
+    top: 26,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(17,12,10,0.38)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  frameHintText: {
+    color: '#fff7ef',
+    fontWeight: '700',
+    fontSize: 12,
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(17,12,10,0.45)',
@@ -200,10 +222,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 14,
   },
-  loadingText: {
-    marginTop: 10,
-    fontWeight: '700',
+  loadingTitle: {
+    marginTop: 12,
+    fontWeight: '800',
     color: '#fff7ef',
+    fontSize: 18,
+  },
+  loadingText: {
+    marginTop: 8,
+    fontWeight: '600',
+    color: '#fff7ef',
+    textAlign: 'center',
+    maxWidth: 220,
+    lineHeight: 20,
   },
   controlDock: {
     gap: 12,

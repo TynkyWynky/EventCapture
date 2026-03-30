@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
+import { useToast } from '@/context/ToastContext';
 import React, { createContext, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
 
 export interface Post {
@@ -89,9 +91,11 @@ function parseStoredState(rawValue: string | null): StoredPostState | null {
 }
 
 export function PostProvider({ children }: { children: ReactNode }) {
+  const { showToast } = useToast();
   const [posts, setPosts] = useState<Post[]>(DEFAULT_POSTS);
   const [crowns, setCrowns] = useState(DEFAULT_CROWNS);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [lastAwardedEventTitle, setLastAwardedEventTitle] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -146,6 +150,29 @@ export function PostProvider({ children }: { children: ReactNode }) {
     persistState();
   }, [crowns, hasHydrated, posts]);
 
+  useEffect(() => {
+    if (!hasHydrated || !lastAwardedEventTitle) {
+      return;
+    }
+
+    const previousLevel = getCrownLevelProgress(crowns - 1).currentLevel.level;
+    const currentLevel = getCrownLevelProgress(crowns).currentLevel;
+
+    if (currentLevel.level > previousLevel) {
+      const activeReward = getActiveCrownReward(crowns);
+
+      showToast({
+        title: `Level up! You're now Level ${currentLevel.level}`,
+        message: activeReward
+          ? `${currentLevel.title} unlocked after ${lastAwardedEventTitle}. New perk: ${activeReward.reward.perk}.`
+          : `${currentLevel.title} unlocked after ${lastAwardedEventTitle}.`,
+        tone: 'success',
+      });
+    }
+
+    setLastAwardedEventTitle(null);
+  }, [crowns, hasHydrated, lastAwardedEventTitle, showToast]);
+
   const addPost = (newPostData: Omit<Post, 'id' | 'date'>) => {
     const newPost: Post = {
       id: Date.now().toString(),
@@ -156,6 +183,7 @@ export function PostProvider({ children }: { children: ReactNode }) {
     setPosts((prev) => [newPost, ...prev]);
 
     if (newPostData.isBeerFinished) {
+      setLastAwardedEventTitle(newPostData.eventTitle ?? 'your latest capture');
       setCrowns((prev) => prev + 1);
     }
   };

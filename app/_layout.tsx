@@ -49,9 +49,9 @@ export default function RootLayout() {
       <UserProvider>
         <EventProvider>
           <FilterProvider>
-            <PostProvider>
-              <SocialProvider>
-                <ToastProvider>
+            <ToastProvider>
+              <PostProvider>
+                <SocialProvider>
                   <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
                     <AuthNavigatorGuard />
                     <Stack screenOptions={{ headerShown: false }}>
@@ -80,9 +80,9 @@ export default function RootLayout() {
                     </Stack>
                     <StatusBar style="light" />
                   </ThemeProvider>
-                </ToastProvider>
-              </SocialProvider>
-            </PostProvider>
+                </SocialProvider>
+              </PostProvider>
+            </ToastProvider>
           </FilterProvider>
         </EventProvider>
       </UserProvider>

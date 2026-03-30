@@ -2,11 +2,49 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
+function TabButton({
+  children,
+  onPress,
+  style,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  style?: object;
+}) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() =>
+          Animated.spring(scale, {
+            toValue: 0.96,
+            useNativeDriver: true,
+            friction: 7,
+            tension: 180,
+          }).start()
+        }
+        onPressOut={() =>
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: true,
+            friction: 7,
+            tension: 180,
+          }).start()
+        }>
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const colorScheme = useColorScheme();
@@ -41,34 +79,40 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           };
 
           const iconColor = isCapture
-            ? Colors.light.tint
+            ? '#fff'
             : isFocused
               ? '#1f1a17'
               : palette.muted;
 
           return (
-            <TouchableOpacity
+            <TabButton
               key={route.key}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              testID={options.tabBarButtonTestID}
-              activeOpacity={0.9}
               onPress={onPress}
               style={[
                 styles.item,
                 isFocused && !isCapture && styles.itemFocused,
                 isCapture && styles.captureItem,
               ]}>
-              <View style={[styles.inner, isFocused && !isCapture && styles.innerFocused]}>
-                {options.tabBarIcon?.({
-                  focused: isFocused,
-                  color: iconColor,
-                  size: isCapture ? 25 : 22,
-                })}
-
-              </View>
-            </TouchableOpacity>
+              {isCapture ? (
+                <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.captureOuter}>
+                  <View style={styles.captureInner}>
+                    {options.tabBarIcon?.({
+                      focused: isFocused,
+                      color: iconColor,
+                      size: 25,
+                    })}
+                  </View>
+                </LinearGradient>
+              ) : (
+                <View style={[styles.inner, isFocused && styles.innerFocused]}>
+                  {options.tabBarIcon?.({
+                    focused: isFocused,
+                    color: iconColor,
+                    size: 22,
+                  })}
+                </View>
+              )}
+            </TabButton>
           );
         })}
       </View>
@@ -141,7 +185,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 14,
     alignItems: 'center',
   },
   bar: {
@@ -183,6 +226,8 @@ const styles = StyleSheet.create({
   },
   captureItem: {
     flex: 1.08,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inner: {
     minHeight: 44,
@@ -195,5 +240,27 @@ const styles = StyleSheet.create({
   },
   innerFocused: {
     backgroundColor: '#f7f1ea',
+  },
+  captureOuter: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  captureInner: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
 });
