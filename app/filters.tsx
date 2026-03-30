@@ -22,17 +22,35 @@ const pricePresets = [
   { label: 'Under 25', min: 0, max: 25 },
   { label: 'Any', min: 0, max: 120 },
 ];
+const sortOptions = [
+  { label: 'Most popular', value: 'popular' as const },
+  { label: 'Soonest', value: 'soonest' as const },
+  { label: 'Lowest price', value: 'lowest_price' as const },
+];
+const discoveryPresets = [
+  { id: 'all', label: 'Reset all' },
+  { id: 'tonight', label: 'Tonight' },
+  { id: 'popular', label: 'Popular' },
+  { id: 'cheapest', label: 'Cheapest' },
+  { id: 'open_air', label: 'Open air' },
+] as const;
 
 export default function FiltersScreen() {
   const router = useRouter();
   const {
     filters,
     activeFilterCount,
+    activePresetId,
+    favoritePresetId,
     filteredEvents,
+    applyPreset,
+    setSearchQuery,
     toggleGenre,
     setDateFilter,
+    setSortBy,
     setLocation,
     setPriceRange,
+    toggleFavoritePreset,
     resetFilters,
   } = useFilters();
 
@@ -55,6 +73,50 @@ export default function FiltersScreen() {
           <View style={styles.heroMeta}>
             <Text style={styles.heroMetaText}>{filteredEvents.length} events match</Text>
             <Text style={styles.heroMetaText}>{activeFilterCount} active filters</Text>
+          </View>
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Quick presets</Text>
+          <View style={styles.chipRow}>
+            {discoveryPresets.map((preset) => {
+              const active = activePresetId === preset.id;
+
+              return (
+                <View key={preset.id} style={styles.presetWrap}>
+                  <TouchableOpacity
+                    style={[styles.genreChip, active && styles.genreChipActive]}
+                    onPress={() => applyPreset(preset.id)}>
+                    <Text style={[styles.genreText, active && styles.genreTextActive]}>{preset.label}</Text>
+                  </TouchableOpacity>
+                  {preset.id !== 'all' ? (
+                    <TouchableOpacity
+                      style={[styles.favoriteButton, favoritePresetId === preset.id && styles.favoriteButtonActive]}
+                      onPress={() => toggleFavoritePreset(preset.id)}>
+                      <Ionicons
+                        name={favoritePresetId === preset.id ? 'star' : 'star-outline'}
+                        size={14}
+                        color={favoritePresetId === preset.id ? '#fff' : Colors.light.tint}
+                      />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Search</Text>
+          <View style={styles.locationInput}>
+            <Ionicons name="search-outline" size={18} color={Colors.light.tint} />
+            <TextInput
+              value={filters.searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Artists, places, hosts, moods"
+              placeholderTextColor="#8a7f77"
+              style={styles.locationTextInput}
+            />
           </View>
         </SurfaceCard>
 
@@ -98,6 +160,24 @@ export default function FiltersScreen() {
             </Text>
             <Ionicons name="close-circle-outline" size={16} color={Colors.light.tint} />
           </TouchableOpacity>
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Sort results</Text>
+          <View style={styles.chipRow}>
+            {sortOptions.map((option) => {
+              const active = filters.sortBy === option.value;
+
+              return (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[styles.genreChip, active && styles.genreChipActive]}
+                  onPress={() => setSortBy(option.value)}>
+                  <Text style={[styles.genreText, active && styles.genreTextActive]}>{option.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
@@ -170,6 +250,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  presetWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   genreChip: {
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -181,6 +266,17 @@ const styles = StyleSheet.create({
   },
   genreText: { color: '#6f655e', fontWeight: '700' },
   genreTextActive: { color: '#fff7ef' },
+  favoriteButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff1e0',
+  },
+  favoriteButtonActive: {
+    backgroundColor: Colors.light.tint,
+  },
   row: { flexDirection: 'row', gap: 10 },
   pill: {
     flex: 1,

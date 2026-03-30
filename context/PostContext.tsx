@@ -23,7 +23,33 @@ interface StoredPostState {
 
 const PostContext = createContext<PostContextType | undefined>(undefined);
 const STORAGE_KEY = 'eventcapture.post-state';
-const DEFAULT_CROWNS = 3;
+const DEFAULT_POSTS: Post[] = [
+  {
+    id: 'seed-post-1',
+    imageUri: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=900&q=80',
+    date: '18/07/2026',
+    isBeerFinished: true,
+    eventId: 'afterwork-tasting',
+    eventTitle: 'Afterwork Tasting',
+  },
+  {
+    id: 'seed-post-2',
+    imageUri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=900&q=80',
+    date: '07/09/2026',
+    isBeerFinished: false,
+    eventId: 'canal-lights-open-air',
+    eventTitle: 'Canal Lights Open Air',
+  },
+  {
+    id: 'seed-post-3',
+    imageUri: 'https://images.unsplash.com/photo-1436076863939-06870fe779c2?auto=format&fit=crop&w=900&q=80',
+    date: '20/09/2026',
+    isBeerFinished: true,
+    eventId: 'park-food-beats',
+    eventTitle: 'Park Food & Beats',
+  },
+];
+const DEFAULT_CROWNS = 5;
 
 function isValidPost(value: unknown): value is Post {
   if (!value || typeof value !== 'object') {
@@ -63,7 +89,7 @@ function parseStoredState(rawValue: string | null): StoredPostState | null {
 }
 
 export function PostProvider({ children }: { children: ReactNode }) {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<Post[]>(DEFAULT_POSTS);
   const [crowns, setCrowns] = useState(DEFAULT_CROWNS);
   const [hasHydrated, setHasHydrated] = useState(false);
 

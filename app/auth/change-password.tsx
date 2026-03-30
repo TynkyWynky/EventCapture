@@ -2,6 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
+import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -11,6 +12,7 @@ import { useRouter } from 'expo-router';
 export default function ChangePasswordScreen() {
   const router = useRouter();
   const { changePassword } = useUser();
+  const { showToast } = useToast();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,6 +39,11 @@ export default function ChangePasswordScreen() {
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    showToast({
+      tone: 'success',
+      title: 'Password updated',
+      message: 'Your next sign-in will use the new password.',
+    });
   };
 
   return (

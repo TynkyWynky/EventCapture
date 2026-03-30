@@ -2,6 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
 import { Colors } from '@/constants/theme';
+import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function ResetScreen() {
   const router = useRouter();
   const { user, resetPassword } = useUser();
+  const { showToast } = useToast();
   const [email, setEmail] = useState(user.email);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,6 +40,11 @@ export default function ResetScreen() {
     setSuccess('Password reset successfully. You can now sign in.');
     setNewPassword('');
     setConfirmPassword('');
+    showToast({
+      tone: 'success',
+      title: 'Password reset',
+      message: 'You can sign in again with the new password.',
+    });
   };
 
   return (

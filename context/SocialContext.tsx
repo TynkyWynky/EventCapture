@@ -51,6 +51,8 @@ const seedUsers: SocialUser[] = [
   { id: 'niels', name: 'Niels' },
   { id: 'emma', name: 'Emma' },
   { id: 'lucas', name: 'Lucas' },
+  { id: 'zoe', name: 'Zoe' },
+  { id: 'milan', name: 'Milan' },
 ];
 
 function timeAgo(timestamp: number) {
@@ -74,20 +76,67 @@ function createSeedState(): SocialStateMap {
 
   EVENT_RECORDS.forEach((event, index) => {
     initial[event.id] = {
-      liked: index === 0,
-      saved: index === 0,
-      likes: seedUsers.slice(0, Math.min(seedUsers.length, 2 + (index % 2))),
-      comments:
-        index === 0
-          ? [
-              { id: `comment-${event.id}-1`, user: 'Lina', text: 'This lineup looks unreal.', time: '12m ago' },
-              { id: `comment-${event.id}-2`, user: 'Niels', text: 'Saving this for the weekend crew.', time: '38m ago' },
-            ]
-          : [],
+      liked: index === 0 || index === 2,
+      saved: index === 0 || index === 3,
+      likes: seedUsers.slice(0, Math.min(seedUsers.length, 2 + (index % 3))),
+      comments: [
+        {
+          id: `comment-${event.id}-1`,
+          user: seedUsers[index % seedUsers.length].name,
+          text:
+            index % 2 === 0
+              ? 'This one already feels like a strong night.'
+              : 'Adding this to the crew plan immediately.',
+          time: `${12 + index * 6}m ago`,
+        },
+        {
+          id: `comment-${event.id}-2`,
+          user: seedUsers[(index + 1) % seedUsers.length].name,
+          text:
+            index % 2 === 0
+              ? 'The vibe and timing are perfect.'
+              : 'This looks way better than most of the city listings.',
+          time: `${28 + index * 5}m ago`,
+        },
+      ],
     };
   });
 
   return initial;
+}
+
+function createSeedNotifications(): ActivityItem[] {
+  const now = Date.now();
+
+  return [
+    {
+      id: 'seed-activity-1',
+      user: 'Lina',
+      text: 'liked Canal Lights Open Air',
+      icon: 'heart',
+      color: '#e45b5b',
+      createdAt: now - 18 * 60 * 1000,
+      time: '18m ago',
+    },
+    {
+      id: 'seed-activity-2',
+      user: 'Emma',
+      text: 'commented on Park Food & Beats',
+      icon: 'chatbubble-ellipses-outline',
+      color: '#0f766e',
+      createdAt: now - 46 * 60 * 1000,
+      time: '46m ago',
+    },
+    {
+      id: 'seed-activity-3',
+      user: 'Milan',
+      text: 'saved Rooftop Session',
+      icon: 'bookmark-outline',
+      color: '#f47b20',
+      createdAt: now - 90 * 60 * 1000,
+      time: '2h ago',
+    },
+  ];
 }
 
 function isValidSocialState(value: unknown): value is SocialStateMap {
@@ -103,7 +152,7 @@ const SocialContext = createContext<SocialContextType | undefined>(undefined);
 export function SocialProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
   const [socialState, setSocialState] = useState<SocialStateMap>(createSeedState);
-  const [notifications, setNotifications] = useState<ActivityItem[]>([]);
+  const [notifications, setNotifications] = useState<ActivityItem[]>(createSeedNotifications);
   const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {

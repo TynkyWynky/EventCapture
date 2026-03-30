@@ -1,34 +1,80 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-
+import { AppButton } from '@/components/ui/app-button';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
+import { useToast } from '@/context/ToastContext';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ContactScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<'idle' | 'error' | 'success'>('idle');
+
+  const handleSend = () => {
+    if (!subject.trim() || !message.trim()) {
+      setStatus('error');
+      return;
+    }
+
+    setStatus('success');
+    setSubject('');
+    setMessage('');
+    showToast({
+      tone: 'success',
+      title: 'Support note staged',
+      message: 'Your message was queued in this mock support flow.',
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-          </TouchableOpacity>
+        <ScreenHeader
+          eyebrow="SUPPORT"
+          title="Contact"
+          subtitle="Questions, bug reports, and product feedback all belong here."
+          onBack={() => router.back()}
+        />
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>SUPPORT</Text>
-            <Text style={styles.title}>Contact</Text>
-          </View>
-        </View>
-
-        <View style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard}>
           <Text style={styles.heroTitle}>We would love to hear from you</Text>
-          <Text style={styles.heroText}>Questions, bug reports or feedback about the experience all belong here.</Text>
-        </View>
+          <Text style={styles.heroText}>
+            Tell us what broke, what felt great, or what would make the app more useful for your nights out.
+          </Text>
+        </SurfaceCard>
 
-        <View style={styles.sectionCard}>
+        {status === 'error' ? (
+          <FeedbackBanner
+            tone="error"
+            title="Add a subject and message"
+            message="A little more context helps support feel a lot more real."
+          />
+        ) : null}
+
+        {status === 'success' ? (
+          <FeedbackBanner
+            tone="success"
+            title="Message queued"
+            message="This is a mock flow for now, but your note has been staged like a real support request."
+          />
+        ) : null}
+
+        <SurfaceCard style={styles.sectionCard}>
+          <Text style={styles.label}>Subject</Text>
+          <TextInput
+            style={styles.singleInput}
+            placeholder="Bug report, feature idea, account issue..."
+            placeholderTextColor="#91867f"
+            value={subject}
+            onChangeText={setSubject}
+          />
+
           <Text style={styles.label}>Your message</Text>
           <TextInput
             style={styles.input}
@@ -36,12 +82,12 @@ export default function ContactScreen() {
             placeholderTextColor="#91867f"
             multiline
             textAlignVertical="top"
+            value={message}
+            onChangeText={setMessage}
           />
 
-          <TouchableOpacity style={styles.submit}>
-            <Text style={styles.submitText}>Send message</Text>
-          </TouchableOpacity>
-        </View>
+          <AppButton label="Send message" onPress={handleSend} />
+        </SurfaceCard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -50,36 +96,8 @@ export default function ContactScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
   container: { padding: 16, gap: 16, paddingBottom: 152 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: {
-    color: '#857a72',
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: '#1f1a17',
-    fontSize: 26,
-    fontWeight: '800',
-  },
   heroCard: {
     backgroundColor: '#231b17',
-    borderRadius: 24,
-    padding: 18,
   },
   heroTitle: {
     color: '#fff7ef',
@@ -92,20 +110,21 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   sectionCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 18,
     gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   label: {
     color: '#1f1a17',
     fontWeight: '800',
-    fontSize: 18,
+    fontSize: 16,
+  },
+  singleInput: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 15,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    color: '#1f1a17',
   },
   input: {
     backgroundColor: '#fff',
@@ -117,12 +136,4 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     color: '#1f1a17',
   },
-  submit: {
-    marginTop: 6,
-    backgroundColor: Colors.light.tint,
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  submitText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

@@ -1,47 +1,52 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-
+import { AppButton } from '@/components/ui/app-button';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function TermsScreen() {
   const router = useRouter();
+  const [agreed, setAgreed] = useState(false);
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-          </TouchableOpacity>
+        <ScreenHeader
+          eyebrow="LEGAL"
+          title="Terms & privacy"
+          subtitle="A readable version of the basics people actually care about."
+          onBack={() => router.back()}
+        />
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>LEGAL</Text>
-            <Text style={styles.title}>Terms & privacy</Text>
-          </View>
-        </View>
+        {agreed ? (
+          <FeedbackBanner
+            tone="success"
+            title="Preference saved"
+            message="This mock flow now remembers that you agreed during this session."
+          />
+        ) : null}
 
-        <View style={styles.card}>
+        <SurfaceCard style={styles.card}>
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.body}>
-              These terms describe how EventCapture should be used respectfully and safely. By continuing to use the app, you agree to share accurate information, follow community standards, and avoid abusive or misleading content.
+              These terms explain how EventCapture should be used respectfully and safely. By continuing to use the app,
+              you agree to share accurate information, follow community standards, and avoid abusive, misleading or harmful content.
               {'\n\n'}
-              We may use account activity, captures and event interactions to improve the experience, personalize recommendations and keep the platform secure. You remain responsible for the content you upload and for respecting the rules of the venues and events you attend.
+              We may use account activity, captures and event interactions to improve recommendations, personalize the experience,
+              and keep the platform secure. You remain responsible for what you upload and for respecting the rules of the venues and events you attend.
               {'\n\n'}
-              If you need clarification about privacy, account handling or data requests, please reach out through the support section.
+              If you need clarification around privacy, account handling, or data requests, you can always reach out through support.
             </Text>
           </ScrollView>
-        </View>
+        </SurfaceCard>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={[styles.action, styles.secondary]} onPress={() => router.back()}>
-            <Text style={styles.secondaryText}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.action, styles.primary]}>
-            <Text style={styles.primaryText}>Agree</Text>
-          </TouchableOpacity>
+          <AppButton label="Back" variant="secondary" style={styles.action} onPress={() => router.back()} />
+          <AppButton label={agreed ? 'Agreed' : 'Agree'} style={styles.action} onPress={() => setAgreed(true)} />
         </View>
       </View>
     </SafeAreaView>
@@ -51,52 +56,10 @@ export default function TermsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
   container: { padding: 16, gap: 16, flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: {
-    color: '#857a72',
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 26,
-  },
   card: {
     flex: 1,
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   body: { color: '#514943', lineHeight: 22 },
   actions: { flexDirection: 'row', gap: 12, paddingBottom: 12 },
-  action: { flex: 1, paddingVertical: 15, borderRadius: 18, alignItems: 'center' },
-  secondary: {
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  primary: { backgroundColor: Colors.light.tint },
-  secondaryText: { color: '#6f655e', fontWeight: '800' },
-  primaryText: { color: '#fff', fontWeight: '800' },
+  action: { flex: 1 },
 });

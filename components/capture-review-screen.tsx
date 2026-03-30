@@ -1,7 +1,7 @@
+import { AppImage } from '@/components/ui/app-image';
 import { useEvents } from '@/context/EventContext';
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -67,7 +67,7 @@ export function CaptureReviewScreen({
         </View>
 
         <View style={styles.heroCard}>
-          <Image source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
+          <AppImage source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
 
           <View style={styles.heroBody}>
             <Text style={styles.message}>{message}</Text>

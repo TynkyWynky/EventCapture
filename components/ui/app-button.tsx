@@ -1,6 +1,6 @@
 import { Colors } from '@/constants/theme';
 import React from 'react';
-import { StyleProp, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
 
 interface AppButtonProps {
   label: string;
@@ -17,26 +17,41 @@ export function AppButton({
   disabled = false,
   style,
 }: AppButtonProps) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+
+  const animateTo = (toValue: number) => {
+    Animated.spring(scale, {
+      toValue,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 180,
+    }).start();
+  };
+
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      style={[
-        styles.base,
-        variant === 'primary' && styles.primary,
-        variant === 'secondary' && styles.secondary,
-        variant === 'danger' && styles.danger,
-        disabled && styles.disabled,
-        style,
-      ]}>
-      <Text
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        onPressIn={() => animateTo(0.97)}
+        onPressOut={() => animateTo(1)}
         style={[
-          styles.label,
-          variant === 'secondary' && styles.secondaryLabel,
+          styles.base,
+          variant === 'primary' && styles.primary,
+          variant === 'secondary' && styles.secondary,
+          variant === 'danger' && styles.danger,
+          disabled && styles.disabled,
+          style,
         ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
+        <Text
+          style={[
+            styles.label,
+            variant === 'secondary' && styles.secondaryLabel,
+          ]}>
+          {label}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 

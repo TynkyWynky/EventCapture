@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { Animated, Pressable, StyleSheet } from 'react-native';
 
 interface IconActionButtonProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -14,17 +14,36 @@ export function IconActionButton({
   onPress,
   tone = 'light',
 }: IconActionButtonProps) {
+  const scale = React.useRef(new Animated.Value(1)).current;
+
   return (
-    <TouchableOpacity
-      style={[styles.base, tone === 'light' ? styles.light : styles.dark]}
-      onPress={onPress}
-      activeOpacity={0.85}>
-      <Ionicons
-        name={icon}
-        size={20}
-        color={tone === 'light' ? '#1f1a17' : '#fff7ef'}
-      />
-    </TouchableOpacity>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        style={[styles.base, tone === 'light' ? styles.light : styles.dark]}
+        onPress={onPress}
+        onPressIn={() =>
+          Animated.spring(scale, {
+            toValue: 0.94,
+            useNativeDriver: true,
+            friction: 7,
+            tension: 180,
+          }).start()
+        }
+        onPressOut={() =>
+          Animated.spring(scale, {
+            toValue: 1,
+            useNativeDriver: true,
+            friction: 7,
+            tension: 180,
+          }).start()
+        }>
+        <Ionicons
+          name={icon}
+          size={20}
+          color={tone === 'light' ? '#1f1a17' : '#fff7ef'}
+        />
+      </Pressable>
+    </Animated.View>
   );
 }
 

@@ -1,5 +1,6 @@
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { AppImage } from '@/components/ui/app-image';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
@@ -7,17 +8,24 @@ import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const discoveryPresets = [
+  { id: 'all', label: 'All' },
+  { id: 'tonight', label: 'Tonight' },
+  { id: 'popular', label: 'Popular' },
+  { id: 'cheapest', label: 'Cheapest' },
+  { id: 'open_air', label: 'Open air' },
+] as const;
+
 export default function MyEventsScreen() {
   const router = useRouter();
   const { events } = useEvents();
-  const { filteredEvents, activeFilterCount } = useFilters();
+  const { filteredEvents, activeFilterCount, activePresetId, favoritePresetId, applyPreset, filters } = useFilters();
   const { user } = useUser();
   const featuredEvents = (activeFilterCount ? filteredEvents : events).slice(0, 4);
 
@@ -26,7 +34,7 @@ export default function MyEventsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.topBar}>
           <View style={styles.titleRow}>
-            <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+            <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
             <View style={styles.titleCopy}>
               <Text style={styles.eyebrow}>DISCOVER</Text>
               <Text style={styles.title}>{user.city} Events</Text>
@@ -48,7 +56,7 @@ export default function MyEventsScreen() {
           <View style={styles.heroStats}>
             <StatChip label="live picks" value={featuredEvents.length.toString()} tone="dark" />
             <StatChip label="city" value={user.city} tone="dark" />
-            <StatChip label="filters" value={activeFilterCount.toString()} tone="dark" />
+            <StatChip label="sort" value={filters.sortBy.replace('_', ' ')} tone="dark" />
           </View>
         </LinearGradient>
 
@@ -58,6 +66,29 @@ export default function MyEventsScreen() {
             <Text style={styles.sectionSubtitle}>Curated picks that are already moving</Text>
           </View>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+          {favoritePresetId ? (
+            <TouchableOpacity
+              style={[styles.presetChip, styles.favoritePresetChip]}
+              onPress={() => applyPreset(favoritePresetId)}>
+              <Ionicons name="star" size={14} color={Colors.light.tint} />
+              <Text style={styles.favoritePresetText}>Saved</Text>
+            </TouchableOpacity>
+          ) : null}
+          {discoveryPresets.map((preset) => {
+            const active = activePresetId === preset.id;
+
+            return (
+              <TouchableOpacity
+                key={preset.id}
+                style={[styles.presetChip, active && styles.presetChipActive]}
+                onPress={() => applyPreset(preset.id)}>
+                <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>{preset.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {featuredEvents.length ? (
           featuredEvents.map((event, index) => (
@@ -71,7 +102,7 @@ export default function MyEventsScreen() {
                 })
               }>
               <SurfaceCard style={[styles.eventCard, index % 2 === 0 && styles.eventCardWarm]}>
-                <Image source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
+                <AppImage source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
 
                 <View style={styles.eventBody}>
                   <View style={styles.eventHeader}>
@@ -135,6 +166,29 @@ const styles = StyleSheet.create({
   sectionHeader: { gap: 4 },
   sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 22 },
   sectionSubtitle: { color: '#81776f', fontSize: 13 },
+  presetRow: { gap: 10, paddingBottom: 4 },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  presetChipActive: {
+    backgroundColor: '#fff1e0',
+    borderColor: Colors.light.tint,
+  },
+  favoritePresetChip: {
+    backgroundColor: '#fff6eb',
+    borderColor: '#f5c28f',
+  },
+  presetChipText: { color: '#6e635c', fontWeight: '700' },
+  presetChipTextActive: { color: Colors.light.tint },
+  favoritePresetText: { color: Colors.light.tint, fontWeight: '800' },
   eventCard: { padding: 12, gap: 12 },
   eventCardWarm: { backgroundColor: '#fff4eb' },
   eventImage: { width: '100%', height: 182, borderRadius: 20 },

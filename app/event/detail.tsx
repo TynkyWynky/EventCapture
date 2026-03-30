@@ -1,4 +1,5 @@
 import { AppButton } from '@/components/ui/app-button';
+import { AppImage } from '@/components/ui/app-image';
 import { EmptyState } from '@/components/ui/empty-state';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { StatChip } from '@/components/ui/stat-chip';
@@ -7,7 +8,6 @@ import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
 import { Colors } from '@/constants/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
@@ -46,7 +46,7 @@ export default function EventDetailScreen() {
           paddingBottom: 116 + Math.max(insets.bottom, 16),
         }}>
         <View style={styles.heroWrap}>
-          <Image source={{ uri: event.heroImage }} style={styles.hero} contentFit="cover" />
+          <AppImage source={{ uri: event.heroImage }} style={styles.hero} contentFit="cover" />
 
           <LinearGradient colors={['rgba(0,0,0,0.08)', 'rgba(28,18,13,0.82)']} style={styles.heroOverlay}>
             <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 18) }]}>
@@ -196,7 +196,7 @@ export default function EventDetailScreen() {
 
           <SurfaceCard style={styles.hostCard}>
             <View style={styles.hostRow}>
-              <Image source={{ uri: event.hostAvatar }} style={styles.hostAvatar} contentFit="cover" />
+              <AppImage source={{ uri: event.hostAvatar }} style={styles.hostAvatar} contentFit="cover" />
               <View style={styles.hostCopy}>
                 <Text style={styles.hostLabel}>Hosted by</Text>
                 <Text style={styles.hostName}>{event.hostName}</Text>

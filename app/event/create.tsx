@@ -1,10 +1,12 @@
 import { AppButton } from '@/components/ui/app-button';
+import { AppImage } from '@/components/ui/app-image';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
+import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -16,6 +18,7 @@ export default function CreateEventScreen() {
   const router = useRouter();
   const { createEvent } = useEvents();
   const { addActivity } = useSocial();
+  const { showToast } = useToast();
   const { user } = useUser();
   const [coverUrl, setCoverUrl] = useState('');
   const [title, setTitle] = useState('');
@@ -77,6 +80,11 @@ export default function CreateEventScreen() {
       icon: 'calendar-outline',
       color: Colors.light.accent,
     });
+    showToast({
+      tone: 'success',
+      title: 'Event published',
+      message: `${createdEvent.title} is now live in discovery.`,
+    });
 
     router.replace({
       pathname: '/event/detail',
@@ -110,9 +118,13 @@ export default function CreateEventScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.uploadBox}>
-          <View style={styles.uploadIconWrap}>
-            <Ionicons name="image-outline" size={28} color={Colors.light.tint} />
-          </View>
+          {coverUrl ? (
+            <AppImage source={{ uri: coverUrl }} style={styles.previewImage} contentFit="cover" />
+          ) : (
+            <View style={styles.uploadIconWrap}>
+              <Ionicons name="image-outline" size={28} color={Colors.light.tint} />
+            </View>
+          )}
           <Text style={styles.uploadTitle}>Event cover image</Text>
           <Text style={styles.uploadText}>
             Paste an image URL to give the event a strong visual identity.
@@ -220,6 +232,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff2e5',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 12,
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 18,
     marginBottom: 12,
   },
   uploadTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 18 },

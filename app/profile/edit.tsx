@@ -1,12 +1,13 @@
 import { AppButton } from '@/components/ui/app-button';
+import { AppImage } from '@/components/ui/app-image';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
+import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -15,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function EditProfileScreen() {
   const router = useRouter();
   const { user, updateProfile } = useUser();
+  const { showToast } = useToast();
   const [avatarUri, setAvatarUri] = useState(user.avatarUri);
   const [username, setUsername] = useState(user.username);
   const [fullName, setFullName] = useState(user.fullName);
@@ -55,7 +57,7 @@ export default function EditProfileScreen() {
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
               {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
+                <AppImage source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
               ) : (
                 <Ionicons name="person-outline" size={42} color="#9d938b" />
               )}
@@ -141,6 +143,11 @@ export default function EditProfileScreen() {
             label="Save profile"
             onPress={() => {
               updateProfile({ avatarUri, username, fullName, city, bio, email });
+              showToast({
+                tone: 'success',
+                title: 'Profile updated',
+                message: 'Your public profile changes were saved.',
+              });
               router.back();
             }}
           />

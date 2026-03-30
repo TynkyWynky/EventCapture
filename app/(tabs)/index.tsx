@@ -1,6 +1,7 @@
 import { AppButton } from '@/components/ui/app-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { IconActionButton } from '@/components/ui/icon-action-button';
+import { AppImage } from '@/components/ui/app-image';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { useEvents } from '@/context/EventContext';
@@ -9,20 +10,34 @@ import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const filters = ['Live music', 'Open air', 'Food', 'Late night'];
+const discoveryPresets = [
+  { id: 'all', label: 'All' },
+  { id: 'tonight', label: 'Tonight' },
+  { id: 'popular', label: 'Popular' },
+  { id: 'cheapest', label: 'Cheapest' },
+] as const;
 
 export default function HomeFeed() {
   const router = useRouter();
   const { posts } = usePosts();
   const { events, featuredEventId } = useEvents();
-  const { filteredEvents, filters: activeFilters, toggleGenre, activeFilterCount } = useFilters();
+  const {
+    filteredEvents,
+    filters: activeFilters,
+    toggleGenre,
+    activeFilterCount,
+    activePresetId,
+    favoritePresetId,
+    applyPreset,
+    setSearchQuery,
+  } = useFilters();
   const { user } = useUser();
   const latestPost = posts[0];
   const feedEvents = activeFilterCount ? filteredEvents : events;
@@ -38,7 +53,7 @@ export default function HomeFeed() {
 
           <View style={styles.heroTop}>
             <View style={styles.profileRow}>
-              <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+              <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
               <View style={styles.heroCopy}>
                 <Text style={styles.heroEyebrow}>TONIGHT IN BRUSSELS</Text>
                 <Text style={styles.heroTitle}>Find your next vibe, {user.username}</Text>
@@ -56,18 +71,26 @@ export default function HomeFeed() {
             Browse standout events, save memories and move through the city with your crew.
           </Text>
 
-          <TouchableOpacity style={styles.searchBox} activeOpacity={0.9} onPress={() => router.push('/filters')}>
+          <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color="#8d827a" />
-            <Text style={styles.searchText}>
-              {activeFilterCount ? `${activeFilterCount} filters active` : 'Search artists, places or moods'}
-            </Text>
-            <Ionicons name="options-outline" size={18} color="#8d827a" />
-          </TouchableOpacity>
+            <TextInput
+              value={activeFilters.searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search artists, places or moods"
+              placeholderTextColor="#8d827a"
+              style={styles.searchInput}
+            />
+            <TouchableOpacity onPress={() => router.push('/filters')}>
+              <Ionicons name="options-outline" size={18} color="#8d827a" />
+            </TouchableOpacity>
+          </View>
+
+          {activeFilterCount ? <Text style={styles.searchMeta}>{activeFilterCount} filters active</Text> : null}
 
           <View style={styles.metricRow}>
             <StatChip label="events nearby" value={feedEvents.length.toString()} tone="dark" />
             <StatChip label="captures saved" value={posts.length.toString().padStart(2, '0')} tone="dark" />
-            <StatChip label="friends active" value="08" tone="dark" />
+            <StatChip label="sort" value={activeFilters.sortBy.replace('_', ' ')} tone="dark" />
           </View>
         </LinearGradient>
 
@@ -77,6 +100,29 @@ export default function HomeFeed() {
             <Text style={styles.sectionSubtitle}>Explore by atmosphere</Text>
           </View>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+          {favoritePresetId ? (
+            <TouchableOpacity
+              style={[styles.presetChip, styles.favoritePresetChip]}
+              onPress={() => applyPreset(favoritePresetId)}>
+              <Ionicons name="star" size={14} color={Colors.light.tint} />
+              <Text style={styles.favoritePresetText}>Saved</Text>
+            </TouchableOpacity>
+          ) : null}
+          {discoveryPresets.map((preset) => {
+            const active = activePresetId === preset.id;
+
+            return (
+              <TouchableOpacity
+                key={preset.id}
+                style={[styles.presetChip, active && styles.presetChipActive]}
+                onPress={() => applyPreset(preset.id)}>
+                <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>{preset.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         <View style={styles.filterRow}>
           {filters.map((filter) => {
@@ -141,7 +187,7 @@ export default function HomeFeed() {
               ) : null}
             </View>
 
-            <Image source={{ uri: latestPost.imageUri }} style={styles.postImage} contentFit="cover" />
+            <AppImage source={{ uri: latestPost.imageUri }} style={styles.postImage} contentFit="cover" />
             <Text style={styles.cardTitle}>{latestPost.eventTitle || 'Captured moment'}</Text>
             <Text style={styles.cardMeta}>{latestPost.date}</Text>
           </SurfaceCard>
@@ -166,7 +212,7 @@ export default function HomeFeed() {
             <Text style={styles.sectionSubtitle}>Good energy, close to you</Text>
           </View>
           <TouchableOpacity style={styles.filterButton} onPress={() => router.push('/filters')}>
-            <Text style={styles.filterButtonText}>Filters</Text>
+            <Text style={styles.filterButtonText}>{activeFilters.sortBy === 'popular' ? 'Popular' : activeFilters.sortBy === 'soonest' ? 'Soonest' : 'Lowest price'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -182,7 +228,7 @@ export default function HomeFeed() {
                 })
               }>
               <SurfaceCard style={styles.eventCard}>
-                <Image source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
+                <AppImage source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
 
                 <View style={styles.eventBody}>
                   <View style={styles.eventHeader}>
@@ -272,11 +318,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  searchText: { flex: 1, color: '#8d827a', fontWeight: '600' },
+  searchInput: { flex: 1, color: '#1f1a17', fontWeight: '600', paddingVertical: 0 },
+  searchMeta: { color: '#f3caa5', fontSize: 12, fontWeight: '700', marginTop: -8 },
   metricRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
   sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 22 },
   sectionSubtitle: { color: '#81776f', fontSize: 13 },
+  presetRow: { gap: 10, paddingBottom: 14 },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  presetChipActive: {
+    backgroundColor: '#fff1e0',
+    borderColor: Colors.light.tint,
+  },
+  favoritePresetChip: {
+    backgroundColor: '#fff6eb',
+    borderColor: '#f5c28f',
+  },
+  presetChipText: { color: '#6e635c', fontWeight: '700' },
+  presetChipTextActive: { color: Colors.light.tint },
+  favoritePresetText: { color: Colors.light.tint, fontWeight: '800' },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   filterChip: { backgroundColor: '#efe3d5', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
   filterChipActive: { backgroundColor: '#231b17' },

@@ -1,67 +1,126 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-
-import { Colors } from '@/constants/theme';
+import { AppButton } from '@/components/ui/app-button';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
+import { Colors } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const highlights = [
+  'Discover nights that actually match your mood',
+  'Capture your drink moments and earn crowns',
+  'Save favorite discovery presets for faster browsing',
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.card}>
-        <View style={styles.logoWrap}>
-          <LogoMark size={48} />
-        </View>
-        <Text style={styles.body}>
-          Explanation on BierReal fffffffffffffffffffffff gggggggggggggggggggggggg gggggggggggggggggg
-          ggggggggggggggggggggggggggggggggggggggggggggg
-        </Text>
-        <TouchableOpacity style={styles.primary} onPress={() => router.push('/auth/login')}>
-          <Text style={styles.primaryText}>Sign In</Text>
-          <Ionicons name="arrow-forward" size={16} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      <LinearGradient colors={['#1f1612', '#352016', Colors.light.tintDark]} style={styles.background}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <SurfaceCard style={styles.card}>
+            <View style={styles.logoWrap}>
+              <LogoMark size={52} />
+            </View>
+
+            <Text style={styles.eyebrow}>WELCOME TO EVENTCAPTURE</Text>
+            <Text style={styles.title}>Find the night. Keep the memory.</Text>
+            <Text style={styles.body}>
+              EventCapture helps you discover events around Brussels, save the ones that match your vibe,
+              and turn your best drink moments into a shared nightlife diary.
+            </Text>
+
+            <View style={styles.highlightList}>
+              {highlights.map((item) => (
+                <View key={item} style={styles.highlightRow}>
+                  <View style={styles.highlightIcon}>
+                    <Ionicons name="sparkles-outline" size={16} color={Colors.light.tint} />
+                  </View>
+                  <Text style={styles.highlightText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.actionBlock}>
+              <AppButton label="Sign in" onPress={() => router.push('/auth/login')} />
+              <AppButton label="Create account" variant="secondary" onPress={() => router.push('/profile/create')} />
+            </View>
+          </SurfaceCard>
+        </ScrollView>
+      </LinearGradient>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.tint, alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1, backgroundColor: '#1f1612' },
+  background: { flex: 1 },
+  content: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   card: {
-    width: '88%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    borderRadius: 30,
+    gap: 16,
+    paddingHorizontal: 22,
+    paddingVertical: 28,
   },
   logoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: Colors.light.tint,
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    backgroundColor: '#fce7d7',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
-  body: { color: '#444', lineHeight: 20 },
-  primary: {
-    marginTop: 8,
-    width: '100%',
-    backgroundColor: Colors.light.tint,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
+  eyebrow: {
+    color: '#8d6c56',
+    textAlign: 'center',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 1.2,
+  },
+  title: {
+    color: '#1f1a17',
+    fontSize: 31,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  body: {
+    color: '#6f655e',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  highlightList: {
+    gap: 10,
+  },
+  highlightRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#fff4e8',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  primaryText: { color: '#fff', fontWeight: '800' },
+  highlightIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  highlightText: {
+    flex: 1,
+    color: '#1f1a17',
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  actionBlock: {
+    gap: 10,
+    marginTop: 2,
+  },
 });
