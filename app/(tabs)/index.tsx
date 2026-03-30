@@ -1,44 +1,34 @@
+import { AppButton } from '@/components/ui/app-button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { IconActionButton } from '@/components/ui/icon-action-button';
+import { StatChip } from '@/components/ui/stat-chip';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { useEvents } from '@/context/EventContext';
+import { useFilters } from '@/context/FilterContext';
 import { usePosts } from '@/context/PostContext';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useUser } from '@/context/UserContext';
+import { Colors } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-import { Colors } from '@/constants/theme';
-
-const avatar = 'https://i.pravatar.cc/120?img=64';
-
-const sampleEvents = [
-  {
-    title: 'Rooftop Session',
-    place: 'Ixelles',
-    date: '18 Jul',
-    time: '20:30',
-    tags: 'Live set, rooftop',
-    price: '18 EUR',
-    image:
-      'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1200&q=80',
-  },
-  {
-    title: 'Night Market Afterparty',
-    place: 'Brussels Center',
-    date: '24 Aug',
-    time: '22:00',
-    tags: 'Food, DJ set',
-    price: '12 EUR',
-    image:
-      'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=1200&q=80',
-  },
-];
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const filters = ['Live music', 'Open air', 'Food', 'Late night'];
 
 export default function HomeFeed() {
   const router = useRouter();
   const { posts } = usePosts();
+  const { events, featuredEventId } = useEvents();
+  const { filteredEvents, filters: activeFilters, toggleGenre, activeFilterCount } = useFilters();
+  const { user } = useUser();
   const latestPost = posts[0];
+  const feedEvents = activeFilterCount ? filteredEvents : events;
+  const featuredEvent =
+    feedEvents.find((event) => event.id === featuredEventId) ?? feedEvents[0];
+  const trendingEvents = feedEvents.slice(0, 3);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -48,39 +38,36 @@ export default function HomeFeed() {
 
           <View style={styles.heroTop}>
             <View style={styles.profileRow}>
-              <Image source={{ uri: avatar }} style={styles.avatar} />
-              <View>
+              <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+              <View style={styles.heroCopy}>
                 <Text style={styles.heroEyebrow}>TONIGHT IN BRUSSELS</Text>
-                <Text style={styles.heroTitle}>Find your next vibe</Text>
+                <Text style={styles.heroTitle}>Find your next vibe, {user.username}</Text>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.heroAction} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={20} color="#fff7ef" />
-            </TouchableOpacity>
+            <IconActionButton
+              icon="notifications-outline"
+              tone="dark"
+              onPress={() => router.push('/notifications')}
+            />
           </View>
 
-          <Text style={styles.heroText}>Browse standout events, save memories and move through the city with your crew.</Text>
+          <Text style={styles.heroText}>
+            Browse standout events, save memories and move through the city with your crew.
+          </Text>
 
           <TouchableOpacity style={styles.searchBox} activeOpacity={0.9} onPress={() => router.push('/filters')}>
             <Ionicons name="search" size={18} color="#8d827a" />
-            <Text style={styles.searchText}>Search artists, places or moods</Text>
+            <Text style={styles.searchText}>
+              {activeFilterCount ? `${activeFilterCount} filters active` : 'Search artists, places or moods'}
+            </Text>
             <Ionicons name="options-outline" size={18} color="#8d827a" />
           </TouchableOpacity>
 
           <View style={styles.metricRow}>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>24</Text>
-              <Text style={styles.metricLabel}>events nearby</Text>
-            </View>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>{posts.length.toString().padStart(2, '0')}</Text>
-              <Text style={styles.metricLabel}>captures saved</Text>
-            </View>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>08</Text>
-              <Text style={styles.metricLabel}>friends active</Text>
-            </View>
+            <StatChip label="events nearby" value={feedEvents.length.toString()} tone="dark" />
+            <StatChip label="captures saved" value={posts.length.toString().padStart(2, '0')} tone="dark" />
+            <StatChip label="friends active" value="08" tone="dark" />
           </View>
         </LinearGradient>
 
@@ -92,49 +79,55 @@ export default function HomeFeed() {
         </View>
 
         <View style={styles.filterRow}>
-          {filters.map((filter, index) => (
-            <TouchableOpacity key={filter} style={[styles.filterChip, index === 0 && styles.filterChipActive]}>
-              <Text style={[styles.filterChipText, index === 0 && styles.filterChipTextActive]}>{filter}</Text>
-            </TouchableOpacity>
-          ))}
+          {filters.map((filter) => {
+            const active = activeFilters.selectedGenres.includes(filter);
+
+            return (
+              <TouchableOpacity
+                key={filter}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => toggleGenre(filter)}>
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{filter}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        <LinearGradient colors={['#231b17', '#3a261d']} style={styles.featuredCard}>
-          <View style={styles.featuredTop}>
-            <View>
-              <Text style={styles.featuredEyebrow}>FEATURED TONIGHT</Text>
-              <Text style={styles.featuredTitle}>Electronic Harbor Session</Text>
+        {featuredEvent ? (
+          <LinearGradient colors={['#231b17', '#3a261d']} style={styles.featuredCard}>
+            <View style={styles.featuredTop}>
+              <View style={styles.featuredCopy}>
+                <Text style={styles.featuredEyebrow}>FEATURED TONIGHT</Text>
+                <Text style={styles.featuredTitle}>{featuredEvent.title}</Text>
+              </View>
+              <View style={styles.liveBadge}>
+                <Text style={styles.liveBadgeText}>LIVE</Text>
+              </View>
             </View>
-            <View style={styles.liveBadge}>
-              <Text style={styles.liveBadgeText}>LIVE</Text>
-            </View>
-          </View>
 
-          <Text style={styles.featuredDesc}>Sunset visuals, electronic sets and a crowd that actually feels alive.</Text>
+            <Text style={styles.featuredDesc}>{featuredEvent.description}</Text>
 
-          <View style={styles.featuredMeta}>
-            <View style={styles.metaPill}>
-              <Ionicons name="pin-outline" size={14} color="#f6d6bb" />
-              <Text style={styles.metaText}>Brussels Canal</Text>
+            <View style={styles.featuredMeta}>
+              <StatChip label="spot" value={featuredEvent.place} icon="pin-outline" tone="dark" />
+              <StatChip label="time" value={featuredEvent.time} icon="time-outline" tone="dark" />
+              <StatChip label="crowd" value={featuredEvent.attendees} icon="people-outline" tone="dark" />
             </View>
-            <View style={styles.metaPill}>
-              <Ionicons name="time-outline" size={14} color="#f6d6bb" />
-              <Text style={styles.metaText}>22:30</Text>
-            </View>
-            <View style={styles.metaPill}>
-              <Ionicons name="people-outline" size={14} color="#f6d6bb" />
-              <Text style={styles.metaText}>420 going</Text>
-            </View>
-          </View>
 
-          <TouchableOpacity style={styles.featuredButton} onPress={() => router.push('/event/detail')}>
-            <Text style={styles.featuredButtonText}>See details</Text>
-            <Ionicons name="arrow-forward" size={16} color="#fff" />
-          </TouchableOpacity>
-        </LinearGradient>
+            <AppButton
+              label="See details"
+              onPress={() =>
+                router.push({
+                  pathname: '/event/detail',
+                  params: { eventId: featuredEvent.id },
+                })
+              }
+              style={styles.featuredButton}
+            />
+          </LinearGradient>
+        ) : null}
 
         {latestPost ? (
-          <View style={styles.postCard}>
+          <SurfaceCard style={styles.postCard}>
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>Latest capture</Text>
@@ -151,8 +144,21 @@ export default function HomeFeed() {
             <Image source={{ uri: latestPost.imageUri }} style={styles.postImage} contentFit="cover" />
             <Text style={styles.cardTitle}>{latestPost.eventTitle || 'Captured moment'}</Text>
             <Text style={styles.cardMeta}>{latestPost.date}</Text>
-          </View>
-        ) : null}
+          </SurfaceCard>
+        ) : (
+          <SurfaceCard style={styles.capturePrompt}>
+            <View style={styles.promptIcon}>
+              <Ionicons name="camera-outline" size={22} color={Colors.light.tint} />
+            </View>
+            <View style={styles.promptCopy}>
+              <Text style={styles.promptTitle}>Start your capture streak</Text>
+              <Text style={styles.promptText}>
+                Take your first drink photo to unlock crowns and build your night recap.
+              </Text>
+            </View>
+            <AppButton label="Open camera" onPress={() => router.push('/camera')} />
+          </SurfaceCard>
+        )}
 
         <View style={styles.sectionHeader}>
           <View>
@@ -164,48 +170,57 @@ export default function HomeFeed() {
           </TouchableOpacity>
         </View>
 
-        {sampleEvents.map((event) => (
-          <TouchableOpacity key={event.title} activeOpacity={0.92} style={styles.eventCard} onPress={() => router.push('/event/detail')}>
-            <Image source={{ uri: event.image }} style={styles.eventImage} contentFit="cover" />
+        {trendingEvents.length ? (
+          trendingEvents.map((event) => (
+            <TouchableOpacity
+              key={event.id}
+              activeOpacity={0.92}
+              onPress={() =>
+                router.push({
+                  pathname: '/event/detail',
+                  params: { eventId: event.id },
+                })
+              }>
+              <SurfaceCard style={styles.eventCard}>
+                <Image source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
 
-            <View style={styles.eventBody}>
-              <View style={styles.eventHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{event.title}</Text>
-                  <Text style={styles.cardMeta}>{event.tags}</Text>
-                </View>
-                <View style={styles.priceBadge}>
-                  <Text style={styles.priceText}>{event.price}</Text>
-                </View>
-              </View>
+                <View style={styles.eventBody}>
+                  <View style={styles.eventHeader}>
+                    <View style={styles.eventCopy}>
+                      <Text style={styles.cardTitle}>{event.title}</Text>
+                      <Text style={styles.cardMeta}>{event.vibe}</Text>
+                    </View>
+                    <View style={styles.priceBadge}>
+                      <Text style={styles.priceText}>{event.price}</Text>
+                    </View>
+                  </View>
 
-              <View style={styles.infoRow}>
-                <View style={styles.infoPill}>
-                  <Ionicons name="pin-outline" size={14} color="#6f655e" />
-                  <Text style={styles.infoText}>{event.place}</Text>
-                </View>
-                <View style={styles.infoPill}>
-                  <Ionicons name="calendar-outline" size={14} color="#6f655e" />
-                  <Text style={styles.infoText}>{event.date}</Text>
-                </View>
-                <View style={styles.infoPill}>
-                  <Ionicons name="time-outline" size={14} color="#6f655e" />
-                  <Text style={styles.infoText}>{event.time}</Text>
-                </View>
-              </View>
+                  <View style={styles.infoRow}>
+                    <StatChip label="place" value={event.place} icon="pin-outline" />
+                    <StatChip label="date" value={event.date} icon="calendar-outline" />
+                    <StatChip label="time" value={event.time} icon="time-outline" />
+                  </View>
 
-              <View style={styles.cardFooter}>
-                <View style={styles.friendRow}>
-                  <View style={styles.dot} />
-                  <Text style={styles.friendText}>Friends are interested</Text>
+                  <View style={styles.cardFooter}>
+                    <View style={styles.friendRow}>
+                      <View style={styles.dot} />
+                      <Text style={styles.friendText}>Friends are interested</Text>
+                    </View>
+                    <View style={styles.arrowWrap}>
+                      <Ionicons name="arrow-forward" size={16} color="#fff" />
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.arrowWrap}>
-                  <Ionicons name="arrow-forward" size={16} color="#fff" />
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+              </SurfaceCard>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <EmptyState
+            icon="options-outline"
+            title="No events match yet"
+            message="Try relaxing a filter or reset your picks to see more nights."
+          />
+        )}
 
         <TouchableOpacity style={styles.fab} onPress={() => router.push('/event/create')}>
           <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.fabInner}>
@@ -241,19 +256,12 @@ const styles = StyleSheet.create({
     borderRadius: 90,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  heroCopy: { flex: 1 },
   avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)' },
   heroEyebrow: { color: '#f3caa5', fontSize: 11, fontWeight: '800', letterSpacing: 1.3 },
   heroTitle: { color: '#fff8f2', fontSize: 24, fontWeight: '800' },
-  heroAction: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   heroText: { color: '#ebddd1', fontSize: 16, lineHeight: 24, maxWidth: 320 },
   searchBox: {
     backgroundColor: '#fffaf5',
@@ -265,17 +273,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchText: { flex: 1, color: '#8d827a', fontWeight: '600' },
-  metricRow: { flexDirection: 'row', gap: 10 },
-  metric: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.11)',
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-  },
-  metricValue: { color: '#fff7ef', fontWeight: '800', fontSize: 22 },
-  metricLabel: { color: '#e7d2c4', fontSize: 12, marginTop: 2 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  metricRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
   sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 22 },
   sectionSubtitle: { color: '#81776f', fontSize: 13 },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
@@ -294,71 +293,43 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
-  featuredTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  featuredTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
+  featuredCopy: { flex: 1 },
   featuredEyebrow: { color: '#f0c9a9', fontWeight: '800', fontSize: 11, letterSpacing: 1.2 },
-  featuredTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 24, marginTop: 6, maxWidth: 230 },
+  featuredTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 24, marginTop: 6 },
   featuredDesc: { color: '#d6c5b8', lineHeight: 21 },
   liveBadge: { backgroundColor: '#0f766e', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' },
   liveBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 0.8 },
-  featuredMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  metaText: { color: '#f6d6bb', fontWeight: '700', fontSize: 12 },
-  featuredButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.light.tint,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  featuredButtonText: { color: '#fff', fontWeight: '800' },
-  postCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
+  featuredMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  featuredButton: { marginTop: 2 },
+  postCard: { marginBottom: 20, gap: 12 },
   rewardBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f766e', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   rewardText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  postImage: { width: '100%', height: 180, borderRadius: 18, marginBottom: 12 },
+  postImage: { width: '100%', height: 180, borderRadius: 18 },
+  capturePrompt: { gap: 14, marginBottom: 20 },
+  promptIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#fff1e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promptCopy: { gap: 4 },
+  promptTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
+  promptText: { color: '#81776f', lineHeight: 21 },
   filterButton: { backgroundColor: '#efe3d5', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
   filterButtonText: { color: '#1f1a17', fontWeight: '800', fontSize: 13 },
-  eventCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 26,
-    padding: 14,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
+  eventCard: { padding: 14, marginBottom: 16 },
   eventImage: { width: '100%', height: 190, borderRadius: 20, marginBottom: 14 },
   eventBody: { gap: 10 },
   eventHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  eventCopy: { flex: 1 },
   cardTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 21 },
   cardMeta: { color: '#81776f', fontSize: 13.5, marginTop: 2 },
   priceBadge: { backgroundColor: '#231b17', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   priceText: { color: '#fff7ef', fontWeight: '800', fontSize: 12 },
   infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  infoPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f6eee4', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
-  infoText: { color: '#6f655e', fontWeight: '600', fontSize: 13.5 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0f766e' },

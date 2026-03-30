@@ -1,69 +1,50 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import { EmptyState } from '@/components/ui/empty-state';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { useSocial } from '@/context/SocialContext';
 import { Colors } from '@/constants/theme';
-
-const items = [
-  {
-    user: 'Joe',
-    text: 'liked your latest capture',
-    time: '2h ago',
-    icon: 'heart',
-    color: '#e45b5b',
-    section: 'New',
-  },
-  {
-    user: 'Jaime',
-    text: 'commented on your event post',
-    time: '10h ago',
-    icon: 'chatbubble-ellipses-outline',
-    color: Colors.light.accent,
-    section: 'New',
-  },
-  {
-    user: 'Alex',
-    text: 'saved Sunset Brewery Fest',
-    time: 'Yesterday',
-    icon: 'bookmark-outline',
-    color: Colors.light.tint,
-    section: 'Earlier',
-  },
-  {
-    user: 'Jeniffer',
-    text: 'liked your profile update',
-    time: '15 Oct 2024',
-    icon: 'heart',
-    color: '#e45b5b',
-    section: 'Earlier',
-  },
-];
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { notifications } = useSocial();
+  const items = notifications.map((item, index) => ({
+    ...item,
+    section: index < 3 ? 'New' : 'Earlier',
+  }));
   const sections = ['New', 'Earlier'];
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>ACTIVITY</Text>
-            <Text style={styles.title}>Notifications</Text>
-          </View>
-          <TouchableOpacity style={styles.iconButton}>
-            <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          eyebrow="ACTIVITY"
+          title="Notifications"
+          onBack={() => router.back()}
+          rightAction={
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
+            </TouchableOpacity>
+          }
+        />
 
-        <View style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard}>
           <Text style={styles.heroTitle}>Stay in the loop</Text>
           <Text style={styles.heroText}>Track likes, comments and event activity without losing the thread of your night.</Text>
-        </View>
+        </SurfaceCard>
+
+        {!items.length ? (
+          <EmptyState
+            icon="notifications-outline"
+            title="No activity yet"
+            message="Likes, saves, and comments will appear here as soon as they happen."
+          />
+        ) : null}
 
         {sections.map((section) => {
           const entries = items.filter((item) => item.section === section);
@@ -103,12 +84,6 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
   container: { padding: 16, paddingBottom: 152 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 18,
-  },
   iconButton: {
     width: 40,
     height: 40,
@@ -119,21 +94,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  eyebrow: {
-    color: '#857a72',
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: '#1f1a17',
-    fontSize: 26,
-    fontWeight: '800',
-  },
   heroCard: {
     backgroundColor: '#231b17',
-    borderRadius: 24,
-    padding: 18,
     marginBottom: 20,
   },
   heroTitle: {

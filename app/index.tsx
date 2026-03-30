@@ -1,5 +1,7 @@
+import { useUser } from '@/context/UserContext';
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +11,7 @@ import { Colors } from '@/constants/theme';
 
 export default function SplashScreen() {
   const router = useRouter();
+  const { isAuthenticated } = useUser();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -54,7 +57,10 @@ export default function SplashScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.button} activeOpacity={0.9} onPress={() => router.push('/auth/login')}>
+            <TouchableOpacity
+              style={styles.button}
+              activeOpacity={0.9}
+              onPress={() => router.push(isAuthenticated ? '/(tabs)' : '/auth/login')}>
               <Text style={styles.buttonText}>Open EventCapture</Text>
             </TouchableOpacity>
           </View>

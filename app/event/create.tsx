@@ -1,55 +1,133 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { AppButton } from '@/components/ui/app-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { StatChip } from '@/components/ui/stat-chip';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { Colors } from '@/constants/theme';
+import { useEvents } from '@/context/EventContext';
+import { useSocial } from '@/context/SocialContext';
+import { useUser } from '@/context/UserContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-
-import { Colors } from '@/constants/theme';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function CreateEventScreen() {
   const router = useRouter();
+  const { createEvent } = useEvents();
+  const { addActivity } = useSocial();
+  const { user } = useUser();
+  const [coverUrl, setCoverUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [address, setAddress] = useState('');
+  const [dateTime, setDateTime] = useState('');
+  const [vibe, setVibe] = useState('');
+  const [price, setPrice] = useState('');
 
-  const input = (label: string, placeholder: string, icon: React.ReactNode) => (
+  const input = (
+    label: string,
+    placeholder: string,
+    icon: React.ReactNode,
+    value: string,
+    onChangeText: (text: string) => void
+  ) => (
     <View style={styles.fieldGroup}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.inputRow}>
         {icon}
-        <TextInput placeholder={placeholder} placeholderTextColor="#91867f" style={styles.input} />
+        <TextInput
+          placeholder={placeholder}
+          placeholderTextColor="#91867f"
+          style={styles.input}
+          value={value}
+          onChangeText={onChangeText}
+        />
       </View>
     </View>
   );
 
+  const handleCreate = () => {
+    const locationParts = address
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const fallbackPlace = address.trim() || 'Brussels';
+    const place = locationParts[locationParts.length - 1] ?? fallbackPlace;
+    const [datePart, timePart] = dateTime.includes('  ')
+      ? dateTime.split('  ')
+      : [dateTime, 'Time to be confirmed'];
+    const createdEvent = createEvent({
+      title,
+      description,
+      address,
+      place,
+      date: datePart || 'TBD',
+      fullDate: dateTime || 'Date to be confirmed',
+      time: timePart || 'Time to be confirmed',
+      vibe,
+      price,
+      priceLabel: price ? `${price} entry` : 'Free entry',
+      heroImage: coverUrl,
+    });
+
+    addActivity({
+      user: user.username,
+      text: `created ${createdEvent.title}`,
+      icon: 'calendar-outline',
+      color: Colors.light.accent,
+    });
+
+    router.replace({
+      pathname: '/event/detail',
+      params: { eventId: createdEvent.id },
+    });
+  };
+
+  const isPublishDisabled = !title.trim() || !address.trim() || !dateTime.trim();
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-          </TouchableOpacity>
+        <ScreenHeader
+          eyebrow="HOST"
+          title="Create Event"
+          subtitle="Shape the page before people even arrive."
+          onBack={() => router.back()}
+          rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>Draft</Text></View>}
+        />
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>HOST</Text>
-            <Text style={styles.title}>Create Event</Text>
-          </View>
-
-          <TouchableOpacity style={styles.draftBtn}>
-            <Text style={styles.draftText}>Draft</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard}>
           <Text style={styles.heroTitle}>Bring your next night to life</Text>
-          <Text style={styles.heroText}>Create an event page that feels polished before anyone even arrives.</Text>
-        </View>
+          <Text style={styles.heroText}>
+            Create an event page that feels polished before anyone even arrives.
+          </Text>
 
-        <TouchableOpacity style={styles.uploadBox} activeOpacity={0.92}>
+          <View style={styles.heroStats}>
+            <StatChip label="host" value={user.username} />
+            <StatChip label="city" value={user.city} />
+          </View>
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.uploadBox}>
           <View style={styles.uploadIconWrap}>
             <Ionicons name="image-outline" size={28} color={Colors.light.tint} />
           </View>
-          <Text style={styles.uploadTitle}>Upload event cover</Text>
-          <Text style={styles.uploadText}>Choose a strong image that instantly sets the mood.</Text>
-        </TouchableOpacity>
+          <Text style={styles.uploadTitle}>Event cover image</Text>
+          <Text style={styles.uploadText}>
+            Paste an image URL to give the event a strong visual identity.
+          </Text>
+          <TextInput
+            placeholder="https://images.unsplash.com/..."
+            placeholderTextColor="#91867f"
+            style={styles.coverInput}
+            value={coverUrl}
+            onChangeText={setCoverUrl}
+            autoCapitalize="none"
+          />
+        </SurfaceCard>
 
-        <View style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Basics</Text>
 
           <View style={styles.fieldGroup}>
@@ -58,6 +136,8 @@ export default function CreateEventScreen() {
               placeholder="Add event name"
               placeholderTextColor="#91867f"
               style={styles.textField}
+              value={title}
+              onChangeText={setTitle}
             />
           </View>
 
@@ -69,26 +149,29 @@ export default function CreateEventScreen() {
               style={[styles.textField, styles.textArea]}
               multiline
               textAlignVertical="top"
+              value={description}
+              onChangeText={setDescription}
             />
           </View>
-        </View>
+        </SurfaceCard>
 
-        <View style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Details</Text>
 
-          {input('Location', 'Add address', <Ionicons name="location-outline" size={18} color="#81776f" />)}
-          {input('Date & time', 'dd/mm/yyyy   --:--', <Ionicons name="calendar-outline" size={18} color="#81776f" />)}
-          {input('Music or vibe', 'Add genre or atmosphere', <Ionicons name="musical-notes-outline" size={18} color="#81776f" />)}
-          {input('Price', 'Add price', <MaterialCommunityIcons name="currency-eur" size={18} color="#81776f" />)}
-        </View>
+          {input('Location', 'Add address', <Ionicons name="location-outline" size={18} color="#81776f" />, address, setAddress)}
+          {input('Date & time', '18 Jul 2026  20:30 - 01:00', <Ionicons name="calendar-outline" size={18} color="#81776f" />, dateTime, setDateTime)}
+          {input('Music or vibe', 'Add genre or atmosphere', <Ionicons name="musical-notes-outline" size={18} color="#81776f" />, vibe, setVibe)}
+          {input('Price', 'Add price', <MaterialCommunityIcons name="currency-eur" size={18} color="#81776f" />, price, setPrice)}
+        </SurfaceCard>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.createBtn}>
-            <Text style={styles.createText}>Publish event</Text>
-          </TouchableOpacity>
+          <AppButton label="Cancel" variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
+          <AppButton
+            label="Publish event"
+            onPress={handleCreate}
+            disabled={isPublishDisabled}
+            style={styles.createBtn}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -98,45 +181,21 @@ export default function CreateEventScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
   container: { padding: 16, paddingBottom: 152, gap: 16 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconButton: {
-    width: 40,
+  draftChip: {
+    minWidth: 64,
     height: 40,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  eyebrow: {
-    color: '#857a72',
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: '#1f1a17',
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  draftBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
   draftText: { color: '#6f655e', fontWeight: '700' },
   heroCard: {
     backgroundColor: '#231b17',
-    borderRadius: 24,
-    padding: 18,
+    gap: 12,
   },
   heroTitle: {
     color: '#fff7ef',
@@ -146,12 +205,9 @@ const styles = StyleSheet.create({
   heroText: {
     color: '#d7c7bb',
     lineHeight: 21,
-    marginTop: 8,
   },
+  heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   uploadBox: {
-    backgroundColor: '#fffaf5',
-    borderRadius: 24,
-    padding: 22,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#ead7c2',
@@ -168,15 +224,19 @@ const styles = StyleSheet.create({
   },
   uploadTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 18 },
   uploadText: { color: '#81776f', textAlign: 'center', lineHeight: 20, marginTop: 6, maxWidth: 260 },
+  coverInput: {
+    width: '100%',
+    marginTop: 14,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#ead7c2',
+    color: '#1f1a17',
+  },
   sectionCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    gap: 2,
   },
   sectionTitle: {
     color: '#1f1a17',
@@ -218,22 +278,6 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, color: '#1f1a17' },
   actionRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 15,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    backgroundColor: Colors.light.card,
-  },
-  cancelText: { color: '#6f655e', fontWeight: '700' },
-  createBtn: {
-    flex: 1.2,
-    paddingVertical: 15,
-    borderRadius: 18,
-    backgroundColor: Colors.light.tint,
-    alignItems: 'center',
-  },
-  createText: { color: '#fff', fontWeight: '800' },
+  cancelBtn: { flex: 1 },
+  createBtn: { flex: 1.2 },
 });

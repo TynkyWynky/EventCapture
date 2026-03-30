@@ -1,43 +1,57 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEvents } from '@/context/EventContext';
+import { useSocial } from '@/context/SocialContext';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors } from '@/constants/theme';
 
-const users = ['Emma', 'Lucas', 'Mila', 'Noah'];
-
 export default function LikesScreen() {
   const router = useRouter();
+  const { eventId } = useLocalSearchParams<{ eventId?: string }>();
+  const { getEventById } = useEvents();
+  const { getEventSocial } = useSocial();
+  const event = getEventById(eventId);
+  const users = getEventSocial(eventId)?.likes ?? [];
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-        </TouchableOpacity>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>ENGAGEMENT</Text>
-          <Text style={styles.title}>Likes</Text>
-        </View>
+      <View style={styles.headerWrap}>
+        <ScreenHeader
+          eyebrow="ENGAGEMENT"
+          title="Likes"
+          subtitle={event?.title ?? 'Event reactions'}
+          onBack={() => router.back()}
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {users.map((name) => (
-          <View key={name} style={styles.card}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+        {users.length ? (
+          users.map((entry) => (
+            <View key={entry.id} style={styles.card}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{entry.name.charAt(0)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{entry.name}</Text>
+                <Text style={styles.meta}>Liked this event</Text>
+              </View>
+              <View style={styles.heartBadge}>
+                <Ionicons name="heart" size={16} color="#e45b5b" />
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{name}</Text>
-              <Text style={styles.meta}>Liked your latest capture</Text>
-            </View>
-            <View style={styles.heartBadge}>
-              <Ionicons name="heart" size={16} color="#e45b5b" />
-            </View>
-          </View>
-        ))}
+          ))
+        ) : (
+          <EmptyState
+            icon="heart-outline"
+            title="No likes yet"
+            message="When people react to this event, they will show up here."
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -45,26 +59,11 @@ export default function LikesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  headerWrap: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 14,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: { color: '#857a72', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: '#1f1a17', fontSize: 26, fontWeight: '800' },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   card: {
     backgroundColor: Colors.light.card,

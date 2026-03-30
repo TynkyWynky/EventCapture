@@ -1,64 +1,66 @@
+import { AppButton } from '@/components/ui/app-button';
+import { IconActionButton } from '@/components/ui/icon-action-button';
+import { StatChip } from '@/components/ui/stat-chip';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
+import { useUser } from '@/context/UserContext';
+import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-import { Colors } from '@/constants/theme';
-
-const avatar = 'https://i.pravatar.cc/120?img=64';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { posts, crowns } = usePosts();
+  const { events } = useEvents();
+  const { user } = useUser();
+  const rewardProgress = Math.min((crowns / 9) * 100, 100);
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.headerCard}>
+        <LinearGradient colors={['#231b17', '#4b2d1f']} style={styles.headerCard}>
           <View style={styles.headerTop}>
-            <Image source={{ uri: avatar }} style={styles.avatar} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>Username</Text>
-              <Text style={styles.sub}>Full name · Brussels</Text>
+            <View style={styles.profileWrap}>
+              <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+              <View style={styles.identity}>
+                <Text style={styles.name}>{user.username}</Text>
+                <Text style={styles.sub}>
+                  {user.fullName} · {user.city}
+                </Text>
+              </View>
             </View>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/menu')}>
-              <Ionicons name="menu" size={22} color="#1f1a17" />
-            </TouchableOpacity>
+
+            <View style={styles.headerActions}>
+              <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
+              <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
+            </View>
           </View>
 
-          <Text style={styles.bio}>Capturing nights, collecting crowns and keeping the best event memories close.</Text>
+          <Text style={styles.bio}>{user.bio}</Text>
 
           <View style={styles.statsRow}>
-            {[
-              { label: 'Posts', value: posts.length.toString() },
-              { label: 'Crowns', value: crowns.toString() },
-              { label: 'Events', value: '3' },
-            ].map((stat) => (
-              <View key={stat.label} style={styles.stat}>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
+            <StatChip label="posts" value={posts.length.toString()} tone="dark" />
+            <StatChip label="crowns" value={crowns.toString()} tone="dark" />
+            <StatChip label="events" value={events.length.toString()} tone="dark" />
           </View>
 
-          <TouchableOpacity style={styles.editBtn} onPress={() => router.push('/profile/edit')}>
-            <Text style={styles.editText}>Edit profile</Text>
-          </TouchableOpacity>
-        </View>
+          <AppButton label="Edit profile" onPress={() => router.push('/profile/edit')} style={styles.editButton} />
+        </LinearGradient>
 
-        <View style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Reward progress</Text>
             <Text style={styles.sectionMeta}>{crowns}/9</Text>
           </View>
 
           <View style={styles.progressOuter}>
-            <View style={[styles.progressFill, { width: `${Math.min((crowns / 9) * 100, 100)}%` }]} />
+            <View style={[styles.progressFill, { width: `${rewardProgress}%` }]} />
           </View>
 
           <View style={styles.crownGrid}>
@@ -73,15 +75,36 @@ export default function ProfileScreen() {
             ))}
           </View>
 
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push('/achievements')}>
-            <Text style={styles.secondaryBtnText}>See all rewards</Text>
-          </TouchableOpacity>
-        </View>
+          <AppButton label="See all rewards" variant="secondary" onPress={() => router.push('/achievements')} />
+        </SurfaceCard>
 
-        <View style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Account snapshot</Text>
+          <View style={styles.accountRow}>
+            <View style={styles.accountIcon}>
+              <Ionicons name="mail-outline" size={18} color={Colors.light.tint} />
+            </View>
+            <View style={styles.accountCopy}>
+              <Text style={styles.accountLabel}>Email</Text>
+              <Text style={styles.accountValue}>{user.email}</Text>
+            </View>
+          </View>
+
+          <View style={styles.accountRow}>
+            <View style={styles.accountIcon}>
+              <Ionicons name="location-outline" size={18} color={Colors.light.tint} />
+            </View>
+            <View style={styles.accountCopy}>
+              <Text style={styles.accountLabel}>City</Text>
+              <Text style={styles.accountValue}>{user.city}</Text>
+            </View>
+          </View>
+        </SurfaceCard>
+
+        <SurfaceCard style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.aboutText}>Tap to add a short bio about yourself, your favourite event types and what kind of nights you never miss.</Text>
-        </View>
+          <Text style={styles.aboutText}>{user.bio}</Text>
+        </SurfaceCard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -91,50 +114,32 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
   container: { padding: 16, paddingBottom: 152, gap: 18 },
   headerCard: {
-    backgroundColor: '#231b17',
-    borderRadius: 26,
+    borderRadius: 28,
     padding: 18,
+    gap: 16,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
   },
-  headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 2, borderColor: 'rgba(255,255,255,0.14)' },
-  name: { color: '#fff7ef', fontWeight: '800', fontSize: 22 },
-  sub: { color: '#decfc2', marginTop: 2 },
-  bio: { color: '#decfc2', lineHeight: 21, marginTop: 14 },
-  actionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#fffaf5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  stat: { flex: 1, backgroundColor: '#fffaf5', borderRadius: 16, paddingVertical: 12, alignItems: 'center' },
-  statValue: { color: Colors.light.tint, fontWeight: '800', fontSize: 18 },
-  statLabel: { color: '#7f756d', fontSize: 12, marginTop: 4 },
-  editBtn: { marginTop: 14, backgroundColor: Colors.light.tint, borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
-  editText: { color: '#fff', fontWeight: '800' },
-  sectionCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  headerTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  profileWrap: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  avatar: { width: 76, height: 76, borderRadius: 38, borderWidth: 2, borderColor: 'rgba(255,255,255,0.14)' },
+  identity: { flex: 1 },
+  name: { color: '#fff7ef', fontWeight: '800', fontSize: 24 },
+  sub: { color: '#decfc2', marginTop: 4 },
+  bio: { color: '#decfc2', lineHeight: 21 },
+  headerActions: { gap: 10 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  editButton: { marginTop: 2 },
+  sectionCard: { gap: 14 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
   sectionMeta: { color: '#8a7f77', fontWeight: '700' },
   progressOuter: { height: 10, backgroundColor: '#efe3d5', borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: Colors.light.tint, borderRadius: 999 },
-  crownGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
+  crownGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   crownBadge: {
     width: '30%',
     aspectRatio: 1,
@@ -144,7 +149,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   crownEarned: { backgroundColor: '#fff0de' },
-  secondaryBtn: { marginTop: 14, borderRadius: 16, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#ead7c2' },
-  secondaryBtnText: { color: '#1f1a17', fontWeight: '700' },
-  aboutText: { color: '#81776f', lineHeight: 22, marginTop: 10 },
+  accountRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  accountIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: '#fff1e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountCopy: { flex: 1, gap: 2 },
+  accountLabel: { color: '#7b7068', fontSize: 12.5, fontWeight: '700' },
+  accountValue: { color: '#1f1a17', fontSize: 15, fontWeight: '700' },
+  aboutText: { color: '#81776f', lineHeight: 22 },
 });

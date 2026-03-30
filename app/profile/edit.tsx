@@ -1,50 +1,125 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-
+import { AppButton } from '@/components/ui/app-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { StatChip } from '@/components/ui/stat-chip';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
+import { useUser } from '@/context/UserContext';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { user, updateProfile } = useUser();
+  const [avatarUri, setAvatarUri] = useState(user.avatarUri);
+  const [username, setUsername] = useState(user.username);
+  const [fullName, setFullName] = useState(user.fullName);
+  const [city, setCity] = useState(user.city);
+  const [email, setEmail] = useState(user.email);
+  const [bio, setBio] = useState(user.bio);
+
+  const pickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-          </TouchableOpacity>
+        <ScreenHeader
+          eyebrow="PROFILE"
+          title="Edit profile"
+          subtitle="Refresh your identity, bio, and public details."
+          onBack={() => router.back()}
+        />
 
-          <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>PROFILE</Text>
-            <Text style={styles.title}>Edit profile</Text>
+        <SurfaceCard style={styles.heroCard}>
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatar}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
+              ) : (
+                <Ionicons name="person-outline" size={42} color="#9d938b" />
+              )}
+            </View>
+            <TouchableOpacity style={styles.avatarBadge} onPress={pickAvatar}>
+              <Ionicons name="camera-outline" size={16} color="#fff" />
+            </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={styles.heroCard}>
           <Text style={styles.heroTitle}>Keep your profile fresh</Text>
-          <Text style={styles.heroText}>Update your public details, bio and account presence in one clean flow.</Text>
-        </View>
+          <Text style={styles.heroText}>
+            Update your public details, bio and account presence in one clean flow.
+          </Text>
 
-        <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
-            <Ionicons name="person-outline" size={42} color="#9d938b" />
+          <View style={styles.heroStats}>
+            <StatChip label="username" value={username || user.username} />
+            <StatChip label="city" value={city || user.city} />
           </View>
-          <TouchableOpacity style={styles.avatarBadge}>
-            <Ionicons name="camera-outline" size={16} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        </SurfaceCard>
 
-        <View style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard}>
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Username</Text>
-            <TextInput placeholder="Update username" placeholderTextColor="#91867f" style={styles.input} />
+            <TextInput
+              placeholder="Update username"
+              placeholderTextColor="#91867f"
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+            />
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Full name</Text>
-            <TextInput placeholder="Update full name" placeholderTextColor="#91867f" style={styles.input} />
+            <TextInput
+              placeholder="Update full name"
+              placeholderTextColor="#91867f"
+              style={styles.input}
+              value={fullName}
+              onChangeText={setFullName}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <TextInput
+              placeholder="Update your email"
+              placeholderTextColor="#91867f"
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>City</Text>
+            <TextInput
+              placeholder="Update your city"
+              placeholderTextColor="#91867f"
+              style={styles.input}
+              value={city}
+              onChangeText={setCity}
+            />
           </View>
 
           <View style={styles.fieldGroup}>
@@ -55,22 +130,23 @@ export default function EditProfileScreen() {
               style={[styles.input, styles.textArea]}
               multiline
               textAlignVertical="top"
+              value={bio}
+              onChangeText={setBio}
             />
           </View>
-        </View>
+        </SurfaceCard>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryBtn}>
-            <Text style={styles.primaryText}>Save profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryBtn}>
-            <Text style={styles.secondaryText}>Change password</Text>
-          </TouchableOpacity>
+          <AppButton
+            label="Save profile"
+            onPress={() => {
+              updateProfile({ avatarUri, username, fullName, city, bio, email });
+              router.back();
+            }}
+          />
+          <AppButton label="Change password" variant="secondary" onPress={() => router.push('/auth/change-password')} />
+          <AppButton label="Delete account" variant="danger" />
         </View>
-
-        <TouchableOpacity style={styles.deleteBtn}>
-          <Text style={styles.deleteText}>Delete account</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -79,23 +155,8 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
   container: { padding: 16, paddingBottom: 152, gap: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: { color: '#857a72', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: '#1f1a17', fontSize: 26, fontWeight: '800' },
-  heroCard: { backgroundColor: '#231b17', borderRadius: 24, padding: 18 },
-  heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800' },
-  heroText: { color: '#d7c7bb', marginTop: 8, lineHeight: 21 },
-  avatarWrap: { alignSelf: 'center', marginVertical: 6 },
+  heroCard: { backgroundColor: '#231b17', alignItems: 'center', gap: 12 },
+  avatarWrap: { marginVertical: 6 },
   avatar: {
     width: 112,
     height: 112,
@@ -105,7 +166,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: '#fff',
+    overflow: 'hidden',
   },
+  avatarImage: { width: '100%', height: '100%' },
   avatarBadge: {
     position: 'absolute',
     right: 4,
@@ -119,17 +182,10 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: Colors.light.background,
   },
-  sectionCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 24,
-    padding: 18,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
+  heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  heroText: { color: '#d7c7bb', lineHeight: 21, textAlign: 'center' },
+  heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  sectionCard: { gap: 14 },
   fieldGroup: { gap: 8 },
   fieldLabel: { color: '#81776f', fontWeight: '700', fontSize: 12.5 },
   input: {
@@ -143,24 +199,4 @@ const styles = StyleSheet.create({
   },
   textArea: { minHeight: 110 },
   actionRow: { gap: 12 },
-  primaryBtn: { backgroundColor: Colors.light.tint, borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
-  primaryText: { color: '#fff', fontWeight: '800' },
-  secondaryBtn: {
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  secondaryText: { color: '#1f1a17', fontWeight: '700' },
-  deleteBtn: {
-    borderWidth: 1,
-    borderColor: '#efb6ae',
-    backgroundColor: '#fff1ee',
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  deleteText: { color: '#c64d3a', fontWeight: '800' },
 });

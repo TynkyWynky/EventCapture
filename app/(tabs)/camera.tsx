@@ -3,7 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 
@@ -12,6 +13,8 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const insets = useSafeAreaInsets();
 
   if (!permission) {
     // Camera permissions are still loading.
@@ -21,12 +24,19 @@ export default function CameraScreen() {
   if (!permission.granted) {
     // Camera permissions are not granted yet.
     return (
-      <View style={styles.container}>
-        <Text style={{ textAlign: 'center', marginBottom: 20 }}>We need your permission to show the camera</Text>
-        <TouchableOpacity onPress={requestPermission} style={styles.permissionBtn}>
-          <Text style={styles.permissionBtnText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.permissionState, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+          <View style={styles.permissionCard}>
+            <Text style={styles.permissionTitle}>Camera access needed</Text>
+            <Text style={styles.permissionText}>
+              We need access to your camera so you can snap your drink without anything covering the controls.
+            </Text>
+            <TouchableOpacity onPress={requestPermission} style={styles.permissionBtn}>
+              <Text style={styles.permissionBtnText}>Grant Permission</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -65,12 +75,13 @@ export default function CameraScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <View style={styles.topBar}>
           <View>
             <Text style={styles.eyebrow}>CAPTURE</Text>
-            <Text style={styles.title}>Frame the moment</Text>
+            <Text style={styles.title}>Capture your drink</Text>
+            <Text style={styles.subtitle}>Keep the cup inside the frame and tap the shutter.</Text>
           </View>
 
           <TouchableOpacity style={styles.topButton} onPress={() => router.push('/notifications')}>
@@ -79,7 +90,8 @@ export default function CameraScreen() {
         </View>
 
         <View style={styles.photoFrame}>
-          <CameraView style={styles.camera} facing="back" ref={cameraRef} />
+          <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
+          <View style={styles.frameGuide} pointerEvents="none" />
           {isProcessing && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={Colors.light.tint} />
@@ -88,15 +100,27 @@ export default function CameraScreen() {
           )}
         </View>
 
-        <View style={styles.controlBar}>
-          <Ionicons name="image-outline" size={22} color="#555" />
+        <View style={[styles.controlDock, { paddingBottom: Math.max(insets.bottom, 18) }]}>
+          <View style={styles.tipPill}>
+            <Ionicons name="beer-outline" size={16} color="#fff7ef" />
+            <Text style={styles.tipText}>Best result: keep the glass fully visible.</Text>
+          </View>
+
+          <View style={styles.controlBar}>
+            <View style={styles.sideButtonPlaceholder} />
           <TouchableOpacity
             style={[styles.shutter, isProcessing && { opacity: 0.5 }]}
             onPress={takePicture}
             disabled={isProcessing}>
             <View style={styles.shutterInner} />
           </TouchableOpacity>
-          <Ionicons name="refresh-outline" size={22} color="#555" />
+            <TouchableOpacity
+              style={styles.sideButton}
+              onPress={() => setFacing((current) => (current === 'back' ? 'front' : 'back'))}
+              disabled={isProcessing}>
+              <Ionicons name="camera-reverse-outline" size={22} color="#1f1a17" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -107,16 +131,13 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.tint },
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 132,
   },
   topBar: {
     width: '100%',
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 14,
   },
@@ -132,6 +153,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginTop: 2,
   },
+  subtitle: {
+    color: '#ffe1ca',
+    marginTop: 6,
+    maxWidth: 240,
+    lineHeight: 20,
+  },
   topButton: {
     width: 40,
     height: 40,
@@ -142,23 +169,33 @@ const styles = StyleSheet.create({
   },
   photoFrame: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    flex: 1,
+    borderRadius: 28,
     padding: 12,
     width: '100%',
-    aspectRatio: 9 / 16,
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
-    marginBottom: 14,
+    marginBottom: 18,
     overflow: 'hidden',
     position: 'relative',
   },
   camera: { flex: 1, borderRadius: 14 },
+  frameGuide: {
+    position: 'absolute',
+    top: '16%',
+    left: '12%',
+    right: '12%',
+    bottom: '20%',
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(17,12,10,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 14,
@@ -166,45 +203,97 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontWeight: '700',
-    color: Colors.light.tint,
+    color: '#fff7ef',
+  },
+  controlDock: {
+    gap: 12,
+  },
+  tipPill: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(35,27,23,0.42)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  tipText: {
+    color: '#fff7ef',
+    fontWeight: '600',
+    fontSize: 12.5,
   },
   controlBar: {
-    width: '90%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    minHeight: 92,
+    backgroundColor: '#fffaf5',
+    borderRadius: 28,
     paddingVertical: 14,
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
-  shutter: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 5,
-    borderColor: Colors.light.tint,
+  sideButtonPlaceholder: {
+    width: 52,
+    height: 52,
+  },
+  sideButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#f3e5d8',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  shutter: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 6,
+    borderColor: Colors.light.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
   shutterInner: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     backgroundColor: Colors.light.tint,
-    borderRadius: 17,
+    borderRadius: 22,
+  },
+  permissionState: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  permissionCard: {
+    backgroundColor: '#fffaf5',
+    borderRadius: 28,
+    padding: 24,
+    gap: 14,
+  },
+  permissionTitle: {
+    color: '#1f1a17',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  permissionText: {
+    color: '#6f655e',
+    lineHeight: 21,
   },
   permissionBtn: {
     backgroundColor: Colors.light.tint,
-    padding: 15,
-    borderRadius: 10,
+    paddingVertical: 15,
+    borderRadius: 16,
+    alignItems: 'center',
   },
   permissionBtnText: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
 });

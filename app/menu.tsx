@@ -1,5 +1,9 @@
+import { useUser } from '@/context/UserContext';
+import { AppButton } from '@/components/ui/app-button';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import React from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -40,6 +44,7 @@ const menuItems = [
 
 export default function MenuScreen() {
   const router = useRouter();
+  const { signOut } = useUser();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -61,7 +66,7 @@ export default function MenuScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.heroCard}>
+          <SurfaceCard style={styles.heroCard}>
             <View style={styles.heroIcon}>
               <Ionicons name="sparkles-outline" size={18} color={Colors.light.tint} />
             </View>
@@ -69,7 +74,7 @@ export default function MenuScreen() {
               <Text style={styles.heroTitle}>Everything outside the core flow</Text>
               <Text style={styles.heroText}>Settings, support and account extras live here so the main tabs stay focused.</Text>
             </View>
-          </View>
+          </SurfaceCard>
 
           <View style={styles.section}>
             {menuItems.map((item) => (
@@ -91,10 +96,15 @@ export default function MenuScreen() {
             ))}
           </View>
 
-          <TouchableOpacity style={styles.signOutButton}>
-            <Ionicons name="log-out-outline" size={18} color="#c64d3a" />
-            <Text style={styles.signOutText}>Sign out</Text>
-          </TouchableOpacity>
+          <AppButton
+            label="Sign out"
+            variant="secondary"
+            style={styles.signOutButton}
+            onPress={() => {
+              signOut();
+              router.replace('/auth/login');
+            }}
+          />
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -176,8 +186,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     backgroundColor: '#231b17',
-    borderRadius: 24,
-    padding: 16,
   },
   heroIcon: {
     width: 36,
@@ -238,19 +246,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
     marginTop: 4,
-    borderRadius: 18,
-    paddingVertical: 14,
     backgroundColor: '#fff1ee',
     borderWidth: 1,
     borderColor: '#f4c9c0',
-  },
-  signOutText: {
-    color: '#c64d3a',
-    fontWeight: '800',
   },
 });

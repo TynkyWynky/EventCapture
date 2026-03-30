@@ -1,54 +1,85 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEvents } from '@/context/EventContext';
+import { useSocial } from '@/context/SocialContext';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Colors } from '@/constants/theme';
 
-const comments = [
-  { user: 'Lina', text: 'This event looked so good, where was it exactly?', time: '2m ago' },
-  { user: 'Niels', text: 'Love the vibe on this capture.', time: '16m ago' },
-];
-
 export default function CommentsScreen() {
   const router = useRouter();
+  const { eventId } = useLocalSearchParams<{ eventId?: string }>();
+  const { getEventById } = useEvents();
+  const { getEventSocial, addEventComment } = useSocial();
+  const [text, setText] = useState('');
+  const event = getEventById(eventId);
+  const social = getEventSocial(eventId);
+  const comments = useMemo(() => social?.comments ?? [], [social?.comments]);
+
+  const handleSend = () => {
+    if (!event?.id) {
+      return;
+    }
+
+    const result = addEventComment(event.id, event.title, text);
+
+    if (result.ok) {
+      setText('');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-        </TouchableOpacity>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.eyebrow}>ENGAGEMENT</Text>
-          <Text style={styles.title}>Comments</Text>
-        </View>
+      <View style={styles.headerWrap}>
+        <ScreenHeader
+          eyebrow="ENGAGEMENT"
+          title="Comments"
+          subtitle={event?.title ?? 'Event discussion'}
+          onBack={() => router.back()}
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {comments.map((item) => (
-          <View key={`${item.user}-${item.time}`} style={styles.commentCard}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>
-            </View>
+        {comments.length ? (
+          comments.map((item) => (
+            <View key={item.id} style={styles.commentCard}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>
+              </View>
 
-            <View style={{ flex: 1 }}>
-              <View style={styles.nameRow}>
-                <Text style={styles.name}>{item.user}</Text>
-                <Text style={styles.time}>{item.time}</Text>
-              </View>
-              <View style={styles.bubble}>
-                <Text style={styles.comment}>{item.text}</Text>
+              <View style={{ flex: 1 }}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.name}>{item.user}</Text>
+                  <Text style={styles.time}>{item.time}</Text>
+                </View>
+                <View style={styles.bubble}>
+                  <Text style={styles.comment}>{item.text}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        ))}
+          ))
+        ) : (
+          <EmptyState
+            icon="chatbubble-ellipses-outline"
+            title="No comments yet"
+            message="Start the conversation around this event."
+          />
+        )}
       </ScrollView>
 
       <View style={styles.inputRow}>
-        <TextInput placeholder="Add a comment..." style={styles.input} placeholderTextColor="#8c827a" />
-        <TouchableOpacity style={styles.send}>
+        <TextInput
+          placeholder="Add a comment..."
+          style={styles.input}
+          placeholderTextColor="#8c827a"
+          value={text}
+          onChangeText={setText}
+        />
+        <TouchableOpacity style={styles.send} onPress={handleSend}>
           <Ionicons name="send" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -58,26 +89,11 @@ export default function CommentsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  headerWrap: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 14,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eyebrow: { color: '#857a72', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: '#1f1a17', fontSize: 26, fontWeight: '800' },
   list: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
   commentCard: {
     flexDirection: 'row',

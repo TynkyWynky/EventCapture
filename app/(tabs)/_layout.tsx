@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -10,9 +11,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? 'light'];
+  const insets = useSafeAreaInsets();
+  const focusedRoute = state.routes[state.index];
+
+  if (focusedRoute?.name === 'camera') {
+    return null;
+  }
 
   return (
-    <View pointerEvents="box-none" style={styles.wrapper}>
+    <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, 14) }]}>
       <View style={[styles.bar, { borderColor: palette.border }]}>
         <View style={styles.barGlow} />
 

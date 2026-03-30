@@ -1,40 +1,106 @@
-import React from 'react';
-import { SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-
-import { Colors } from '@/constants/theme';
+import { AppButton } from '@/components/ui/app-button';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
+import { Colors } from '@/constants/theme';
+import { useUser } from '@/context/UserContext';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResetScreen() {
   const router = useRouter();
+  const { user, resetPassword } = useUser();
+  const [email, setEmail] = useState(user.email);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleReset = () => {
+    if (newPassword !== confirmPassword) {
+      setSuccess('');
+      setError('New password and confirmation do not match.');
+      return;
+    }
+
+    const result = resetPassword(email, newPassword);
+
+    if (!result.ok) {
+      setSuccess('');
+      setError(result.error ?? 'Unable to reset password.');
+      return;
+    }
+
+    setError('');
+    setSuccess('Password reset successfully. You can now sign in.');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <LinearGradient colors={['#1f1612', '#352016', Colors.light.tintDark]} style={styles.background}>
-        <View style={styles.card}>
-          <View style={styles.logoWrap}>
-            <LogoMark size={48} />
-          </View>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            <SurfaceCard style={styles.card}>
+              <View style={styles.logoWrap}>
+                <LogoMark size={48} />
+              </View>
 
-          <Text style={styles.title}>Reset password</Text>
-          <Text style={styles.subtitle}>Enter your email and we&apos;ll send you a link to get back into your account.</Text>
+              <View style={styles.copy}>
+                <Text style={styles.title}>Reset password</Text>
+                <Text style={styles.subtitle}>
+                  Enter your email and choose a new password to get back into your account.
+                </Text>
+              </View>
 
-          <View style={styles.inputRow}>
-            <Ionicons name="mail-outline" size={18} color="#81776f" />
-            <TextInput placeholder="demo@eventcapture.app" placeholderTextColor="#9a9189" style={styles.input} />
-          </View>
+              <View style={styles.inputRow}>
+                <Ionicons name="mail-outline" size={18} color="#81776f" />
+                <TextInput
+                  placeholder="demo@eventcapture.app"
+                  placeholderTextColor="#9a9189"
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                />
+              </View>
 
-          <TouchableOpacity style={styles.primary}>
-            <Text style={styles.primaryText}>Send reset link</Text>
-          </TouchableOpacity>
+              <View style={styles.inputRow}>
+                <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
+                <TextInput
+                  placeholder="New password"
+                  placeholderTextColor="#9a9189"
+                  style={styles.input}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry
+                />
+              </View>
 
-          <TouchableOpacity style={styles.secondary} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={18} color="#1f1a17" />
-            <Text style={styles.secondaryText}>Back to login</Text>
-          </TouchableOpacity>
-        </View>
+              <View style={styles.inputRow}>
+                <Ionicons name="shield-checkmark-outline" size={18} color="#81776f" />
+                <TextInput
+                  placeholder="Confirm new password"
+                  placeholderTextColor="#9a9189"
+                  style={styles.input}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {success ? <Text style={styles.successText}>{success}</Text> : null}
+
+              <AppButton label="Reset password" onPress={handleReset} />
+              <AppButton label="Back to login" variant="secondary" onPress={() => router.back()} />
+            </SurfaceCard>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -42,18 +108,14 @@ export default function ResetScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#1f1612' },
-  background: { flex: 1, justifyContent: 'center', paddingHorizontal: 20 },
+  flex: { flex: 1 },
+  background: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 24 },
   card: {
-    backgroundColor: '#fffaf5',
     borderRadius: 30,
     paddingHorizontal: 22,
     paddingVertical: 30,
     gap: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
   },
   logoWrap: {
     width: 72,
@@ -65,8 +127,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 2,
   },
+  copy: { gap: 6 },
   title: { color: '#1f1a17', fontWeight: '800', fontSize: 30, textAlign: 'center' },
-  subtitle: { color: '#7d726a', textAlign: 'center', lineHeight: 22, marginBottom: 6 },
+  subtitle: { color: '#7d726a', textAlign: 'center', lineHeight: 22 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -79,23 +142,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
   },
   input: { flex: 1, color: '#1f1a17', fontWeight: '600' },
-  primary: {
-    backgroundColor: Colors.light.tint,
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  primaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
-  secondary: {
-    borderRadius: 18,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  secondaryText: { color: '#1f1a17', fontWeight: '700', fontSize: 14 },
+  errorText: { color: '#c64d3a', fontWeight: '700', textAlign: 'center' },
+  successText: { color: '#0f766e', fontWeight: '700', textAlign: 'center' },
 });

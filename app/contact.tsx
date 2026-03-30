@@ -1,5 +1,6 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
@@ -23,7 +24,7 @@ export default function ContactScreen() {
         </View>
 
         <View style={styles.heroCard}>
-          <Text style={styles.heroTitle}>We'd love to hear from you</Text>
+          <Text style={styles.heroTitle}>We would love to hear from you</Text>
           <Text style={styles.heroText}>Questions, bug reports or feedback about the experience all belong here.</Text>
         </View>
 

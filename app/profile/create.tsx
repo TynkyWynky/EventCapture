@@ -1,5 +1,9 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useUser } from '@/context/UserContext';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +12,34 @@ import { Colors } from '@/constants/theme';
 
 export default function CreateProfileScreen() {
   const router = useRouter();
+  const { createProfile, user } = useUser();
+  const [avatarUri, setAvatarUri] = useState(user.avatarUri);
+  const [username, setUsername] = useState(user.username);
+  const [fullName, setFullName] = useState(user.fullName === 'Event Friend' ? '' : user.fullName);
+  const [city, setCity] = useState(user.city);
+  const [email, setEmail] = useState(user.email);
+  const [password, setPassword] = useState('eventcapture123');
+  const [bio, setBio] = useState('');
+  const isCompleteDisabled = !username.trim() || !fullName.trim() || !email.trim() || !password.trim();
+
+  const pickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -28,21 +60,72 @@ export default function CreateProfileScreen() {
 
             <View style={styles.avatarWrap}>
               <View style={styles.avatar}>
-                <Ionicons name="person-outline" size={40} color="#9d938b" />
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
+                ) : (
+                  <Ionicons name="person-outline" size={40} color="#9d938b" />
+                )}
               </View>
-              <TouchableOpacity style={styles.avatarBadge}>
+              <TouchableOpacity style={styles.avatarBadge} onPress={pickAvatar}>
                 <Ionicons name="camera-outline" size={16} color="#fff" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Username</Text>
-              <TextInput placeholder="Choose a username" placeholderTextColor="#91867f" style={styles.input} />
+              <TextInput
+                placeholder="Choose a username"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                placeholder="Add your email"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Password</Text>
+              <TextInput
+                placeholder="Create a password"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
             </View>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Full name</Text>
-              <TextInput placeholder="Add your full name" placeholderTextColor="#91867f" style={styles.input} />
+              <TextInput
+                placeholder="Add your full name"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={fullName}
+                onChangeText={setFullName}
+              />
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>City</Text>
+              <TextInput
+                placeholder="Where are you based?"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={city}
+                onChangeText={setCity}
+              />
             </View>
 
             <View style={styles.fieldGroup}>
@@ -53,10 +136,26 @@ export default function CreateProfileScreen() {
                 style={[styles.input, styles.textArea]}
                 multiline
                 textAlignVertical="top"
+                value={bio}
+                onChangeText={setBio}
               />
             </View>
 
-            <TouchableOpacity style={styles.primary}>
+            <TouchableOpacity
+              style={[styles.primary, isCompleteDisabled && styles.primaryDisabled]}
+              disabled={isCompleteDisabled}
+              onPress={() => {
+                createProfile({
+                  username,
+                  fullName,
+                  city,
+                  bio,
+                  avatarUri,
+                  email,
+                  password,
+                });
+                router.replace('/(tabs)');
+              }}>
               <Text style={styles.primaryText}>Complete profile</Text>
             </TouchableOpacity>
           </View>
@@ -108,6 +207,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarBadge: {
     position: 'absolute',
@@ -140,6 +244,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 4,
+  },
+  primaryDisabled: {
+    opacity: 0.6,
   },
   primaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

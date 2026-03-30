@@ -1,67 +1,82 @@
-import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-
+import { AppButton } from '@/components/ui/app-button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { IconActionButton } from '@/components/ui/icon-action-button';
+import { StatChip } from '@/components/ui/stat-chip';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { useEvents } from '@/context/EventContext';
+import { useSocial } from '@/context/SocialContext';
 import { Colors } from '@/constants/theme';
-
-const tags = ['Live music', 'Craft beer', 'Outdoor', 'Friends night'];
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EventDetailScreen() {
   const router = useRouter();
+  const { eventId } = useLocalSearchParams<{ eventId?: string }>();
+  const { getEventById } = useEvents();
+  const { getEventSocial, toggleEventLike, toggleEventSave } = useSocial();
+  const event = getEventById(eventId);
+  const social = getEventSocial(eventId);
+  const insets = useSafeAreaInsets();
+
+  if (!event) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.missingWrap}>
+          <EmptyState
+            icon="calendar-clear-outline"
+            title="Event not found"
+            message="This event could not be loaded. Head back and pick another one."
+          />
+          <AppButton label="Go back" onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom: 116 + Math.max(insets.bottom, 16),
+        }}>
         <View style={styles.heroWrap}>
-          <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1400&q=80',
-            }}
-            style={styles.hero}
-            contentFit="cover"
-          />
+          <Image source={{ uri: event.heroImage }} style={styles.hero} contentFit="cover" />
 
           <LinearGradient colors={['rgba(0,0,0,0.08)', 'rgba(28,18,13,0.82)']} style={styles.heroOverlay}>
-            <View style={styles.topBar}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-                <Ionicons name="chevron-back" size={20} color="#fff7ef" />
-              </TouchableOpacity>
+            <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 18) }]}>
+              <IconActionButton icon="chevron-back" tone="dark" onPress={() => router.back()} />
 
               <View style={styles.topActions}>
-                <TouchableOpacity style={styles.iconButton}>
-                  <Ionicons name="heart-outline" size={18} color="#fff7ef" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconButton}>
-                  <Ionicons name="share-social-outline" size={18} color="#fff7ef" />
-                </TouchableOpacity>
+                <IconActionButton
+                  icon={social?.liked ? 'heart' : 'heart-outline'}
+                  tone="dark"
+                  onPress={() => toggleEventLike(event.id, event.title)}
+                />
+                <IconActionButton
+                  icon={social?.saved ? 'bookmark' : 'bookmark-outline'}
+                  tone="dark"
+                  onPress={() => toggleEventSave(event.id, event.title)}
+                />
               </View>
             </View>
 
             <View style={styles.heroContent}>
               <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>TRENDING TONIGHT</Text>
+                <Text style={styles.liveBadgeText}>{event.badge}</Text>
               </View>
-              <Text style={styles.title}>Sunset Brewery Fest</Text>
-              <Text style={styles.subtitle}>
-                A warm open-air evening with craft beer, local music and one of the most social crowds in the city.
-              </Text>
+              <Text style={styles.title}>{event.title}</Text>
+              <Text style={styles.subtitle}>{event.description}</Text>
 
               <View style={styles.metaRow}>
-                <View style={styles.metaPill}>
-                  <Ionicons name="calendar-outline" size={14} color="#f6d6bb" />
-                  <Text style={styles.metaText}>22 Oct</Text>
-                </View>
-                <View style={styles.metaPill}>
-                  <Ionicons name="time-outline" size={14} color="#f6d6bb" />
-                  <Text style={styles.metaText}>15:00 - 21:00</Text>
-                </View>
-                <View style={styles.metaPill}>
-                  <Ionicons name="people-outline" size={14} color="#f6d6bb" />
-                  <Text style={styles.metaText}>642 going</Text>
-                </View>
+                <StatChip label="date" value={event.date} icon="calendar-outline" tone="dark" />
+                <StatChip label="time" value={event.time} icon="time-outline" tone="dark" />
+                <StatChip label="crowd" value={event.attendees} icon="people-outline" tone="dark" />
               </View>
             </View>
           </LinearGradient>
@@ -69,36 +84,61 @@ export default function EventDetailScreen() {
 
         <View style={styles.body}>
           <View style={styles.statRow}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>18 EUR</Text>
-              <Text style={styles.statLabel}>pre-sale</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>Ixelles</Text>
-              <Text style={styles.statLabel}>location</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>Open air</Text>
-              <Text style={styles.statLabel}>experience</Text>
-            </View>
+            <StatChip label="pre-sale" value={event.price} tone="accent" />
+            <StatChip label="location" value={event.place} tone="light" />
+            <StatChip label="experience" value={event.experience} tone="light" />
           </View>
 
-          <View style={styles.card}>
+          <SurfaceCard style={styles.card}>
             <Text style={styles.sectionTitle}>About this event</Text>
-            <Text style={styles.description}>
-              Join us for an evening of craft beers, live music and sunset energy that slowly builds into a buzzing night scene. Expect local brewers, food stands, good pacing and enough space to actually enjoy the event without feeling boxed in.
-            </Text>
+            <Text style={styles.description}>{event.description}</Text>
+
+            <View style={styles.socialRow}>
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => toggleEventLike(event.id, event.title)}>
+                <Ionicons
+                  name={social?.liked ? 'heart' : 'heart-outline'}
+                  size={18}
+                  color={Colors.light.tint}
+                />
+                <Text style={styles.socialButtonText}>{social?.likes.length ?? 0} likes</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() =>
+                  router.push({
+                    pathname: '/comments',
+                    params: { eventId: event.id },
+                  })
+                }>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.light.tint} />
+                <Text style={styles.socialButtonText}>{social?.comments.length ?? 0} comments</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => toggleEventSave(event.id, event.title)}>
+                <Ionicons
+                  name={social?.saved ? 'bookmark' : 'bookmark-outline'}
+                  size={18}
+                  color={Colors.light.tint}
+                />
+                <Text style={styles.socialButtonText}>{social?.saved ? 'Saved' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.tagRow}>
-              {tags.map((tag) => (
+              {event.tags.map((tag) => (
                 <View key={tag} style={styles.tag}>
                   <Text style={styles.tagText}>{tag}</Text>
                 </View>
               ))}
             </View>
-          </View>
+          </SurfaceCard>
 
-          <View style={styles.card}>
+          <SurfaceCard style={styles.card}>
             <Text style={styles.sectionTitle}>Event details</Text>
 
             <View style={styles.detailRow}>
@@ -107,8 +147,8 @@ export default function EventDetailScreen() {
               </View>
               <View style={styles.detailCopy}>
                 <Text style={styles.detailLabel}>Location</Text>
-                <Text style={styles.detailValue}>Brussels Beer Garden, Ixelles</Text>
-                <Text style={styles.detailHint}>Tap to open in maps</Text>
+                <Text style={styles.detailValue}>{event.address}</Text>
+                <Text style={styles.detailHint}>{event.place}</Text>
               </View>
             </View>
 
@@ -118,8 +158,8 @@ export default function EventDetailScreen() {
               </View>
               <View style={styles.detailCopy}>
                 <Text style={styles.detailLabel}>Date and time</Text>
-                <Text style={styles.detailValue}>Wednesday 22 October 2026</Text>
-                <Text style={styles.detailHint}>15:00 until 21:00</Text>
+                <Text style={styles.detailValue}>{event.fullDate}</Text>
+                <Text style={styles.detailHint}>{event.time}</Text>
               </View>
             </View>
 
@@ -128,9 +168,9 @@ export default function EventDetailScreen() {
                 <Ionicons name="musical-notes-outline" size={18} color={Colors.light.tint} />
               </View>
               <View style={styles.detailCopy}>
-                <Text style={styles.detailLabel}>Music & vibe</Text>
-                <Text style={styles.detailValue}>Indie, electro and live sessions</Text>
-                <Text style={styles.detailHint}>Relaxed social atmosphere</Text>
+                <Text style={styles.detailLabel}>Music and vibe</Text>
+                <Text style={styles.detailValue}>{event.vibe}</Text>
+                <Text style={styles.detailHint}>{event.experience}</Text>
               </View>
             </View>
 
@@ -140,40 +180,41 @@ export default function EventDetailScreen() {
               </View>
               <View style={styles.detailCopy}>
                 <Text style={styles.detailLabel}>Pricing</Text>
-                <Text style={styles.detailValue}>18 EUR pre-sale</Text>
-                <Text style={styles.detailHint}>22 EUR at the door</Text>
+                <Text style={styles.detailValue}>{event.priceLabel}</Text>
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: '/likes',
+                      params: { eventId: event.id },
+                    })
+                  }>
+                  <Text style={styles.detailHint}>{social?.likes.length ?? 0} people liked this</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </SurfaceCard>
 
-          <View style={styles.hostCard}>
+          <SurfaceCard style={styles.hostCard}>
             <View style={styles.hostRow}>
-              <Image source={{ uri: 'https://i.pravatar.cc/120?img=12' }} style={styles.hostAvatar} contentFit="cover" />
-              <View style={{ flex: 1 }}>
+              <Image source={{ uri: event.hostAvatar }} style={styles.hostAvatar} contentFit="cover" />
+              <View style={styles.hostCopy}>
                 <Text style={styles.hostLabel}>Hosted by</Text>
-                <Text style={styles.hostName}>Brussels Nights Collective</Text>
+                <Text style={styles.hostName}>{event.hostName}</Text>
               </View>
-              <TouchableOpacity style={styles.followBtn}>
-                <Text style={styles.followText}>Follow</Text>
-              </TouchableOpacity>
+              <AppButton label="Follow" variant="secondary" style={styles.followBtn} />
             </View>
-          </View>
+          </SurfaceCard>
         </View>
       </ScrollView>
 
-      <View style={styles.bottomWrap}>
+      <View style={[styles.bottomWrap, { bottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.bottomCard}>
           <View>
-            <Text style={styles.bottomPrice}>18 EUR</Text>
+            <Text style={styles.bottomPrice}>{event.price}</Text>
             <Text style={styles.bottomPriceMeta}>per ticket</Text>
           </View>
 
-          <TouchableOpacity style={styles.buyButton}>
-            <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.buyGradient}>
-              <Text style={styles.buyText}>Get ticket</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
+          <AppButton label="Get ticket" style={styles.buyButton} />
         </View>
       </View>
     </SafeAreaView>
@@ -182,28 +223,22 @@ export default function EventDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { paddingBottom: 132 },
+  missingWrap: {
+    flex: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+    gap: 16,
+  },
   heroWrap: { height: 430, marginBottom: -26 },
   hero: { width: '100%', height: '100%' },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
     paddingHorizontal: 18,
-    paddingTop: 18,
     paddingBottom: 42,
   },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   topActions: { flexDirection: 'row', gap: 10 },
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
   heroContent: { gap: 12 },
   liveBadge: {
     alignSelf: 'flex-start',
@@ -216,48 +251,26 @@ const styles = StyleSheet.create({
   title: { color: '#fff7ef', fontSize: 34, fontWeight: '800', lineHeight: 38, maxWidth: 300 },
   subtitle: { color: '#eadccf', fontSize: 15, lineHeight: 22, maxWidth: 320 },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  metaPill: {
+  body: { paddingHorizontal: 16, gap: 16 },
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  card: { gap: 12 },
+  sectionTitle: { color: '#1f1a17', fontSize: 22, fontWeight: '800' },
+  description: { color: '#6f655e', lineHeight: 22, fontSize: 14.5 },
+  socialRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
+  socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    gap: 8,
+    backgroundColor: '#fff3e6',
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
-  metaText: { color: '#f6d6bb', fontWeight: '700', fontSize: 12.5 },
-  body: { paddingHorizontal: 16, gap: 16 },
-  statRow: { flexDirection: 'row', gap: 10 },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.light.card,
-    borderRadius: 22,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  statValue: { color: '#1f1a17', fontWeight: '800', fontSize: 18 },
-  statLabel: { color: '#81776f', marginTop: 4, fontSize: 12.5 },
-  card: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 26,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  sectionTitle: { color: '#1f1a17', fontSize: 22, fontWeight: '800', marginBottom: 10 },
-  description: { color: '#6f655e', lineHeight: 22, fontSize: 14.5 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
+  socialButtonText: { color: '#1f1a17', fontWeight: '700', fontSize: 12.5 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
   tag: { backgroundColor: '#f2e4d5', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   tagText: { color: '#4b4038', fontWeight: '700', fontSize: 12.5 },
-  detailRow: { flexDirection: 'row', gap: 12, marginTop: 6, marginBottom: 12 },
+  detailRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
   detailIconWrap: {
     width: 40,
     height: 40,
@@ -272,21 +285,14 @@ const styles = StyleSheet.create({
   detailHint: { color: '#8d8178', fontSize: 13 },
   hostCard: {
     backgroundColor: '#231b17',
-    borderRadius: 24,
-    padding: 16,
   },
   hostRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   hostAvatar: { width: 54, height: 54, borderRadius: 27 },
+  hostCopy: { flex: 1 },
   hostLabel: { color: '#d4c4b7', fontSize: 12 },
   hostName: { color: '#fff7ef', fontSize: 17, fontWeight: '800', marginTop: 2 },
-  followBtn: {
-    backgroundColor: '#fff7ef',
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  followText: { color: '#231b17', fontWeight: '800' },
-  bottomWrap: { position: 'absolute', left: 16, right: 16, bottom: 16 },
+  followBtn: { minWidth: 92 },
+  bottomWrap: { position: 'absolute', left: 16, right: 16 },
   bottomCard: {
     backgroundColor: 'rgba(255,250,245,0.98)',
     borderRadius: 24,
@@ -294,6 +300,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 16,
     shadowColor: '#000',
     shadowOpacity: 0.09,
     shadowRadius: 18,
@@ -302,13 +309,5 @@ const styles = StyleSheet.create({
   },
   bottomPrice: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
   bottomPriceMeta: { color: '#7b7068', marginTop: 2 },
-  buyButton: { borderRadius: 18, overflow: 'hidden' },
-  buyGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-  },
-  buyText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  buyButton: { minWidth: 140 },
 });
