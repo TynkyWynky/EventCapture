@@ -17,13 +17,19 @@ import React, { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const filters = ['Live music', 'Open air', 'Food', 'Late night'];
+const genreFilters = ['Live music', 'Electronic', 'Open air', 'Food', 'Outdoor', 'Late night'];
 const discoveryPresets = [
-  { id: 'all', label: 'All' },
-  { id: 'tonight', label: 'Tonight' },
-  { id: 'popular', label: 'Popular' },
-  { id: 'cheapest', label: 'Cheapest' },
+  { id: 'all', label: 'All', icon: 'grid-outline' as const },
+  { id: 'tonight', label: 'Tonight', icon: 'moon-outline' as const },
+  { id: 'popular', label: 'Popular', icon: 'flame-outline' as const },
+  { id: 'cheapest', label: 'Cheapest', icon: 'wallet-outline' as const },
+  { id: 'open_air', label: 'Open air', icon: 'sunny-outline' as const },
 ] as const;
+const sortOptions = [
+  { value: 'popular' as const, label: 'Popular' },
+  { value: 'soonest' as const, label: 'Soonest' },
+  { value: 'lowest_price' as const, label: 'Cheapest' },
+];
 
 export default function HomeFeed() {
   const router = useRouter();
@@ -38,6 +44,8 @@ export default function HomeFeed() {
     favoritePresetId,
     applyPreset,
     setSearchQuery,
+    setSortBy,
+    resetFilters,
   } = useFilters();
   const { user } = useUser();
   const latestPost = posts[0];
@@ -52,9 +60,16 @@ export default function HomeFeed() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // Simulate a data refresh — in a real app this would re-fetch from API
     setTimeout(() => setRefreshing(false), 800);
   }, []);
+
+  const cycleSortBy = useCallback(() => {
+    const currentIndex = sortOptions.findIndex((o) => o.value === activeFilters.sortBy);
+    const nextIndex = (currentIndex + 1) % sortOptions.length;
+    setSortBy(sortOptions[nextIndex].value);
+  }, [activeFilters.sortBy, setSortBy]);
+
+  const currentSortLabel = sortOptions.find((o) => o.value === activeFilters.sortBy)?.label ?? 'Popular';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -64,6 +79,8 @@ export default function HomeFeed() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.tint} />
         }>
+
+        {/* ====== HERO ====== */}
         <LinearGradient colors={['#241813', '#4a2a18', Colors.light.tintDark]} style={styles.hero}>
           <View style={styles.heroGlow} />
 
@@ -77,16 +94,8 @@ export default function HomeFeed() {
             </View>
 
             <View style={styles.heroActions}>
-              <IconActionButton
-                icon="notifications-outline"
-                tone="dark"
-                onPress={() => router.push('/notifications')}
-              />
-              <IconActionButton
-                icon="menu"
-                tone="dark"
-                onPress={() => router.push('/menu')}
-              />
+              <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
+              <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
             </View>
           </View>
 
@@ -94,6 +103,7 @@ export default function HomeFeed() {
             Browse standout events, save memories and move through the city with your crew.
           </Text>
 
+          {/* ====== SEARCH BOX ====== */}
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color="#8d827a" />
             <TextInput
@@ -102,21 +112,48 @@ export default function HomeFeed() {
               placeholder="Search artists, places or moods"
               placeholderTextColor="#8d827a"
               style={styles.searchInput}
+              returnKeyType="search"
             />
-            <TouchableOpacity onPress={() => router.push('/filters')}>
-              <Ionicons name="options-outline" size={18} color="#8d827a" />
+            {activeFilters.searchQuery.length > 0 ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color="#b0a69e" />
+              </TouchableOpacity>
+            ) : null}
+            <View style={styles.searchDivider} />
+            <TouchableOpacity onPress={() => router.push('/filters')} style={styles.filterIconBtn}>
+              <Ionicons name="options-outline" size={18} color={activeFilterCount > 0 ? Colors.light.tint : '#8d827a'} />
+              {activeFilterCount > 0 ? (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           </View>
 
-          {activeFilterCount ? <Text style={styles.searchMeta}>{activeFilterCount} filters active</Text> : null}
+          {/* ====== ACTIVE FILTER BAR ====== */}
+          {activeFilterCount > 0 ? (
+            <View style={styles.activeFilterBar}>
+              <Text style={styles.activeFilterText}>
+                {feedEvents.length} event{feedEvents.length !== 1 ? 's' : ''} · {activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active
+              </Text>
+              <TouchableOpacity onPress={resetFilters} style={styles.clearFiltersBtn}>
+                <Ionicons name="close" size={13} color="#fff" />
+                <Text style={styles.clearFiltersText}>Clear all</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
+          {/* ====== METRICS ====== */}
           <View style={styles.metricRow}>
             <StatChip label="events nearby" value={feedEvents.length.toString()} tone="dark" />
-            <StatChip label="captures saved" value={posts.length.toString().padStart(2, '0')} tone="dark" />
-            <StatChip label="sort" value={activeFilters.sortBy.replace('_', ' ')} tone="dark" />
+            <StatChip label="captures" value={posts.length.toString().padStart(2, '0')} tone="dark" />
+            <TouchableOpacity onPress={cycleSortBy}>
+              <StatChip label="sort" value={currentSortLabel} tone="dark" icon="swap-vertical-outline" />
+            </TouchableOpacity>
           </View>
         </LinearGradient>
 
+        {/* ====== DISCOVERY PRESETS ====== */}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Quick picks</Text>
@@ -141,14 +178,16 @@ export default function HomeFeed() {
                 key={preset.id}
                 style={[styles.presetChip, active && styles.presetChipActive]}
                 onPress={() => applyPreset(preset.id)}>
+                <Ionicons name={preset.icon} size={14} color={active ? Colors.light.tint : '#6e635c'} />
                 <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>{preset.label}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
+        {/* ====== GENRE CHIPS ====== */}
         <View style={styles.filterRow}>
-          {filters.map((filter) => {
+          {genreFilters.map((filter) => {
             const active = activeFilters.selectedGenres.includes(filter);
 
             return (
@@ -162,6 +201,7 @@ export default function HomeFeed() {
           })}
         </View>
 
+        {/* ====== FEATURED EVENT ====== */}
         {featuredEvent ? (
           <LinearGradient colors={['#231b17', '#3a261d']} style={styles.featuredCard}>
             <View style={styles.featuredTop}>
@@ -195,6 +235,7 @@ export default function HomeFeed() {
           </LinearGradient>
         ) : null}
 
+        {/* ====== CROWN SPOTLIGHT ====== */}
         {activeReward ? (
           <SurfaceCard style={styles.crownSpotlightCard}>
             <View style={styles.sectionHeader}>
@@ -245,6 +286,7 @@ export default function HomeFeed() {
           </SurfaceCard>
         ) : null}
 
+        {/* ====== LATEST CAPTURE ====== */}
         {latestPost ? (
           <SurfaceCard style={styles.postCard}>
             <View style={styles.sectionHeader}>
@@ -279,13 +321,15 @@ export default function HomeFeed() {
           </SurfaceCard>
         )}
 
+        {/* ====== TRENDING EVENTS ====== */}
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>Trending events</Text>
             <Text style={styles.sectionSubtitle}>Good energy, close to you</Text>
           </View>
-          <TouchableOpacity style={styles.filterButton} onPress={() => router.push('/filters')}>
-            <Text style={styles.filterButtonText}>{activeFilters.sortBy === 'popular' ? 'Popular' : activeFilters.sortBy === 'soonest' ? 'Soonest' : 'Lowest price'}</Text>
+          <TouchableOpacity style={styles.sortToggle} onPress={cycleSortBy}>
+            <Ionicons name="swap-vertical-outline" size={14} color={Colors.light.tint} />
+            <Text style={styles.sortToggleText}>{currentSortLabel}</Text>
           </TouchableOpacity>
         </View>
 
@@ -334,21 +378,24 @@ export default function HomeFeed() {
             </TouchableOpacity>
           ))
         ) : (
-          <EmptyState
-            icon="options-outline"
-            title="No events match yet"
-            message="Try relaxing a filter or reset your picks to see more nights."
-          />
+          <SurfaceCard style={styles.emptyCard}>
+            <EmptyState
+              icon="options-outline"
+              title="No events match yet"
+              message="Try relaxing a filter or reset your picks to see more nights."
+            />
+            <AppButton label="Reset all filters" variant="secondary" onPress={resetFilters} />
+          </SurfaceCard>
         )}
 
-        </ScrollView>
+      </ScrollView>
 
-        <TouchableOpacity style={styles.fab} onPress={() => router.push('/event/create')}>
-          <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.fabInner}>
-            <Ionicons name="add" size={26} color="#fff" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/event/create')}>
+        <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.fabInner}>
+          <Ionicons name="add" size={26} color="#fff" />
+        </LinearGradient>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
@@ -384,21 +431,66 @@ const styles = StyleSheet.create({
   heroEyebrow: { color: '#f3caa5', fontSize: 11, fontWeight: '800', letterSpacing: 1.3 },
   heroTitle: { color: '#fff8f2', fontSize: 24, fontWeight: '800' },
   heroText: { color: '#ebddd1', fontSize: 16, lineHeight: 24, maxWidth: 320 },
+
+  // ---- Search ----
   searchBox: {
     backgroundColor: '#fffaf5',
     borderRadius: 18,
     paddingHorizontal: 16,
-    paddingVertical: 15,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  searchInput: { flex: 1, color: '#1f1a17', fontWeight: '600', paddingVertical: 0 },
-  searchMeta: { color: '#f3caa5', fontSize: 12, fontWeight: '700', marginTop: -8 },
+  searchInput: { flex: 1, color: '#1f1a17', fontWeight: '600', paddingVertical: 0, fontSize: 15 },
+  searchDivider: { width: 1, height: 22, backgroundColor: '#e0d5ca', marginHorizontal: 2 },
+  filterIconBtn: { position: 'relative', padding: 4 },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.light.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+
+  // ---- Active Filter Bar ----
+  activeFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: -8,
+  },
+  activeFilterText: { color: '#f3caa5', fontSize: 13, fontWeight: '700' },
+  clearFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  clearFiltersText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  // ---- Metrics ----
   metricRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+
+  // ---- Section ----
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
   sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 22 },
   sectionSubtitle: { color: '#81776f', fontSize: 13 },
+
+  // ---- Presets ----
   presetRow: { gap: 10, paddingBottom: 14 },
   presetChip: {
     flexDirection: 'row',
@@ -422,11 +514,29 @@ const styles = StyleSheet.create({
   presetChipText: { color: '#6e635c', fontWeight: '700' },
   presetChipTextActive: { color: Colors.light.tint },
   favoritePresetText: { color: Colors.light.tint, fontWeight: '800' },
+
+  // ---- Genre Filters ----
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   filterChip: { backgroundColor: '#efe3d5', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
   filterChipActive: { backgroundColor: '#231b17' },
   filterChipText: { color: '#6e635c', fontWeight: '700' },
   filterChipTextActive: { color: '#fff7ef' },
+
+  // ---- Sort Toggle ----
+  sortToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff1e0',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.tint,
+  },
+  sortToggleText: { color: Colors.light.tint, fontWeight: '800', fontSize: 13 },
+
+  // ---- Featured ----
   featuredCard: {
     borderRadius: 28,
     padding: 22,
@@ -447,6 +557,8 @@ const styles = StyleSheet.create({
   liveBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 0.8 },
   featuredMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   featuredButton: { marginTop: 2 },
+
+  // ---- Crown ----
   crownSpotlightCard: { marginBottom: 20, gap: 12, backgroundColor: '#fff7ef' },
   crownSpotlightIcon: {
     width: 40,
@@ -489,6 +601,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7ede3',
   },
   crownMetaText: { color: '#6d635d', fontWeight: '700', fontSize: 12.5 },
+
+  // ---- Posts ----
   postCard: { marginBottom: 20, gap: 12 },
   rewardBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0f766e', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   rewardText: { color: '#fff', fontWeight: '700', fontSize: 12 },
@@ -505,8 +619,8 @@ const styles = StyleSheet.create({
   promptCopy: { gap: 4 },
   promptTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
   promptText: { color: '#81776f', lineHeight: 21 },
-  filterButton: { backgroundColor: '#efe3d5', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
-  filterButtonText: { color: '#1f1a17', fontWeight: '800', fontSize: 13 },
+
+  // ---- Events ----
   eventCard: { padding: 14, marginBottom: 16 },
   eventImage: { width: '100%', height: 190, borderRadius: 20, marginBottom: 14 },
   eventBody: { gap: 10 },
@@ -522,6 +636,11 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0f766e' },
   friendText: { color: '#81776f', fontWeight: '600' },
   arrowWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.light.tint, alignItems: 'center', justifyContent: 'center' },
+
+  // ---- Empty ----
+  emptyCard: { gap: 14, marginBottom: 16 },
+
+  // ---- FAB ----
   fab: { position: 'absolute', right: 36, bottom: 110, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 8, zIndex: 10 },
   fabInner: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
 });
