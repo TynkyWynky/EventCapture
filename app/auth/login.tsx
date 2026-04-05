@@ -48,16 +48,24 @@ export default function LoginScreen() {
                 </Text>
               </View>
 
-              <View style={styles.demoCard}>
-                <Text style={styles.demoLabel}>Demo account</Text>
-                <Text style={styles.demoValue}>{user.email}</Text>
-                <Text style={styles.demoHint}>Password: `eventcapture123`</Text>
-              </View>
+              <View style={styles.accountRow}>
+                <TouchableOpacity
+                  style={[styles.demoCard, email === user.email && styles.demoCardActive]}
+                  activeOpacity={0.85}
+                  onPress={() => { setEmail(user.email); setPassword('eventcapture123'); setError(''); }}>
+                  <Text style={styles.demoLabel}>Demo account</Text>
+                  <Text style={styles.demoValue}>{user.email}</Text>
+                  <Text style={styles.demoHint}>Tap to fill</Text>
+                </TouchableOpacity>
 
-              <View style={styles.demoCard}>
-                <Text style={styles.demoLabel}>Admin account</Text>
-                <Text style={styles.demoValue}>admin</Text>
-                <Text style={styles.demoHint}>Password: `admin`</Text>
+                <TouchableOpacity
+                  style={[styles.demoCard, email === 'admin' && styles.demoCardActive]}
+                  activeOpacity={0.85}
+                  onPress={() => { setEmail('admin'); setPassword('admin'); setError(''); }}>
+                  <Text style={styles.demoLabel}>Admin</Text>
+                  <Text style={styles.demoValue}>admin</Text>
+                  <Text style={styles.demoHint}>Tap to fill</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.inputRow}>
@@ -128,11 +136,22 @@ const styles = StyleSheet.create({
   copy: { gap: 6 },
   title: { color: '#1f1a17', fontWeight: '800', fontSize: 30, textAlign: 'center' },
   subtitle: { color: '#7d726a', textAlign: 'center', lineHeight: 22 },
+  accountRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   demoCard: {
+    flex: 1,
     backgroundColor: '#fff2e6',
     borderRadius: 18,
     padding: 14,
     gap: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  demoCardActive: {
+    borderColor: Colors.light.tint,
+    backgroundColor: '#fff8f0',
   },
   demoLabel: { color: '#8a6a52', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
   demoValue: { color: '#1f1a17', fontWeight: '800' },
