@@ -340,7 +340,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
         setFilters(DEFAULT_FILTERS);
       },
     };
-  }, [events, filters]);
+  }, [events, favoritePresetId, filters]);
 
   return <FilterContext.Provider value={value}>{children}</FilterContext.Provider>;
 }

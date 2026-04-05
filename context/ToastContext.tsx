@@ -1,6 +1,7 @@
 import { Toast, ToastItem } from '@/components/ui/toast';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ShowToastInput {
   title: string;
@@ -13,6 +14,22 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
+
+function ToastPortal({ toast, opacity, translateY }: { toast: ToastItem | null; opacity: Animated.Value; translateY: Animated.Value }) {
+  const insets = useSafeAreaInsets();
+
+  if (!toast) {
+    return null;
+  }
+
+  return (
+    <View pointerEvents="none" style={[styles.portal, { top: Math.max(insets.top, 18) + 6 }]}>
+      <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+        <Toast item={toast} />
+      </Animated.View>
+    </View>
+  );
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastItem | null>(null);
@@ -58,13 +75,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      {toast ? (
-        <View pointerEvents="none" style={styles.portal}>
-          <Animated.View style={{ opacity, transform: [{ translateY }] }}>
-            <Toast item={toast} />
-          </Animated.View>
-        </View>
-      ) : null}
+      <ToastPortal toast={toast} opacity={opacity} translateY={translateY} />
     </ToastContext.Provider>
   );
 }
@@ -82,7 +93,6 @@ export function useToast() {
 const styles = StyleSheet.create({
   portal: {
     position: 'absolute',
-    top: 18,
     left: 16,
     right: 16,
     zIndex: 100,

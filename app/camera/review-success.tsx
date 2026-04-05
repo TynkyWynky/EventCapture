@@ -35,7 +35,7 @@ export default function ReviewSuccessScreen() {
         title: 'Capture posted',
         message: `Your crown-eligible moment from ${eventTitle} is now live.`,
       });
-      router.push('/(tabs)');
+      router.replace('/(tabs)');
     }
   };
 

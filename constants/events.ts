@@ -212,10 +212,3 @@ export const EVENT_RECORDS: EventRecord[] = [
 
 export const FEATURED_EVENT_ID = 'canal-lights-open-air';
 
-export function getEventById(eventId?: string | string[]) {
-  if (!eventId || Array.isArray(eventId)) {
-    return undefined;
-  }
-
-  return EVENT_RECORDS.find((event) => event.id === eventId);
-}

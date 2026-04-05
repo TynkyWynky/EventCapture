@@ -25,15 +25,16 @@ function AuthNavigatorGuard() {
 
     const isAuthRoute = pathname.startsWith('/auth/');
     const isCreateProfileRoute = pathname === '/profile/create';
+    const isOnboardingRoute = pathname === '/onboarding';
     const isSplashRoute = pathname === '/';
-    const isPublicRoute = isSplashRoute || isAuthRoute || isCreateProfileRoute;
+    const isPublicRoute = isSplashRoute || isAuthRoute || isCreateProfileRoute || isOnboardingRoute;
 
     if (!isAuthenticated && !isPublicRoute) {
-      router.replace('/auth/login');
+      router.replace('/onboarding');
       return;
     }
 
-    if (isAuthenticated && (pathname === '/auth/login' || pathname === '/auth/reset' || pathname === '/profile/create')) {
+    if (isAuthenticated && (pathname === '/auth/login' || pathname === '/auth/reset' || pathname === '/profile/create' || pathname === '/onboarding')) {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isReady, pathname, router]);

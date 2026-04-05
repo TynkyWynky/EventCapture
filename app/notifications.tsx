@@ -8,11 +8,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { useSocial } from '@/context/SocialContext';
+import { useToast } from '@/context/ToastContext';
 import { Colors } from '@/constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { notifications } = useSocial();
+  const { notifications, markAllRead } = useSocial();
+  const { showToast } = useToast();
   const items = notifications.map((item, index) => ({
     ...item,
     section: index < 3 ? 'New' : 'Earlier',
@@ -27,7 +29,10 @@ export default function NotificationsScreen() {
           title="Notifications"
           onBack={() => router.back()}
           rightAction={
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => {
+              markAllRead();
+              showToast({ tone: 'success', title: 'All cleared', message: 'Notifications have been cleared.' });
+            }}>
               <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>
           }

@@ -46,6 +46,8 @@ interface SocialContextType {
   addEventComment: (eventId: string, eventTitle: string, text: string) => { ok: boolean; error?: string };
   addActivity: (item: Omit<ActivityItem, 'id' | 'createdAt' | 'time'>) => void;
   notifications: ActivityItem[];
+  unreadCount: number;
+  markAllRead: () => void;
   getLikedEvents: () => Array<{ eventId: string; eventTitle: string; likedBy: SocialUser[] }>;
   getPlannedEvents: () => Array<{
     eventId: string;
@@ -412,6 +414,10 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         ...item,
         time: timeAgo(item.createdAt),
       })),
+      unreadCount: notifications.length,
+      markAllRead: () => {
+        setNotifications([]);
+      },
       getLikedEvents: () =>
         EVENT_RECORDS.map((event) => ({
           eventId: event.id,

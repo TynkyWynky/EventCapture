@@ -2,12 +2,13 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSocial } from '@/context/SocialContext';
 
 function TabButton({
   children,
@@ -51,6 +52,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const palette = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
   const focusedRoute = state.routes[state.index];
+  const { unreadCount } = useSocial();
 
   if (focusedRoute?.name === 'camera') {
     return null;
@@ -58,7 +60,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, 14) }]}>
-      <View style={[styles.bar, { borderColor: palette.border }]}>
+      <View style={[styles.bar, { borderColor: palette.border, backgroundColor: palette.card }]}>
         <View style={styles.barGlow} />
 
         {state.routes.map((route, index) => {
@@ -110,6 +112,11 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                     color: iconColor,
                     size: 22,
                   })}
+                  {route.name === 'profile' && unreadCount > 0 ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                    </View>
+                  ) : null}
                 </View>
               )}
             </TabButton>
@@ -262,5 +269,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  badge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#e45b5b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
   },
 });

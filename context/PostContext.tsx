@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
 import { useToast } from '@/context/ToastContext';
-import React, { createContext, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
 
 export interface Post {
   id: string;
@@ -173,7 +173,7 @@ export function PostProvider({ children }: { children: ReactNode }) {
     setLastAwardedEventTitle(null);
   }, [crowns, hasHydrated, lastAwardedEventTitle, showToast]);
 
-  const addPost = (newPostData: Omit<Post, 'id' | 'date'>) => {
+  const addPost = useCallback((newPostData: Omit<Post, 'id' | 'date'>) => {
     const newPost: Post = {
       id: Date.now().toString(),
       date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY
@@ -186,11 +186,11 @@ export function PostProvider({ children }: { children: ReactNode }) {
       setLastAwardedEventTitle(newPostData.eventTitle ?? 'your latest capture');
       setCrowns((prev) => prev + 1);
     }
-  };
+  }, []);
 
   const value = useMemo(
     () => ({ posts, crowns, addPost }),
-    [posts, crowns]
+    [posts, crowns, addPost]
   );
 
   return (

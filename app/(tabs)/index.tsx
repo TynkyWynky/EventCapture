@@ -13,8 +13,8 @@ import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const filters = ['Live music', 'Open air', 'Food', 'Late night'];
@@ -48,10 +48,22 @@ export default function HomeFeed() {
   const activeReward = getActiveCrownReward(crowns);
   const nextReward = getNextCrownReward(crowns);
   const crownLevel = getCrownLevelProgress(crowns);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Simulate a data refresh — in a real app this would re-fetch from API
+    setTimeout(() => setRefreshing(false), 800);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.tint} />
+        }>
         <LinearGradient colors={['#241813', '#4a2a18', Colors.light.tintDark]} style={styles.hero}>
           <View style={styles.heroGlow} />
 
@@ -214,10 +226,12 @@ export default function HomeFeed() {
                 <Ionicons name="sparkles-outline" size={14} color={Colors.light.tint} />
                 <Text style={styles.crownMetaText}>{activeReward.milestone}</Text>
               </View>
-              <View style={styles.crownMetaChip}>
-                <Ionicons name="arrow-forward-outline" size={14} color={Colors.light.tint} />
-                <Text style={styles.crownMetaText}>Next: {nextReward.reward.perk}</Text>
-              </View>
+              {nextReward ? (
+                <View style={styles.crownMetaChip}>
+                  <Ionicons name="arrow-forward-outline" size={14} color={Colors.light.tint} />
+                  <Text style={styles.crownMetaText}>Next: {nextReward.reward.perk}</Text>
+                </View>
+              ) : null}
             </View>
 
             <AppButton label="Open crown vault" variant="secondary" onPress={() => router.push('/achievements')} />
@@ -320,13 +334,14 @@ export default function HomeFeed() {
           />
         )}
 
+        </ScrollView>
+
         <TouchableOpacity style={styles.fab} onPress={() => router.push('/event/create')}>
           <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.fabInner}>
             <Ionicons name="add" size={26} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
   );
 }
 
@@ -499,6 +514,6 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0f766e' },
   friendText: { color: '#81776f', fontWeight: '600' },
   arrowWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.light.tint, alignItems: 'center', justifyContent: 'center' },
-  fab: { position: 'absolute', right: 20, bottom: 18, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  fab: { position: 'absolute', right: 36, bottom: 110, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 8, zIndex: 10 },
   fabInner: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
 });

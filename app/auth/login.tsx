@@ -54,6 +54,12 @@ export default function LoginScreen() {
                 <Text style={styles.demoHint}>Password: `eventcapture123`</Text>
               </View>
 
+              <View style={styles.demoCard}>
+                <Text style={styles.demoLabel}>Admin account</Text>
+                <Text style={styles.demoValue}>admin</Text>
+                <Text style={styles.demoHint}>Password: `admin`</Text>
+              </View>
+
               <View style={styles.inputRow}>
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput

@@ -35,7 +35,7 @@ export default function ReviewFailScreen() {
         title: 'Capture shared',
         message: `Your moment from ${eventTitle} was posted to the feed.`,
       });
-      router.push('/(tabs)');
+      router.replace('/(tabs)');
     }
   };
 

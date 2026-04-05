@@ -50,6 +50,20 @@ const DEFAULT_CREDENTIALS: AccountCredentials = {
   password: 'eventcapture123',
 };
 
+const ADMIN_CREDENTIALS: AccountCredentials = {
+  email: 'admin',
+  password: 'admin',
+};
+
+const ADMIN_USER: UserProfile = {
+  username: 'admin',
+  fullName: 'Admin User',
+  bio: 'Platform administrator.',
+  city: 'Brussels',
+  email: 'admin',
+  avatarUri: 'https://i.pravatar.cc/160?img=68',
+};
+
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 function isValidUserProfile(value: unknown): value is UserProfile {
@@ -159,6 +173,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: 'Enter both email and password.' };
         }
 
+        // Check admin credentials
+        if (
+          normalizedEmail === ADMIN_CREDENTIALS.email.toLowerCase() &&
+          normalizedPassword === ADMIN_CREDENTIALS.password
+        ) {
+          setUser(ADMIN_USER);
+          setCredentials(ADMIN_CREDENTIALS);
+          setIsAuthenticated(true);
+          return { ok: true };
+        }
+
         if (
           normalizedEmail !== credentials.email.toLowerCase() ||
           normalizedPassword !== credentials.password
@@ -201,9 +226,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
           avatarUri: profile.avatarUri?.trim() || prev.avatarUri,
         }));
         if (profile.email?.trim()) {
+          const trimmedEmail = profile.email.trim();
           setCredentials((prev) => ({
             ...prev,
-            email: profile.email.trim(),
+            email: trimmedEmail,
           }));
         }
       },

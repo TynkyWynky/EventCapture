@@ -4,7 +4,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -43,46 +43,51 @@ export default function CommentsScreen() {
         />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
-        {comments.length ? (
-          comments.map((item) => (
-            <View key={item.id} style={styles.commentCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>
-              </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+          {comments.length ? (
+            comments.map((item) => (
+              <View key={item.id} style={styles.commentCard}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>
+                </View>
 
-              <View style={{ flex: 1 }}>
-                <View style={styles.nameRow}>
-                  <Text style={styles.name}>{item.user}</Text>
-                  <Text style={styles.time}>{item.time}</Text>
-                </View>
-                <View style={styles.bubble}>
-                  <Text style={styles.comment}>{item.text}</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.name}>{item.user}</Text>
+                    <Text style={styles.time}>{item.time}</Text>
+                  </View>
+                  <View style={styles.bubble}>
+                    <Text style={styles.comment}>{item.text}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))
-        ) : (
-          <EmptyState
-            icon="chatbubble-ellipses-outline"
-            title="No comments yet"
-            message="Start the conversation around this event."
+            ))
+          ) : (
+            <EmptyState
+              icon="chatbubble-ellipses-outline"
+              title="No comments yet"
+              message="Start the conversation around this event."
+            />
+          )}
+        </ScrollView>
+
+        <View style={styles.inputRow}>
+          <TextInput
+            placeholder="Add a comment..."
+            style={styles.input}
+            placeholderTextColor="#8c827a"
+            value={text}
+            onChangeText={setText}
           />
-        )}
-      </ScrollView>
-
-      <View style={styles.inputRow}>
-        <TextInput
-          placeholder="Add a comment..."
-          style={styles.input}
-          placeholderTextColor="#8c827a"
-          value={text}
-          onChangeText={setText}
-        />
-        <TouchableOpacity style={styles.send} onPress={handleSend}>
-          <Ionicons name="send" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.send} onPress={handleSend}>
+            <Ionicons name="send" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

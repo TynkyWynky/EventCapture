@@ -1,10 +1,11 @@
 import { useUser } from '@/context/UserContext';
+import { useToast } from '@/context/ToastContext';
 import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -13,9 +14,33 @@ import { Colors } from '@/constants/theme';
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useUser();
+  const { showToast } = useToast();
   const [push, setPush] = useState(true);
   const [reminder, setReminder] = useState(true);
   const [likes, setLikes] = useState(true);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete account',
+      'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            signOut();
+            showToast({
+              tone: 'info',
+              title: 'Account deleted',
+              message: 'Your account has been removed. This is a demo action.',
+            });
+            router.replace('/auth/login');
+          },
+        },
+      ]
+    );
+  };
 
   const settingRow = (label: string, subtitle: string, value: boolean, setter: (v: boolean) => void) => (
     <View style={styles.settingRow}>
@@ -86,7 +111,7 @@ export default function SettingsScreen() {
               router.replace('/auth/login');
             }}
           />
-          <AppButton label="Delete account" variant="danger" />
+          <AppButton label="Delete account" variant="danger" onPress={handleDeleteAccount} />
         </View>
       </ScrollView>
     </SafeAreaView>
