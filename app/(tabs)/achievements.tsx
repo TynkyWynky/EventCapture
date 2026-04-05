@@ -66,7 +66,10 @@ export default function AchievementsScreen() {
           subtitle="A polished view of every win, milestone, and next unlock."
           onBack={() => router.back()}
           rightAction={
-            <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
+              <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
+            </View>
           }
         />
 

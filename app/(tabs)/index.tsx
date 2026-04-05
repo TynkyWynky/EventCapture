@@ -76,11 +76,18 @@ export default function HomeFeed() {
               </View>
             </View>
 
-            <IconActionButton
-              icon="notifications-outline"
-              tone="dark"
-              onPress={() => router.push('/notifications')}
-            />
+            <View style={styles.heroActions}>
+              <IconActionButton
+                icon="notifications-outline"
+                tone="dark"
+                onPress={() => router.push('/notifications')}
+              />
+              <IconActionButton
+                icon="menu"
+                tone="dark"
+                onPress={() => router.push('/menu')}
+              />
+            </View>
           </View>
 
           <Text style={styles.heroText}>
@@ -370,6 +377,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  heroActions: { flexDirection: 'row', gap: 8 },
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   heroCopy: { flex: 1 },
   avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)' },

@@ -78,15 +78,24 @@ export default function CameraScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <View style={styles.topBar}>
-          <View>
+          <TouchableOpacity style={styles.topButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color="#1f1a17" />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>CAPTURE</Text>
             <Text style={styles.title}>Capture your drink</Text>
             <Text style={styles.subtitle}>Keep the cup inside the frame and tap the shutter.</Text>
           </View>
 
-          <TouchableOpacity style={styles.topButton} onPress={() => router.push('/notifications')}>
-            <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            <TouchableOpacity style={styles.topButton} onPress={() => router.push('/notifications')}>
+              <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.topButton} onPress={() => router.push('/menu')}>
+              <Ionicons name="menu" size={20} color="#1f1a17" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.photoFrame}>
@@ -145,6 +154,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 14,
+    gap: 10,
+  },
+  topActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   eyebrow: {
     color: '#fff0e1',

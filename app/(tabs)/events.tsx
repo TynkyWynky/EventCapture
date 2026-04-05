@@ -44,6 +44,7 @@ export default function MyEventsScreen() {
           <View style={styles.actions}>
             <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
             <IconActionButton icon="add" onPress={() => router.push('/event/create')} />
+            <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
           </View>
         </View>
 
