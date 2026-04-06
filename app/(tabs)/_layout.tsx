@@ -1,14 +1,14 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Tabs } from 'expo-router';
+import React from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSocial } from '@/context/SocialContext';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 function TabButton({
   children,
@@ -58,70 +58,82 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     return null;
   }
 
+  const leftRoutes = state.routes.slice(0, 2);
+  const centerRoutes = state.routes.slice(2, 4);
+  const rightRoutes = state.routes.slice(4, 6);
+
+  const renderNormalButton = (route: any, index: number) => {
+    const { options } = descriptors[route.key];
+    const isFocused = state.index === index;
+    const onPress = () => {
+      const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+      if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+    };
+
+    return (
+      <TabButton key={route.key} onPress={onPress} style={[styles.item, isFocused && styles.itemFocused]}>
+        <View style={[styles.inner, isFocused && styles.innerFocused]}>
+          {options.tabBarIcon?.({ focused: isFocused, color: isFocused ? '#1f1a17' : palette.muted, size: 22 })}
+          {route.name === 'profile' && unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      </TabButton>
+    );
+  };
+
+  const renderCenterButton = (route: any, index: number, isFirst: boolean) => {
+    const { options } = descriptors[route.key];
+    const isFocused = state.index === index;
+    const onPress = () => {
+      const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+      if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
+    };
+
+    return (
+      <View key={route.key} style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Divider if it's the second center button */}
+        {!isFirst && <View style={styles.centerDivider} />}
+        <TabButton onPress={onPress}>
+          <View style={[styles.centerItemInner, isFocused && styles.centerItemFocused]}>
+            {options.tabBarIcon?.({ 
+              focused: isFocused, 
+              color: isFocused ? '#ffffff' : 'rgba(255,255,255,0.5)', 
+              size: route.name === 'camera' ? 24 : 22 
+            })}
+          </View>
+        </TabButton>
+      </View>
+    );
+  };
+
   return (
     <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, 14) }]}>
       <View style={[styles.bar, { borderColor: palette.border, backgroundColor: palette.card }]}>
         <View style={styles.barGlow} />
 
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
-          const isCapture = route.name === 'camera';
+        <View style={styles.sideGroup}>
+          {leftRoutes.map((route) => {
+            const index = state.routes.indexOf(route);
+            return renderNormalButton(route, index);
+          })}
+        </View>
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
+        <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.centerGroup}>
+          {centerRoutes.map((route, i) => {
+            const index = state.routes.indexOf(route);
+            return renderCenterButton(route, index, i === 0);
+          })}
+        </LinearGradient>
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
-            }
-          };
-
-          const iconColor = isCapture
-            ? '#fff'
-            : isFocused
-              ? '#1f1a17'
-              : palette.muted;
-
-          return (
-            <TabButton
-              key={route.key}
-              onPress={onPress}
-              style={[
-                styles.item,
-                isFocused && !isCapture && styles.itemFocused,
-                isCapture && styles.captureItem,
-              ]}>
-              {isCapture ? (
-                <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.captureOuter}>
-                  <View style={styles.captureInner}>
-                    {options.tabBarIcon?.({
-                      focused: isFocused,
-                      color: iconColor,
-                      size: 25,
-                    })}
-                  </View>
-                </LinearGradient>
-              ) : (
-                <View style={[styles.inner, isFocused && styles.innerFocused]}>
-                  {options.tabBarIcon?.({
-                    focused: isFocused,
-                    color: iconColor,
-                    size: 22,
-                  })}
-                  {route.name === 'profile' && unreadCount > 0 ? (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              )}
-            </TabButton>
-          );
-        })}
+        <View style={styles.sideGroup}>
+          {rightRoutes.map((route) => {
+            const index = state.routes.indexOf(route);
+            return renderNormalButton(route, index);
+          })}
+        </View>
       </View>
     </View>
   );
@@ -148,15 +160,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="socialfeed"
-        options={{
-          title: 'Community',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'images' : 'images-outline'} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="events"
         options={{
           title: 'Explore',
@@ -170,7 +173,16 @@ export default function TabLayout() {
         options={{
           title: 'Capture',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'camera' : 'camera-outline'} size={25} color={color} />
+            <Ionicons name={focused ? 'camera' : 'camera-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="socialfeed"
+        options={{
+          title: 'Social',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'logo-instagram' : 'logo-instagram'} size={24} color={color} />
           ),
         }}
       />
@@ -204,16 +216,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bar: {
-    width: '90%',
+    width: '92%',
     minHeight: 82,
-    borderRadius: 32,
+    borderRadius: 36,
     borderWidth: 1,
     backgroundColor: '#ffffff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 22,
@@ -231,58 +243,32 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 999,
     backgroundColor: '#fff7ef',
   },
-  item: {
+  sideGroup: {
+    flexDirection: 'row',
     flex: 1,
-    minHeight: 52,
+    justifyContent: 'space-around',
+  },
+  item: {
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 6,
   },
   itemFocused: {
-    backgroundColor: '#f0f0f0',
-  },
-  captureItem: {
-    flex: 1.08,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   inner: {
-    minHeight: 44,
-    minWidth: 44,
+    width: 44,
+    height: 44,
     borderRadius: 22,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   innerFocused: {
     backgroundColor: '#f7f1ea',
   },
-  captureOuter: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  captureInner: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
   badge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
+    top: 0,
+    right: 0,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -297,5 +283,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '800',
+  },
+  centerGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 30,
+    padding: 6,
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  centerDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginHorizontal: 2,
+  },
+  centerItemInner: {
+    minWidth: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerItemFocused: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
 });
