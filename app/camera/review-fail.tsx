@@ -19,6 +19,11 @@ export default function ReviewFailScreen() {
   const handlePost = (eventId: string, eventTitle: string) => {
     if (photoUri) {
       addPost({
+        user: {
+          id: user.username, // In a real app this would be a proper ID
+          username: user.username,
+          avatarUri: user.avatarUri,
+        },
         imageUri: photoUri,
         isBeerFinished: false,
         eventId,

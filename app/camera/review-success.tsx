@@ -19,6 +19,11 @@ export default function ReviewSuccessScreen() {
   const handlePost = (eventId: string, eventTitle: string) => {
     if (photoUri) {
       addPost({
+        user: {
+          id: user.username,
+          username: user.username,
+          avatarUri: user.avatarUri,
+        },
         imageUri: photoUri,
         isBeerFinished: true,
         eventId,

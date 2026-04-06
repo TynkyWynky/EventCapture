@@ -148,6 +148,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="socialfeed"
+        options={{
+          title: 'Community',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'images' : 'images-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="events"
         options={{
           title: 'Explore',
