@@ -1,5 +1,6 @@
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
+import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ export default function CommentsScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
   const { getEventById } = useEvents();
   const { getEventSocial, addEventComment } = useSocial();
+  const { showToast } = useToast();
   const [text, setText] = useState('');
   const event = getEventById(eventId);
   const social = getEventSocial(eventId);
@@ -29,6 +31,8 @@ export default function CommentsScreen() {
 
     if (result.ok) {
       setText('');
+    } else if (result.error) {
+      showToast({ title: 'Comment failed', message: result.error, tone: 'error' });
     }
   };
 

@@ -48,13 +48,13 @@ interface SocialContextType {
   notifications: ActivityItem[];
   unreadCount: number;
   markAllRead: () => void;
-  getLikedEvents: () => Array<{ eventId: string; eventTitle: string; likedBy: SocialUser[] }>;
-  getPlannedEvents: () => Array<{
+  getLikedEvents: () => { eventId: string; eventTitle: string; likedBy: SocialUser[] }[];
+  getPlannedEvents: () => {
     eventId: string;
     saved: boolean;
     planStatus: EventPlanStatus;
     planNote: string;
-  }>;
+  }[];
 }
 
 type SocialStateMap = Record<string, EventSocialState>;

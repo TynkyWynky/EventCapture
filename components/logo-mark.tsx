@@ -1,10 +1,10 @@
 import React from 'react';
-import { StyleProp, ViewStyle } from 'react-native';
+import { StyleProp, ImageStyle } from 'react-native';
 import { Image } from 'expo-image';
 
 type Props = {
   size?: number;
-  style?: StyleProp<ViewStyle>;
+  style?: StyleProp<ImageStyle>;
 };
 
 export function LogoMark({ size = 64, style }: Props) {

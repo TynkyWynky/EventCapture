@@ -7,7 +7,6 @@ import { AppImage } from '@/components/ui/app-image';
 import { Colors } from '@/constants/theme';
 import { usePosts, Post } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
-import { SurfaceCard } from '@/components/ui/surface-card';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { LinearGradient } from 'expo-linear-gradient';
 

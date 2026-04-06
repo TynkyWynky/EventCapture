@@ -148,7 +148,7 @@ export function PostProvider({ children }: { children: ReactNode }) {
 
         setPosts(parsedState.posts);
         setCrowns(parsedState.crowns);
-      } catch (error) {
+      } catch {
         try {
           await AsyncStorage.removeItem(STORAGE_KEY);
         } catch {

@@ -1,5 +1,6 @@
 import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
+import { useToast } from '@/context/ToastContext';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ export default function PostCommentsScreen() {
   const { postId } = useLocalSearchParams<{ postId?: string }>();
   const { posts, addPostComment } = usePosts();
   const { user } = useUser();
+  const { showToast } = useToast();
   const [text, setText] = useState('');
   
   const post = posts.find((p) => p.id === postId);
@@ -36,6 +38,8 @@ export default function PostCommentsScreen() {
 
     if (result.ok) {
       setText('');
+    } else if (result.error) {
+      showToast({ title: 'Comment failed', message: result.error, tone: 'error' });
     }
   };
 
