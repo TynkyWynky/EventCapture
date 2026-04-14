@@ -32,6 +32,7 @@ class DrinkDetectionApp {
         this.isRunning = false;
         this.waitingForResponse = false;
         this.logEntries = [];
+        this.latestAnnotatedImage = null;
 
         this.init();
     }
@@ -81,6 +82,7 @@ class DrinkDetectionApp {
             this.ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'detection') {
+                    this.latestAnnotatedImage = data.frame || null;
                     this.handleDetectionResult(data);
                     // Send next frame now that we got a response
                     this.waitingForResponse = false;
@@ -161,7 +163,7 @@ class DrinkDetectionApp {
 
     handleDetectionResult(data) {
         // Draw bounding boxes on overlay canvas (webcam stays live)
-        this.drawDetections(data.detections);
+        this.drawDetections(data.detections, data.debug || { persons: [], mouth_zones: [], faces: [] });
 
         // Update FPS
         this.fpsDisplay.textContent = data.fps || '0';
@@ -182,13 +184,50 @@ class DrinkDetectionApp {
         }
     }
 
-    drawDetections(detections) {
+    drawDetections(detections, debug) {
         const vw = this.webcam.videoWidth || 640;
         const vh = this.webcam.videoHeight || 480;
         this.overlayCanvas.width = vw;
         this.overlayCanvas.height = vh;
         const ctx = this.overlayCanvas.getContext('2d');
         ctx.clearRect(0, 0, vw, vh);
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textBaseline = 'top';
+
+        const debugLines = [
+            `Faces: ${(debug.faces || []).length}`,
+            `Mouth: ${(debug.mouth_zones || []).length}`,
+            `Drinks: ${detections.length}`,
+        ];
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(10, 10, 170, 70);
+        ctx.fillStyle = '#ffffff';
+        debugLines.forEach((line, index) => {
+            ctx.fillText(line, 18, 18 + index * 18);
+        });
+
+        for (const face of debug.faces || []) {
+            const [x1, y1, x2, y2] = face;
+            ctx.strokeStyle = '#ff5a5f';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            ctx.fillStyle = '#ff5a5f';
+            ctx.fillRect(x1, Math.max(0, y1 - 24), 56, 24);
+            ctx.fillStyle = '#000000';
+            ctx.fillText('FACE', x1 + 6, Math.max(2, y1 - 22));
+        }
+
+        for (const mouth of debug.mouth_zones || []) {
+            const [x1, y1, x2, y2] = mouth;
+            ctx.strokeStyle = '#ffd166';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            ctx.fillStyle = '#ffd166';
+            ctx.fillRect(x1, Math.max(0, y1 - 24), 86, 24);
+            ctx.fillStyle = '#000000';
+            ctx.fillText('MOUTH', x1 + 6, Math.max(2, y1 - 22));
+        }
 
         for (const d of detections) {
             const [x1, y1, x2, y2] = d.bbox;
@@ -199,7 +238,7 @@ class DrinkDetectionApp {
 
             // Box
             ctx.strokeStyle = color;
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 4;
             ctx.strokeRect(x1, y1, w, h);
 
             // Label background

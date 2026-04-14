@@ -14,10 +14,12 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
 
-from detector import DrinkDetector
+try:
+    from .detector import DrinkDetector
+except ImportError:
+    from detector import DrinkDetector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,10 +35,51 @@ app.add_middleware(
 
 # Initialize detector
 CUSTOM_MODEL_PATH = Path(__file__).parent / "models" / "drink_detector.pt"
+DEFAULT_MODEL_PATH = Path(__file__).parent / "yolov8n.pt"
+DEBUG_DIR = Path(__file__).parent / "debug"
+DEBUG_DIR.mkdir(exist_ok=True)
 detector = DrinkDetector(
-    model_path="yolov8n.pt",
+    model_path=str(DEFAULT_MODEL_PATH),
     custom_model_path=str(CUSTOM_MODEL_PATH) if CUSTOM_MODEL_PATH.exists() else None,
 )
+last_debug_snapshot = {
+    "source": None,
+    "frame_size": None,
+    "detection_count": 0,
+    "person_count": 0,
+    "face_count": 0,
+    "mouth_zone_count": 0,
+    "saved_frame": None,
+    "saved_annotated": None,
+    "updated_at": None,
+}
+
+
+def _save_debug_artifacts(
+    frame: np.ndarray,
+    annotated: np.ndarray,
+    debug_regions: dict,
+    detections: list,
+    source: str,
+) -> None:
+    global last_debug_snapshot
+
+    frame_path = DEBUG_DIR / "latest_frame.jpg"
+    annotated_path = DEBUG_DIR / "latest_annotated.jpg"
+    cv2.imwrite(str(frame_path), frame)
+    cv2.imwrite(str(annotated_path), annotated)
+
+    last_debug_snapshot = {
+        "source": source,
+        "frame_size": [int(frame.shape[1]), int(frame.shape[0])],
+        "detection_count": len(detections),
+        "person_count": len(debug_regions.get("persons", [])),
+        "face_count": len(debug_regions.get("faces", [])),
+        "mouth_zone_count": len(debug_regions.get("mouth_zones", [])),
+        "saved_frame": str(frame_path),
+        "saved_annotated": str(annotated_path),
+        "updated_at": time.time(),
+    }
 
 # Serve frontend
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -62,8 +105,23 @@ async def status():
     return {
         "status": "running",
         "model": "YOLOv8n",
+        "model_path": str(DEFAULT_MODEL_PATH),
         "custom_model": CUSTOM_MODEL_PATH.exists(),
+        "custom_model_path": str(CUSTOM_MODEL_PATH) if CUSTOM_MODEL_PATH.exists() else None,
         "drink_classes": ["Water", "Coffee", "Tea", "Soda", "Beer", "Wine", "Juice", "Energy Drink"],
+    }
+
+
+@app.get("/api/debug")
+async def debug_status():
+    return {
+        "status": "running",
+        "model_path": str(DEFAULT_MODEL_PATH),
+        "model_exists": DEFAULT_MODEL_PATH.exists(),
+        "custom_model_path": str(CUSTOM_MODEL_PATH) if CUSTOM_MODEL_PATH.exists() else None,
+        "custom_model_exists": CUSTOM_MODEL_PATH.exists(),
+        "debug_dir": str(DEBUG_DIR),
+        "last_snapshot": last_debug_snapshot,
     }
 
 
@@ -81,6 +139,8 @@ async def detect_image(file: UploadFile = File(...)):
 
     detections = detector.detect(frame)
     annotated = detector.annotate_frame(frame, detections)
+    debug_regions = detector.get_debug_regions()
+    _save_debug_artifacts(frame, annotated, debug_regions, detections, source="upload")
 
     _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 85])
     annotated_b64 = base64.b64encode(buffer).decode("utf-8")
@@ -96,6 +156,7 @@ async def detect_image(file: UploadFile = File(...)):
             }
             for d in detections
         ],
+        "debug": debug_regions,
         "annotated_image": f"data:image/jpeg;base64,{annotated_b64}",
     }
 
@@ -151,6 +212,15 @@ async def websocket_detect(websocket: WebSocket):
                 annotated = await asyncio.to_thread(
                     detector.annotate_frame, frame, detections
                 )
+                debug_regions = detector.get_debug_regions()
+                await asyncio.to_thread(
+                    _save_debug_artifacts,
+                    frame,
+                    annotated,
+                    debug_regions,
+                    detections,
+                    "websocket",
+                )
 
                 # Encode result
                 _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -178,6 +248,7 @@ async def websocket_detect(websocket: WebSocket):
                         }
                         for d in detections
                     ],
+                    "debug": debug_regions,
                     "fps": round(fps, 1),
                     "drinking_detected": any(d.is_drinking for d in detections),
                 }
@@ -194,4 +265,5 @@ async def websocket_detect(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
