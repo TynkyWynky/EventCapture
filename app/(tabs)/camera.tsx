@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
@@ -51,23 +51,27 @@ export default function CameraScreen() {
         });
 
         if (photo?.uri) {
-          // Analyze the beer
-          const isBeerFinished = await analyzeBeer(photo.uri);
+          const analysis = await analyzeBeer(photo.uri);
+          const routeParams = {
+            photoUri: photo.uri,
+            analysisHeadline: analysis.summary.headline,
+            analysisMessage: analysis.summary.message,
+            detectedDrinks: analysis.detectedDrinks.join('|'),
+            topDrink: analysis.topDrink ?? '',
+            statusLabel: analysis.summary.status_label,
+          };
 
-          if (isBeerFinished) {
-            router.push({
-              pathname: '/camera/review-success',
-              params: { photoUri: photo.uri },
-            });
-          } else {
-            router.push({
-              pathname: '/camera/review-fail',
-              params: { photoUri: photo.uri },
-            });
-          }
+          router.push({
+            pathname: analysis.crownEligible ? '/camera/review-success' : '/camera/review-fail',
+            params: routeParams,
+          });
         }
       } catch (error) {
         console.error('Failed to take picture:', error);
+        Alert.alert(
+          'Detection unavailable',
+          'The photo was captured, but the detector backend could not analyze it. Make sure the backend service is running and reachable from Expo.'
+        );
       } finally {
         setIsProcessing(false);
       }
@@ -109,7 +113,7 @@ export default function CameraScreen() {
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={Colors.light.tint} />
               <Text style={styles.loadingTitle}>Checking your capture</Text>
-              <Text style={styles.loadingText}>Looking for the best reward match and preparing the review.</Text>
+              <Text style={styles.loadingText}>Uploading the photo to the detection backend and preparing your review.</Text>
             </View>
           )}
         </View>

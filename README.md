@@ -1,157 +1,197 @@
-# EventCapture (BeerReal splash)
+# EventCapture
 
-Expo Router app showing the BeerReal/BearReal mobile UI: splash, auth, feeds, events, camera, crowns, profile, settings, filters, and supporting modals.
+EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOLOv8 drink detection service. The mobile app focuses on event discovery, social posting, crown rewards, and a camera flow that checks whether a captured drink photo is crown eligible.
 
-## Get started
-1) Install dependencies
+## What is in this repo
+
+- A React Native / Expo app with splash, onboarding, login, feed, events, camera, rewards, profile, and settings flows
+- A Python detection backend that analyzes drink photos and exposes HTTP + WebSocket endpoints
+- A lightweight browser demo in `frontend/` served by the backend for quick detector testing
+- Training utilities for exporting a custom YOLO model into `backend/models/drink_detector.pt`
+
+## Current product shape
+
+- The mobile app is the main product surface
+- User, event, filter, post, and social state are stored locally with AsyncStorage
+- Authentication is local demo auth, not a production identity system
+- Crown rewards are awarded from the detector result when a beer-like drink or active drinking moment is found
+- The backend also saves the latest analyzed and annotated frames into `backend/debug/`
+
+## Main app flows
+
+- Splash and onboarding route into login or the authenticated tab experience
+- Tabs include feed, events, camera, social, rewards, and profile
+- The camera screen captures a photo, sends it to the backend, and routes to a success or fail review screen
+- Posting a crown-eligible capture increments the local crown counter and reward progression
+- Admin and support-style screens exist, but they are part of the prototype flow rather than a production admin backend
+
+## Tech stack
+
+- Expo 54 with Expo Router and React Native 0.81
+- FastAPI, Uvicorn, OpenCV, Ultralytics YOLOv8, NumPy, and Torch
+- AsyncStorage for local persistence
+- TypeScript on the app side, Python on the detector side
+
+## Quick start
+
+### Prerequisites
+
+- Node.js with npm available on Windows
+- Python 3.10+ for the backend
+- A working backend virtual environment at `backend/.venv`
+
+### Install app dependencies
+
 ```bash
 npm install
 ```
-2) Run the app
+
+### Install backend dependencies
+
+If `backend/.venv` does not exist yet:
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt
+```
+
+### Run the Expo app only
+
 ```bash
 npm start
 ```
-Pick iOS/Android/Web in Expo CLI.
 
-## Notes
-- Splash: `app/index.tsx` → routes to `app/auth/login.tsx`.
-- Main tabs: `app/(tabs)` (home feed, events, camera, crowns, profile).
-- Extra screens: filters (`app/filters`), menu (`app/menu`), likes/comments, notifications, FAQ/help, contact, terms, event create/detail, profile create/edit, password reset, onboarding, camera review success/fail.
-- Colors: primary `#f68c1f`, dark accent `#ec7c0e`.
-
-## Useful scripts
-- `npm start` – start Expo dev server
-- `npm run android` – open Android
-- `npm run ios` – open iOS simulator
-- `npm run web` – open web preview
-- `npm run lint` – lint with Expo config
-# Drink Detection AI
-
-Real-time drink identification system using YOLOv8 and a web-based interface with live camera feed.
-
-## Features
-
-- **Real-time detection** via webcam using WebSockets
-- **8 drink categories**: Water, Coffee, Tea, Soda, Beer, Wine, Juice, Energy Drink
-- **Drinking action detection**: Detects when someone is actively drinking
-- **Image upload**: Analyze static images
-- **Color-based classification**: Infers drink type from visual cues
-- **Custom model training**: Fine-tune on your own drink dataset
-
-## Project Structure
-
-```
-├── backend/
-│   ├── app.py              # FastAPI WebSocket server
-│   ├── detector.py         # YOLOv8 drink detection engine
-│   ├── requirements.txt    # Python dependencies
-│   └── models/             # Custom trained models (auto-created)
-├── frontend/
-│   ├── index.html          # Web interface
-│   ├── style.css           # Styling
-│   └── app.js              # Webcam capture & WebSocket client
-├── training/
-│   ├── train.py            # YOLOv8 fine-tuning script
-│   ├── dataset.yaml        # Dataset class configuration
-│   └── prepare_data.py     # Data preparation utilities
-```
-
-## Quick Start
-
-### 1. Install Dependencies
+### Run environment checks only
 
 ```bash
+npm run check
+```
+
+This validates:
+
+- Node.js and npm availability
+- `backend/.venv/Scripts/python.exe`
+- `backend/yolov8n.pt`
+- frontend `node_modules`
+- backend imports
+- Expo startup wiring
+
+### Run backend and Expo separately
+
+```bash
+npm run check
+npm run start:services
+```
+
+`npm run start:services` skips the checks and opens the backend and Expo in separate PowerShell windows.
+
+### Run checks and start everything in one command
+
+```bash
+npm run start:all
+```
+
+## Manual backend start
+
+If you want to run the detector without the helper script:
+
+```powershell
 cd backend
-pip install -r requirements.txt
+.\.venv\Scripts\python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-> Requires Python 3.10+. A GPU (CUDA) is recommended but not required — CPU works for ~2-5 FPS.
+The backend serves:
 
-### 2. Run the Server
+- the detector API on port `8000`
+- the browser tester at `http://localhost:8000/`
 
-```bash
-cd backend
-python app.py
+## Mobile app to backend connection
+
+The app resolves the detector base URL in this order:
+
+1. `EXPO_PUBLIC_DETECTION_API_URL`
+2. the Expo debugger host when available
+3. `http://10.0.2.2:8000` on Android emulator
+4. `http://127.0.0.1:8000` elsewhere
+
+If your phone or simulator cannot reach the backend automatically, set `EXPO_PUBLIC_DETECTION_API_URL` before starting Expo.
+
+Example:
+
+```powershell
+$env:EXPO_PUBLIC_DETECTION_API_URL="http://192.168.1.20:8000"
+npm start
 ```
 
-### 3. Open the App
+## Demo credentials
 
-Navigate to **http://localhost:8000** in your browser.
+- Demo user: `demo@eventcapture.app` / `eventcapture123`
+- Admin user: `admin` / `admin`
 
-- Click **Start Camera** to begin real-time detection
-- Or use **Upload Image** to analyze a photo
+These credentials are local-only and backed by AsyncStorage.
 
-## How It Works
+## Detector behavior
 
-### Detection Pipeline
+The backend currently combines several signals:
 
-1. **Frame capture**: Browser captures webcam frames at configurable FPS
-2. **WebSocket transfer**: Frames sent as base64 JPEG to the server
-3. **YOLOv8 inference**: Detects bottles, cups, wine glasses, and people
-4. **Color analysis**: HSV-based classification infers specific drink type
-5. **Drinking detection**: Checks spatial proximity of drinks to face region
-6. **Annotated response**: Sends back labeled frame + detection metadata
+- YOLOv8n COCO detections for bottle, cup, wine glass, and person
+- optional custom model detections from `backend/models/drink_detector.pt`
+- simple HSV-based drink type inference
+- fallback person estimation from face detection when person boxes are weak
+- mouth-zone proximity plus short streak smoothing for active drinking detection
 
-### Drink Type Classification
+A capture is considered crown eligible when either:
 
-The system uses two approaches:
-- **COCO classes**: Detects general categories (bottle, cup, wine glass)
-- **Color analysis**: Analyzes the HSV color profile of the detected region to infer the specific drink (e.g., dark liquid in cup → Coffee, clear bottle → Water)
+- active drinking is detected
+- a beer-like drink is detected
 
-### Drinking Action Detection
+## API endpoints
 
-Detects when a person is actively drinking by analyzing:
-- Person detection (COCO class 0)
-- Drink proximity to the face region (top 35% of person bounding box)
-- Drink position relative to face center
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/health` | GET | Basic backend and model availability |
+| `/api/status` | GET | Runtime status, model info, supported drink classes |
+| `/api/debug` | GET | Debug snapshot metadata and saved artifact paths |
+| `/api/detect` | POST | Analyze a single uploaded image |
+| `/ws/detect` | WebSocket | Real-time frame-by-frame detector stream |
+| `/` | GET | Browser demo UI from `frontend/` |
 
-## Training a Custom Model
+## Project structure
 
-For higher accuracy, train on a custom drink dataset:
+```text
+app/                  Expo Router screens
+components/           Shared UI and review components
+constants/            Seed event data, crown definitions, theme values
+context/              AsyncStorage-backed demo state providers
+services/             App-side API integration for the detector
+backend/              FastAPI app, YOLO detector, config, schemas, debug artifacts
+frontend/             Simple browser detector demo
+training/             Dataset prep and YOLO training helpers
+scripts/              Windows startup helpers for checks + multi-service launch
+```
 
-### 1. Prepare Your Data
+## Training a custom model
 
-```bash
+Prepare a dataset and train with the provided scripts:
+
+```powershell
 cd training
-
-# Create dataset structure
-python prepare_data.py --create-only --output ../datasets/drinks
-
-# Place images in datasets/drinks/images/ and labels in datasets/drinks/labels/
-# Then split into train/val/test:
-python prepare_data.py --source ./raw_labeled_images --output ../datasets/drinks
-```
-
-Label format is YOLO: `class_id center_x center_y width height` (normalized 0-1).
-
-### 2. Train
-
-```bash
+python prepare_data.py --source .\raw_labeled_images --output ..\datasets\drinks
 python train.py --epochs 100 --batch 16
 ```
 
-The best model is automatically copied to `backend/models/drink_detector.pt` and will be loaded on next server start.
+The best exported weights are copied to:
 
-### 3. Resume Training
-
-```bash
-python train.py --resume
+```text
+backend/models/drink_detector.pt
 ```
 
-## Configuration
+That model is loaded automatically when present.
 
-| Setting | Default | Description |
-|---|---|---|
-| Confidence threshold | 35% | Min detection confidence (adjustable in UI) |
-| Frame rate | 5 FPS | Webcam capture rate (adjustable in UI) |
-| Image size | 640px | YOLOv8 inference resolution |
-| Server port | 8000 | FastAPI server port |
+## Notes and limitations
 
-## API Endpoints
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/` | GET | Web interface |
-| `/api/status` | GET | Server & model status |
-| `/api/detect` | POST | Detect drinks in uploaded image |
-| `/ws/detect` | WebSocket | Real-time detection stream |
+- Most app data is prototype data with local persistence, not a shared backend
+- The browser demo is still present and useful for detector debugging, but the main experience is the Expo app
+- The helper scripts are PowerShell-first and currently tailored to this Windows setup
+- The repo currently contains some generated backend debug images and Python bytecode artifacts in the working tree

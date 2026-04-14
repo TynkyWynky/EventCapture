@@ -12,12 +12,20 @@ interface CaptureReviewScreenProps {
   photoUri: string;
   isBeerFinished: boolean;
   onPost: (eventId: string, eventTitle: string) => void | Promise<void>;
+  analysisHeadline?: string;
+  analysisMessage?: string;
+  detectedDrinks?: string[];
+  topDrink?: string | null;
 }
 
 export function CaptureReviewScreen({
   photoUri,
   isBeerFinished,
   onPost,
+  analysisHeadline,
+  analysisMessage,
+  detectedDrinks = [],
+  topDrink,
 }: CaptureReviewScreenProps) {
   const router = useRouter();
   const { events } = useEvents();
@@ -44,6 +52,7 @@ export function CaptureReviewScreen({
   const eventHint = isBeerFinished
     ? 'Pick the event that should get the crown attempt.'
     : 'Pick the event this memory belongs to.';
+  const hasAnalysis = Boolean(analysisHeadline || analysisMessage || detectedDrinks.length || topDrink);
 
   const handleSubmit = async () => {
     if (!selectedEvent || isPosting) {
@@ -121,6 +130,31 @@ export function CaptureReviewScreen({
             </View>
           </View>
         </LinearGradient>
+
+        {hasAnalysis ? (
+          <View style={styles.analysisCard}>
+            <Text style={styles.analysisEyebrow}>Detector result</Text>
+            <Text style={styles.analysisTitle}>{analysisHeadline ?? 'Capture analyzed'}</Text>
+            <Text style={styles.analysisText}>
+              {analysisMessage ?? 'The backend analyzed this photo and attached the result to your review flow.'}
+            </Text>
+
+            <View style={styles.analysisMetaRow}>
+              {topDrink ? (
+                <View style={styles.analysisPill}>
+                  <Ionicons name="beer-outline" size={14} color={Colors.light.tint} />
+                  <Text style={styles.analysisPillText}>Top match: {topDrink}</Text>
+                </View>
+              ) : null}
+              {detectedDrinks.map((drink) => (
+                <View key={drink} style={styles.analysisPill}>
+                  <Ionicons name="sparkles-outline" size={14} color={Colors.light.tint} />
+                  <Text style={styles.analysisPillText}>{drink}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Post this photo to</Text>
@@ -341,6 +375,49 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: 18,
     gap: 12,
+  },
+  analysisCard: {
+    backgroundColor: '#fffaf5',
+    borderRadius: 24,
+    padding: 18,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#ead7c2',
+  },
+  analysisEyebrow: {
+    color: '#857a72',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  analysisTitle: {
+    color: '#1f1a17',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  analysisText: {
+    color: '#514942',
+    lineHeight: 20,
+  },
+  analysisMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  analysisPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: '#fff1e0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  analysisPillText: {
+    color: '#1f1a17',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   sectionTitle: {
     color: '#1f1a17',

@@ -11,6 +11,12 @@ export default function ReviewFailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const photoUri = params.photoUri as string;
+  const analysisHeadline = params.analysisHeadline as string | undefined;
+  const analysisMessage = params.analysisMessage as string | undefined;
+  const detectedDrinks = typeof params.detectedDrinks === 'string' && params.detectedDrinks.length
+    ? params.detectedDrinks.split('|').filter(Boolean)
+    : [];
+  const topDrink = params.topDrink as string | undefined;
   const { addPost } = usePosts();
   const { addActivity } = useSocial();
   const { showToast } = useToast();
@@ -44,5 +50,15 @@ export default function ReviewFailScreen() {
     }
   };
 
-  return <CaptureReviewScreen photoUri={photoUri} isBeerFinished={false} onPost={handlePost} />;
+  return (
+    <CaptureReviewScreen
+      photoUri={photoUri}
+      isBeerFinished={false}
+      onPost={handlePost}
+      analysisHeadline={analysisHeadline}
+      analysisMessage={analysisMessage}
+      detectedDrinks={detectedDrinks}
+      topDrink={topDrink}
+    />
+  );
 }
