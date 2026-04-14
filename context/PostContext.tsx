@@ -34,6 +34,7 @@ interface PostContextType {
   addPost: (post: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => void;
   togglePostLike: (postId: string, username: string) => void;
   addPostComment: (postId: string, user: PostUser, text: string) => { ok: boolean; error?: string };
+  deletePost: (postId: string) => void;
 }
 
 interface StoredPostState {
@@ -265,9 +266,13 @@ export function PostProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }, []);
 
+  const deletePost = useCallback((postId: string) => {
+    setPosts((prev) => prev.filter((post) => post.id !== postId));
+  }, []);
+
   const value = useMemo(
-    () => ({ posts, crowns, addPost, togglePostLike, addPostComment }),
-    [posts, crowns, addPost, togglePostLike, addPostComment]
+    () => ({ posts, crowns, addPost, togglePostLike, addPostComment, deletePost }),
+    [posts, crowns, addPost, togglePostLike, addPostComment, deletePost]
   );
 
   return (

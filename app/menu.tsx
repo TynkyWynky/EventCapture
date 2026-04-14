@@ -50,7 +50,7 @@ const menuItems = [
 
 export default function MenuScreen() {
   const router = useRouter();
-  const { signOut } = useUser();
+  const { user, signOut } = useUser();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -83,6 +83,23 @@ export default function MenuScreen() {
           </SurfaceCard>
 
           <View style={styles.section}>
+            {user.email === 'admin' && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => router.push('/admin' as any)}>
+                <View style={[styles.menuIconWrap, { backgroundColor: '#fcd34d' }]}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color="#78350f" />
+                </View>
+
+                <View style={styles.menuTextWrap}>
+                  <Text style={styles.menuLabel}>Admin Dashboard</Text>
+                  <Text style={styles.menuHint}>Manage users and platform content</Text>
+                </View>
+
+                <Ionicons name="chevron-forward" size={18} color="#8b8078" />
+              </TouchableOpacity>
+            )}
+
             {menuItems.map((item) => (
               <TouchableOpacity
                 key={item.label}
