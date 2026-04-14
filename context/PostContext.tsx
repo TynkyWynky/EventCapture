@@ -1,0 +1,291 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
+import { useToast } from '@/context/ToastContext';
+import React, { createContext, useCallback, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
+
+export interface PostUser {
+  id: string;
+  username: string;
+  avatarUri: string;
+}
+
+export interface PostComment {
+  id: string;
+  user: PostUser;
+  text: string;
+  time: string;
+}
+
+export interface Post {
+  id: string;
+  user: PostUser;
+  imageUri: string;
+  date: string;
+  isBeerFinished: boolean;
+  eventId?: string;
+  eventTitle?: string;
+  likes: string[]; // array of usernames
+  comments: PostComment[];
+}
+
+interface PostContextType {
+  posts: Post[];
+  crowns: number;
+  addPost: (post: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => void;
+  togglePostLike: (postId: string, username: string) => void;
+  addPostComment: (postId: string, user: PostUser, text: string) => { ok: boolean; error?: string };
+  deletePost: (postId: string) => void;
+}
+
+interface StoredPostState {
+  posts: Post[];
+  crowns: number;
+}
+
+const PostContext = createContext<PostContextType | undefined>(undefined);
+const STORAGE_KEY = 'eventcapture.post-state';
+const MOCK_USERS = [
+  { id: 'u1', username: 'alex', avatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80' },
+  { id: 'u2', username: 'sarah_night', avatarUri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=150&q=80' },
+];
+
+const DEFAULT_POSTS: Post[] = [
+  {
+    id: 'seed-post-1',
+    user: MOCK_USERS[0],
+    imageUri: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=900&q=80',
+    date: '18/07/2026',
+    isBeerFinished: true,
+    eventId: 'afterwork-tasting',
+    eventTitle: 'Afterwork Tasting',
+    likes: ['sarah_night', 'demo'],
+    comments: [
+      { id: 'c1', user: MOCK_USERS[1], text: 'Great vibe out there!', time: '2 hours ago' }
+    ]
+  },
+  {
+    id: 'seed-post-2',
+    user: MOCK_USERS[1],
+    imageUri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=900&q=80',
+    date: '07/09/2026',
+    isBeerFinished: false,
+    eventId: 'canal-lights-open-air',
+    eventTitle: 'Canal Lights Open Air',
+    likes: ['alex'],
+    comments: []
+  },
+  {
+    id: 'seed-post-3',
+    user: { id: 'u3', username: 'demo', avatarUri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },
+    imageUri: 'https://images.unsplash.com/photo-1436076863939-06870fe779c2?auto=format&fit=crop&w=900&q=80',
+    date: '20/09/2026',
+    isBeerFinished: true,
+    eventId: 'park-food-beats',
+    eventTitle: 'Park Food & Beats',
+    likes: ['sarah_night'],
+    comments: []
+  },
+];
+const DEFAULT_CROWNS = 5;
+
+function isValidPost(value: unknown): value is Post {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const post = value as Post;
+
+  return (
+    typeof post.id === 'string' &&
+    typeof post.imageUri === 'string' &&
+    typeof post.date === 'string' &&
+    typeof post.isBeerFinished === 'boolean' &&
+    typeof post.user === 'object' &&
+    Array.isArray(post.likes) &&
+    Array.isArray(post.comments) &&
+    (post.eventId === undefined || typeof post.eventId === 'string') &&
+    (post.eventTitle === undefined || typeof post.eventTitle === 'string')
+  );
+}
+
+function parseStoredState(rawValue: string | null): StoredPostState | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsedValue = JSON.parse(rawValue) as Partial<StoredPostState>;
+  const parsedPosts = Array.isArray(parsedValue.posts)
+    ? parsedValue.posts.filter(isValidPost)
+    : [];
+  const parsedCrowns =
+    typeof parsedValue.crowns === 'number' && Number.isFinite(parsedValue.crowns)
+      ? parsedValue.crowns
+      : DEFAULT_CROWNS;
+
+  return {
+    posts: parsedPosts,
+    crowns: parsedCrowns,
+  };
+}
+
+export function PostProvider({ children }: { children: ReactNode }) {
+  const { showToast } = useToast();
+  const [posts, setPosts] = useState<Post[]>(DEFAULT_POSTS);
+  const [crowns, setCrowns] = useState(DEFAULT_CROWNS);
+  const [hasHydrated, setHasHydrated] = useState(false);
+  const [lastAwardedEventTitle, setLastAwardedEventTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrate = async () => {
+      try {
+        const storedState = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsedState = parseStoredState(storedState);
+
+        if (!parsedState || !isMounted) {
+          return;
+        }
+
+        setPosts(parsedState.posts);
+        setCrowns(parsedState.crowns);
+      } catch {
+        try {
+          await AsyncStorage.removeItem(STORAGE_KEY);
+        } catch {
+          // Ignore cleanup failures and fall back to default in-memory state.
+        }
+      } finally {
+        if (isMounted) {
+          setHasHydrated(true);
+        }
+      }
+    };
+
+    hydrate();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
+    const persistState = async () => {
+      try {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ posts, crowns })
+        );
+      } catch {
+        // Keep the app usable even if device storage is unavailable.
+      }
+    };
+
+    persistState();
+  }, [crowns, hasHydrated, posts]);
+
+  useEffect(() => {
+    if (!hasHydrated || !lastAwardedEventTitle) {
+      return;
+    }
+
+    const previousLevel = getCrownLevelProgress(crowns - 1).currentLevel.level;
+    const currentLevel = getCrownLevelProgress(crowns).currentLevel;
+
+    if (currentLevel.level > previousLevel) {
+      const activeReward = getActiveCrownReward(crowns);
+
+      showToast({
+        title: `Level up! You're now Level ${currentLevel.level}`,
+        message: activeReward
+          ? `${currentLevel.title} unlocked after ${lastAwardedEventTitle}. New perk: ${activeReward.reward.perk}.`
+          : `${currentLevel.title} unlocked after ${lastAwardedEventTitle}.`,
+        tone: 'success',
+      });
+    }
+
+    setLastAwardedEventTitle(null);
+  }, [crowns, hasHydrated, lastAwardedEventTitle, showToast]);
+
+  const addPost = useCallback((newPostData: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => {
+    const newPost: Post = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY
+      ...newPostData,
+      likes: [],
+      comments: [],
+    };
+
+    setPosts((prev) => [newPost, ...prev]);
+
+    if (newPostData.isBeerFinished) {
+      setLastAwardedEventTitle(newPostData.eventTitle ?? 'your latest capture');
+      setCrowns((prev) => prev + 1);
+    }
+  }, []);
+
+  const togglePostLike = useCallback((postId: string, username: string) => {
+    setPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        const index = post.likes.indexOf(username);
+        let newLikes = [...post.likes];
+        if (index > -1) {
+          newLikes.splice(index, 1);
+        } else {
+          newLikes.push(username);
+        }
+        return { ...post, likes: newLikes };
+      })
+    );
+  }, []);
+
+  const addPostComment = useCallback((postId: string, user: PostUser, text: string) => {
+    if (!text.trim()) {
+      return { ok: false, error: 'Write a comment before sending.' };
+    }
+
+    const newComment: PostComment = {
+      id: `comment-${postId}-${Date.now()}`,
+      user,
+      text: text.trim(),
+      time: 'Just now',
+    };
+
+    setPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        return { ...post, comments: [newComment, ...post.comments] };
+      })
+    );
+
+    return { ok: true };
+  }, []);
+
+  const deletePost = useCallback((postId: string) => {
+    setPosts((prev) => prev.filter((post) => post.id !== postId));
+  }, []);
+
+  const value = useMemo(
+    () => ({ posts, crowns, addPost, togglePostLike, addPostComment, deletePost }),
+    [posts, crowns, addPost, togglePostLike, addPostComment, deletePost]
+  );
+
+  return (
+    <PostContext.Provider value={value}>
+      {children}
+    </PostContext.Provider>
+  );
+}
+
+export function usePosts() {
+  const context = useContext(PostContext);
+  if (context === undefined) {
+    throw new Error('usePosts must be used within a PostProvider');
+  }
+  return context;
+}
