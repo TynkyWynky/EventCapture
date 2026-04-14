@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drink Detection AI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>&#127864; Drink Detection AI</h1>
+            <p class="subtitle">Real-time drink identification using YOLOv8</p>
+        </header>
+
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="webcam" autoplay playsinline muted></video>
+                    <canvas id="overlayCanvas"></canvas>
+                    <canvas id="captureCanvas" style="display:none;"></canvas>
+                    <img id="resultFrame" alt="Detection result">
+                    <div id="noCamera" class="no-camera">
+                        <p>&#127909; Camera not active</p>
+                        <p>Click "Start Camera" to begin</p>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button id="btnStart" class="btn btn-primary">Start Camera</button>
+                    <button id="btnStop" class="btn btn-danger" disabled>Stop</button>
+                    <button id="btnUpload" class="btn btn-secondary">Upload Image</button>
+                    <input type="file" id="fileInput" accept="image/*" style="display:none">
+                </div>
+                <div class="settings">
+                    <label>
+                        Confidence Threshold:
+                        <input type="range" id="confThreshold" min="10" max="90" value="35">
+                        <span id="confValue">35%</span>
+                    </label>
+                    <label>
+                        Frame Rate:
+                        <select id="frameRate">
+                            <option value="100">10 FPS</option>
+                            <option value="200" selected>5 FPS</option>
+                            <option value="500">2 FPS</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <div class="status-card">
+                    <h3>Connection</h3>
+                    <div id="connectionStatus" class="status disconnected">Disconnected</div>
+                    <div class="stat">
+                        <span>FPS:</span>
+                        <span id="fpsDisplay">0</span>
+                    </div>
+                </div>
+
+                <div class="detections-card">
+                    <h3>Detections</h3>
+                    <div id="detectionsList" class="detections-list">
+                        <p class="empty-state">No drinks detected yet</p>
+                    </div>
+                </div>
+
+                <div class="drinking-card" id="drinkingAlert" style="display:none;">
+                    <h3>&#127864; Drinking Detected!</h3>
+                    <p id="drinkingInfo"></p>
+                </div>
+
+                <div class="history-card">
+                    <h3>Detection Log</h3>
+                    <div id="detectionLog" class="detection-log">
+                        <p class="empty-state">Waiting for detections...</p>
+                    </div>
+                </div>
+
+                <div class="legend-card">
+                    <h3>Supported Drinks</h3>
+                    <div class="drink-grid">
+                        <span class="drink-tag">&#128167; Water</span>
+                        <span class="drink-tag">&#9749; Coffee</span>
+                        <span class="drink-tag">&#127861; Tea</span>
+                        <span class="drink-tag">&#129380; Soda</span>
+                        <span class="drink-tag">&#127866; Beer</span>
+                        <span class="drink-tag">&#127863; Wine</span>
+                        <span class="drink-tag">&#129387; Juice</span>
+                        <span class="drink-tag">&#9889; Energy Drink</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
