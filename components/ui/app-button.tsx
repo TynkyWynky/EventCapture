@@ -1,6 +1,6 @@
 import { Colors } from '@/constants/theme';
 import React from 'react';
-import { Animated, Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleProp, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
 interface AppButtonProps {
   label: string;
@@ -8,6 +8,7 @@ interface AppButtonProps {
   variant?: 'primary' | 'secondary' | 'danger';
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 export function AppButton({
@@ -16,6 +17,7 @@ export function AppButton({
   variant = 'primary',
   disabled = false,
   style,
+  textStyle,
 }: AppButtonProps) {
   const scale = React.useRef(new Animated.Value(1)).current;
 
@@ -47,6 +49,7 @@ export function AppButton({
           style={[
             styles.label,
             variant === 'secondary' && styles.secondaryLabel,
+            textStyle,
           ]}>
           {label}
         </Text>

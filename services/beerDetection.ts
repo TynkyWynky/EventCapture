@@ -42,19 +42,52 @@ export interface DrinkAnalysisResult extends DrinkAnalysisApiResponse {
   topDrink: string | null;
 }
 
+interface ExpoConstantsHostShape {
+  expoGoConfig?: {
+    debuggerHost?: string | null;
+  };
+  expoConfig?: {
+    hostUri?: string | null;
+  };
+  manifest2?: {
+    extra?: {
+      expoClient?: {
+        hostUri?: string | null;
+      };
+    };
+  };
+  manifest?: {
+    debuggerHost?: string | null;
+  };
+}
+
 function trimTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
-function getExpoHost(): string | null {
-  const expoGoConfig = (Constants as unknown as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig;
-  const debuggerHost = expoGoConfig?.debuggerHost;
-  if (!debuggerHost) {
+function extractHost(value?: string | null): string | null {
+  if (!value) {
     return null;
   }
 
-  const [host] = debuggerHost.split(':');
-  return host || null;
+  const withoutProtocol = value.replace(/^[a-z]+:\/\//i, '');
+  const [hostWithPort] = withoutProtocol.split('/');
+  const [host] = hostWithPort.split(':');
+
+  return host?.trim() || null;
+}
+
+function getExpoHost(): string | null {
+  const constants = Constants as unknown as ExpoConstantsHostShape;
+
+  return (
+    [
+      extractHost(constants.expoConfig?.hostUri),
+      extractHost(constants.expoGoConfig?.debuggerHost),
+      extractHost(constants.manifest2?.extra?.expoClient?.hostUri),
+      extractHost(constants.manifest?.debuggerHost),
+    ].find((host): host is string => Boolean(host)) ?? null
+  );
 }
 
 export function getDetectionApiBaseUrl(): string {
@@ -90,27 +123,81 @@ async function appendPhoto(formData: FormData, photoUri: string): Promise<void> 
   } as unknown as Blob);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isDrinkAnalysisApiResponse(value: unknown): value is DrinkAnalysisApiResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    Array.isArray(value.detections) &&
+    isRecord(value.summary) &&
+    isRecord(value.debug) &&
+    typeof value.annotated_image === 'string'
+  );
+}
+
+function getErrorMessage(payload: unknown): string | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const messageCandidates = [payload.error, payload.detail];
+  for (const candidate of messageCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+async function fetchDetectionResult(url: string, formData: FormData): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Detection request timed out. Check that the backend is reachable from your device.');
+    }
+
+    throw new Error('Unable to reach the detection backend. Check your API URL and local network access.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export async function analyzeBeer(photoUri: string): Promise<DrinkAnalysisResult> {
   const formData = new FormData();
   await appendPhoto(formData, photoUri);
 
-  const response = await fetch(`${getDetectionApiBaseUrl()}/api/detect`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-    },
-    body: formData,
-  });
+  const response = await fetchDetectionResult(`${getDetectionApiBaseUrl()}/api/detect`, formData);
 
-  let payload: DrinkAnalysisApiResponse | { error?: string };
+  let payload: unknown;
   try {
     payload = await response.json();
   } catch {
     payload = { error: 'Backend returned invalid JSON.' };
   }
 
-  if (!response.ok || 'error' in payload) {
-    throw new Error(payload.error || 'Detection request failed.');
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload) ?? 'Detection request failed.');
+  }
+
+  if (!isDrinkAnalysisApiResponse(payload)) {
+    throw new Error(getErrorMessage(payload) ?? 'Detection response was missing expected fields.');
   }
 
   return {

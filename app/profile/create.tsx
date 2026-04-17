@@ -2,7 +2,7 @@ import { useUser } from '@/context/UserContext';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -26,6 +26,10 @@ export default function CreateProfileScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
+      Alert.alert(
+        'Photo access needed',
+        'Allow photo library access to choose a profile picture on your device.'
+      );
       return;
     }
 
@@ -44,122 +48,129 @@ export default function CreateProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <LinearGradient colors={['#1f1612', '#352016', Colors.light.tintDark]} style={styles.background}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-          <View style={styles.card}>
-            <View style={styles.header}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
-                <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.eyebrow}>PROFILE</Text>
-                <Text style={styles.title}>Create your profile</Text>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={styles.content}>
+            <View style={styles.card}>
+              <View style={styles.header}>
+                <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+                  <Ionicons name="chevron-back" size={20} color="#1f1a17" />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eyebrow}>PROFILE</Text>
+                  <Text style={styles.title}>Create your profile</Text>
+                </View>
               </View>
-            </View>
 
-            <Text style={styles.subtitle}>Set up the basics so your account already feels personal from the start.</Text>
+              <Text style={styles.subtitle}>Set up the basics so your account already feels personal from the start.</Text>
 
-            <View style={styles.avatarWrap}>
-              <View style={styles.avatar}>
-                {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
-                ) : (
-                  <Ionicons name="person-outline" size={40} color="#9d938b" />
-                )}
+              <View style={styles.avatarWrap}>
+                <View style={styles.avatar}>
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} style={styles.avatarImage} contentFit="cover" />
+                  ) : (
+                    <Ionicons name="person-outline" size={40} color="#9d938b" />
+                  )}
+                </View>
+                <TouchableOpacity style={styles.avatarBadge} onPress={pickAvatar}>
+                  <Ionicons name="camera-outline" size={16} color="#fff" />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.avatarBadge} onPress={pickAvatar}>
-                <Ionicons name="camera-outline" size={16} color="#fff" />
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Username</Text>
+                <TextInput
+                  placeholder="Choose a username"
+                  placeholderTextColor="#91867f"
+                  style={styles.input}
+                  value={username}
+                  onChangeText={setUsername}
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Email</Text>
+                <TextInput
+                  placeholder="Add your email"
+                  placeholderTextColor="#91867f"
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <TextInput
+                  placeholder="Create a password"
+                  placeholderTextColor="#91867f"
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Full name</Text>
+                <TextInput
+                  placeholder="Add your full name"
+                  placeholderTextColor="#91867f"
+                  style={styles.input}
+                  value={fullName}
+                  onChangeText={setFullName}
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>City</Text>
+                <TextInput
+                  placeholder="Where are you based?"
+                  placeholderTextColor="#91867f"
+                  style={styles.input}
+                  value={city}
+                  onChangeText={setCity}
+                />
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>About you</Text>
+                <TextInput
+                  placeholder="What kind of events do you love most?"
+                  placeholderTextColor="#91867f"
+                  style={[styles.input, styles.textArea]}
+                  multiline
+                  textAlignVertical="top"
+                  value={bio}
+                  onChangeText={setBio}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.primary, isCompleteDisabled && styles.primaryDisabled]}
+                disabled={isCompleteDisabled}
+                onPress={() => {
+                  createProfile({
+                    username,
+                    fullName,
+                    city,
+                    bio,
+                    avatarUri,
+                    email,
+                    password,
+                  });
+                  router.replace('/(tabs)');
+                }}>
+                <Text style={styles.primaryText}>Complete profile</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Username</Text>
-              <TextInput
-                placeholder="Choose a username"
-                placeholderTextColor="#91867f"
-                style={styles.input}
-                value={username}
-                onChangeText={setUsername}
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <TextInput
-                placeholder="Add your email"
-                placeholderTextColor="#91867f"
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Password</Text>
-              <TextInput
-                placeholder="Create a password"
-                placeholderTextColor="#91867f"
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Full name</Text>
-              <TextInput
-                placeholder="Add your full name"
-                placeholderTextColor="#91867f"
-                style={styles.input}
-                value={fullName}
-                onChangeText={setFullName}
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>City</Text>
-              <TextInput
-                placeholder="Where are you based?"
-                placeholderTextColor="#91867f"
-                style={styles.input}
-                value={city}
-                onChangeText={setCity}
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>About you</Text>
-              <TextInput
-                placeholder="What kind of events do you love most?"
-                placeholderTextColor="#91867f"
-                style={[styles.input, styles.textArea]}
-                multiline
-                textAlignVertical="top"
-                value={bio}
-                onChangeText={setBio}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.primary, isCompleteDisabled && styles.primaryDisabled]}
-              disabled={isCompleteDisabled}
-              onPress={() => {
-                createProfile({
-                  username,
-                  fullName,
-                  city,
-                  bio,
-                  avatarUri,
-                  email,
-                  password,
-                });
-                router.replace('/(tabs)');
-              }}>
-              <Text style={styles.primaryText}>Complete profile</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -167,6 +178,7 @@ export default function CreateProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#1f1612' },
+  flex: { flex: 1 },
   background: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 28 },
   card: {

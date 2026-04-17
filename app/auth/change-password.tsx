@@ -5,7 +5,7 @@ import { Colors } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -48,71 +48,78 @@ export default function ChangePasswordScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <ScreenHeader
-          eyebrow="SECURITY"
-          title="Change password"
-          subtitle="Update your sign-in and keep the account protected."
-          onBack={() => router.back()}
-        />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={styles.container}>
+          <ScreenHeader
+            eyebrow="SECURITY"
+            title="Change password"
+            subtitle="Update your sign-in and keep the account protected."
+            onBack={() => router.back()}
+          />
 
-        <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Keep your account secure</Text>
-          <Text style={styles.heroText}>
-            Update your password whenever you want a fresh sign-in.
-          </Text>
-        </SurfaceCard>
+          <SurfaceCard style={styles.heroCard}>
+            <Text style={styles.heroTitle}>Keep your account secure</Text>
+            <Text style={styles.heroText}>
+              Update your password whenever you want a fresh sign-in.
+            </Text>
+          </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Current password</Text>
-            <TextInput
-              placeholder="Enter current password"
-              placeholderTextColor="#91867f"
-              style={styles.input}
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              secureTextEntry
-            />
-          </View>
+          <SurfaceCard style={styles.sectionCard}>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Current password</Text>
+              <TextInput
+                placeholder="Enter current password"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry
+              />
+            </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>New password</Text>
-            <TextInput
-              placeholder="Enter new password"
-              placeholderTextColor="#91867f"
-              style={styles.input}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-            />
-          </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>New password</Text>
+              <TextInput
+                placeholder="Enter new password"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+            </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Confirm new password</Text>
-            <TextInput
-              placeholder="Confirm new password"
-              placeholderTextColor="#91867f"
-              style={styles.input}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-            />
-          </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Confirm new password</Text>
+              <TextInput
+                placeholder="Confirm new password"
+                placeholderTextColor="#91867f"
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+              />
+            </View>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          {success ? <Text style={styles.successText}>{success}</Text> : null}
-        </SurfaceCard>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {success ? <Text style={styles.successText}>{success}</Text> : null}
+          </SurfaceCard>
 
-        <AppButton label="Save new password" onPress={handleSave} />
-      </ScrollView>
+          <AppButton label="Save new password" onPress={handleSave} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 32, gap: 16 },
+  flex: { flex: 1 },
+  container: { flexGrow: 1, padding: 16, paddingBottom: 32, gap: 16 },
   heroCard: { backgroundColor: '#231b17', gap: 8 },
   heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800' },
   heroText: { color: '#d7c7bb', lineHeight: 21 },
