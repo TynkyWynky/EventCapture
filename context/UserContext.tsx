@@ -184,19 +184,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
           return { ok: true };
         }
 
+        // Check if it matches the currently stored credentials
         if (
-          normalizedEmail !== credentials.email.toLowerCase() ||
-          normalizedPassword !== credentials.password
+          normalizedEmail === credentials.email.toLowerCase() &&
+          normalizedPassword === credentials.password
         ) {
-          return { ok: false, error: 'Email or password is incorrect.' };
+          // It might be admin or a custom registered user
+          if (normalizedEmail === ADMIN_CREDENTIALS.email.toLowerCase()) {
+            setUser(ADMIN_USER);
+          } else {
+            // Restore from stored user if available, but keep the current email
+            setUser((prev) => ({
+              ...prev,
+              email: credentials.email,
+            }));
+          }
+          setIsAuthenticated(true);
+          return { ok: true };
         }
 
-        setUser((prev) => ({
-          ...prev,
-          email: credentials.email,
-        }));
-        setIsAuthenticated(true);
-        return { ok: true };
+        // Fallback: Check hardcoded demo credentials
+        if (
+          normalizedEmail === DEFAULT_CREDENTIALS.email.toLowerCase() &&
+          normalizedPassword === DEFAULT_CREDENTIALS.password
+        ) {
+          setUser(DEFAULT_USER);
+          setCredentials(DEFAULT_CREDENTIALS);
+          setIsAuthenticated(true);
+          return { ok: true };
+        }
+
+        return { ok: false, error: 'Email or password is incorrect.' };
       },
       createProfile: (profile) => {
         const nextEmail = profile.email?.trim() || DEFAULT_USER.email;

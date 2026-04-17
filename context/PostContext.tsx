@@ -2,31 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
 import { useToast } from '@/context/ToastContext';
 import React, { createContext, useCallback, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
-
-export interface PostUser {
-  id: string;
-  username: string;
-  avatarUri: string;
-}
-
-export interface PostComment {
-  id: string;
-  user: PostUser;
-  text: string;
-  time: string;
-}
-
-export interface Post {
-  id: string;
-  user: PostUser;
-  imageUri: string;
-  date: string;
-  isBeerFinished: boolean;
-  eventId?: string;
-  eventTitle?: string;
-  likes: string[]; // array of usernames
-  comments: PostComment[];
-}
+import { Post, PostUser, PostComment, POST_RECORDS } from '@/constants/posts';
 
 interface PostContextType {
   posts: Post[];
@@ -44,48 +20,6 @@ interface StoredPostState {
 
 const PostContext = createContext<PostContextType | undefined>(undefined);
 const STORAGE_KEY = 'eventcapture.post-state';
-const MOCK_USERS = [
-  { id: 'u1', username: 'alex', avatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80' },
-  { id: 'u2', username: 'sarah_night', avatarUri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=150&q=80' },
-];
-
-const DEFAULT_POSTS: Post[] = [
-  {
-    id: 'seed-post-1',
-    user: MOCK_USERS[0],
-    imageUri: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=900&q=80',
-    date: '18/07/2026',
-    isBeerFinished: true,
-    eventId: 'afterwork-tasting',
-    eventTitle: 'Afterwork Tasting',
-    likes: ['sarah_night', 'demo'],
-    comments: [
-      { id: 'c1', user: MOCK_USERS[1], text: 'Great vibe out there!', time: '2 hours ago' }
-    ]
-  },
-  {
-    id: 'seed-post-2',
-    user: MOCK_USERS[1],
-    imageUri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=900&q=80',
-    date: '07/09/2026',
-    isBeerFinished: false,
-    eventId: 'canal-lights-open-air',
-    eventTitle: 'Canal Lights Open Air',
-    likes: ['alex'],
-    comments: []
-  },
-  {
-    id: 'seed-post-3',
-    user: { id: 'u3', username: 'demo', avatarUri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },
-    imageUri: 'https://images.unsplash.com/photo-1436076863939-06870fe779c2?auto=format&fit=crop&w=900&q=80',
-    date: '20/09/2026',
-    isBeerFinished: true,
-    eventId: 'park-food-beats',
-    eventTitle: 'Park Food & Beats',
-    likes: ['sarah_night'],
-    comments: []
-  },
-];
 const DEFAULT_CROWNS = 5;
 
 function isValidPost(value: unknown): value is Post {
@@ -130,7 +64,7 @@ function parseStoredState(rawValue: string | null): StoredPostState | null {
 
 export function PostProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
-  const [posts, setPosts] = useState<Post[]>(DEFAULT_POSTS);
+  const [posts, setPosts] = useState<Post[]>(POST_RECORDS);
   const [crowns, setCrowns] = useState(DEFAULT_CROWNS);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [lastAwardedEventTitle, setLastAwardedEventTitle] = useState<string | null>(null);
@@ -147,7 +81,10 @@ export function PostProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setPosts(parsedState.posts);
+        const customPosts = parsedState.posts.filter((p) => !POST_RECORDS.some((seed) => seed.id === p.id));
+        const mergedPosts = [...customPosts, ...POST_RECORDS];
+
+        setPosts(mergedPosts);
         setCrowns(parsedState.crowns);
       } catch {
         try {

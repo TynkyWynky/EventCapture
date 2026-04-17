@@ -50,11 +50,11 @@ export default function LoginScreen() {
 
               <View style={styles.accountRow}>
                 <TouchableOpacity
-                  style={[styles.demoCard, email === user.email && styles.demoCardActive]}
+                  style={[styles.demoCard, email === 'demo@eventcapture.app' && styles.demoCardActive]}
                   activeOpacity={0.85}
-                  onPress={() => { setEmail(user.email); setPassword('eventcapture123'); setError(''); }}>
+                  onPress={() => { setEmail('demo@eventcapture.app'); setPassword('eventcapture123'); setError(''); }}>
                   <Text style={styles.demoLabel}>Demo account</Text>
-                  <Text style={styles.demoValue}>{user.email}</Text>
+                  <Text style={styles.demoValue}>demo@eventcapture.app</Text>
                   <Text style={styles.demoHint}>Tap to fill</Text>
                 </TouchableOpacity>
 
