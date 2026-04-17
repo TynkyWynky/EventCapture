@@ -11,6 +11,8 @@ export default function ReviewSuccessScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const photoUri = params.photoUri as string;
+  const storedImageUri = params.storedImageUri as string | undefined;
+  const captureId = params.captureId as string | undefined;
   const analysisHeadline = params.analysisHeadline as string | undefined;
   const analysisMessage = params.analysisMessage as string | undefined;
   const detectedDrinks = typeof params.detectedDrinks === 'string' && params.detectedDrinks.length
@@ -30,10 +32,11 @@ export default function ReviewSuccessScreen() {
           username: user.username,
           avatarUri: user.avatarUri,
         },
-        imageUri: photoUri,
+        imageUri: storedImageUri || photoUri,
         isBeerFinished: true,
         eventId,
         eventTitle,
+        captureId: captureId || undefined,
       });
       addActivity({
         user: user.username,

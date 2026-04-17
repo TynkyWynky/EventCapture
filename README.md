@@ -12,7 +12,9 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 ## Current product shape
 
 - The mobile app is the main product surface
-- User, event, filter, post, and social state are stored locally with AsyncStorage
+- Event and post data now sync to the FastAPI backend when it is reachable, while AsyncStorage stays in place as the app's offline fallback cache
+- Drink captures are stored by the backend in SQLite plus media files so posted photos survive app restarts and can be reused later
+- User auth, filters, and social planning are still prototype-local
 - Authentication is local demo auth, not a production identity system
 - Crown rewards are awarded from the detector result when a beer-like drink or active drinking moment is found
 - The backend also saves the latest analyzed and annotated frames into `backend/debug/`
@@ -28,8 +30,8 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 ## Tech stack
 
 - Expo 54 with Expo Router and React Native 0.81
-- FastAPI, Uvicorn, OpenCV, Ultralytics YOLOv8, NumPy, and Torch
-- AsyncStorage for local persistence
+- FastAPI, Uvicorn, OpenCV, Ultralytics YOLOv8, NumPy, Torch, and SQLite
+- AsyncStorage for offline-first local persistence on the app side
 - TypeScript on the app side, Python on the detector side
 
 ## Quick start
@@ -104,24 +106,27 @@ cd backend
 The backend serves:
 
 - the detector API on port `8000`
+- the events, posts, and persisted captures API on port `8000`
+- stored media files from `/media/...`
 - the browser tester at `http://localhost:8000/`
 
 ## Mobile app to backend connection
 
 The app resolves the detector base URL in this order:
 
-1. `EXPO_PUBLIC_DETECTION_API_URL`
-2. Expo-provided local hosts when available, preferring LAN IPs over loopback hosts
-3. `http://127.0.0.1:8000` and `http://localhost:8000` as local fallbacks
+1. `EXPO_PUBLIC_BACKEND_API_URL`
+2. `EXPO_PUBLIC_DETECTION_API_URL`
+3. Expo-provided local hosts when available, preferring LAN IPs over loopback hosts
+4. `http://127.0.0.1:8000` and `http://localhost:8000` as local fallbacks
 
 On network failures the mobile app now retries across those candidates automatically and surfaces the URLs it tried.
 
-If your phone or simulator cannot reach the backend automatically, set `EXPO_PUBLIC_DETECTION_API_URL` before starting Expo.
+If your phone or simulator cannot reach the backend automatically, set `EXPO_PUBLIC_BACKEND_API_URL` before starting Expo.
 
 Example:
 
 ```powershell
-$env:EXPO_PUBLIC_DETECTION_API_URL="http://192.168.1.20:8000"
+$env:EXPO_PUBLIC_BACKEND_API_URL="http://192.168.1.20:8000"
 npm start
 ```
 
@@ -173,12 +178,12 @@ Transfer the downloaded `.apk` file to your device and open it there. Android ma
 
 ### 6. Point the app at a reachable detector server
 
-For reliable detector access on a phone or any separate device, set `EXPO_PUBLIC_DETECTION_API_URL` to a LAN-reachable backend URL before starting Expo or producing a test build.
+For reliable detector access on a phone or any separate device, set `EXPO_PUBLIC_BACKEND_API_URL` to a LAN-reachable backend URL before starting Expo or producing a test build.
 
 Example:
 
 ```powershell
-$env:EXPO_PUBLIC_DETECTION_API_URL="http://192.168.1.20:8000"
+$env:EXPO_PUBLIC_BACKEND_API_URL="http://192.168.1.20:8000"
 npm run build:apk
 ```
 
@@ -210,6 +215,13 @@ A capture is considered crown eligible when either:
 - active drinking is detected
 - a beer-like drink is detected
 
+When the app uses the persisted capture endpoint, the backend also:
+
+- saves the original uploaded photo into `backend/storage/media/captures/...`
+- saves the annotated detector output beside it
+- stores detection summaries and individual detections in `backend/eventcapture.db`
+- returns a stable media URL that the posting flow can reuse
+
 ## API endpoints
 
 | Endpoint | Method | Purpose |
@@ -218,6 +230,13 @@ A capture is considered crown eligible when either:
 | `/api/status` | GET | Runtime status, model info, supported drink classes |
 | `/api/debug` | GET | Debug snapshot metadata and saved artifact paths |
 | `/api/detect` | POST | Analyze a single uploaded image |
+| `/api/captures/analyze` | POST | Analyze an image, persist original + annotated media, and store the detection result |
+| `/api/captures` | GET | List recent persisted capture summaries |
+| `/api/events` | GET/POST | Read and create shared events in SQLite |
+| `/api/posts` | GET/POST | Read and create feed posts in SQLite |
+| `/api/posts/{postId}/likes/toggle` | POST | Toggle a username on a post's like list |
+| `/api/posts/{postId}/comments` | POST | Add a post comment |
+| `/api/posts/{postId}` | DELETE | Delete a post |
 | `/ws/detect` | WebSocket | Real-time frame-by-frame detector stream |
 | `/` | GET | Browser demo UI from `frontend/` |
 
@@ -228,8 +247,8 @@ app/                  Expo Router screens
 components/           Shared UI and review components
 constants/            Seed event data, crown definitions, theme values
 context/              AsyncStorage-backed demo state providers
-services/             App-side API integration for the detector
-backend/              FastAPI app, YOLO detector, config, schemas, debug artifacts
+services/             App-side backend and detector API integration
+backend/              FastAPI app, YOLO detector, SQLite storage, config, schemas, debug artifacts
 frontend/             Simple browser detector demo
 training/             Dataset prep and YOLO training helpers
 scripts/              Windows startup helpers for checks + multi-service launch
@@ -255,7 +274,9 @@ That model is loaded automatically when present.
 
 ## Notes and limitations
 
-- Most app data is prototype data with local persistence, not a shared backend
+- Authentication is still demo-local and not backed by a production identity system
+- Social planning, event reactions, and filters are still local-first prototype state
+- Events and posts now have backend sync, but the app still keeps AsyncStorage as a resilience fallback
 - The browser demo is still present and useful for detector debugging, but the main experience is the Expo app
 - The helper scripts are PowerShell-first and currently tailored to this Windows setup
-- The repo currently contains some generated backend debug images and Python bytecode artifacts in the working tree
+- Runtime-generated backend data now lives in `backend/eventcapture.db`, `backend/storage/`, and `backend/debug/` and is ignored by git

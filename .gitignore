@@ -29,6 +29,8 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 backend/debug/
+backend/storage/
+backend/eventcapture.db*
 
 # macOS
 .DS_Store

@@ -7,6 +7,8 @@ class HealthResponse(BaseModel):
     ok: bool
     model_exists: bool
     custom_model_exists: bool
+    database_exists: bool
+    database_path: str
 
 
 class DetectionResponse(BaseModel):
@@ -45,6 +47,9 @@ class StatusResponse(BaseModel):
     custom_model: bool
     custom_model_path: str | None = None
     drink_classes: list[str]
+    database_path: str
+    database_exists: bool
+    media_dir: str
 
 
 class DebugSnapshotResponse(BaseModel):
@@ -74,3 +79,90 @@ class DetectImageResponse(BaseModel):
     summary: AnalysisSummaryResponse
     debug: DebugRegionsResponse
     annotated_image: str
+
+
+class AppUserResponse(BaseModel):
+    id: str
+    username: str
+    avatar_uri: str
+
+
+class EventPayload(BaseModel):
+    id: str
+    title: str
+    short_title: str | None = None
+    date: str
+    full_date: str
+    time: str
+    place: str
+    address: str
+    attendees: str
+    attendee_count: int
+    price: str
+    price_label: str
+    vibe: str
+    experience: str
+    hero_image: str
+    host_name: str
+    host_avatar: str
+    badge: str
+    description: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class PostCommentResponse(BaseModel):
+    id: str
+    user: AppUserResponse
+    text: str
+    time: str
+
+
+class PostPayload(BaseModel):
+    id: str
+    user: AppUserResponse
+    image_uri: str
+    date: str
+    is_beer_finished: bool
+    event_id: str | None = None
+    event_title: str | None = None
+    likes: list[str] = Field(default_factory=list)
+    comments: list[PostCommentResponse] = Field(default_factory=list)
+    capture_id: str | None = None
+
+
+class AddPostCommentRequest(BaseModel):
+    user: AppUserResponse
+    text: str
+
+
+class TogglePostLikeRequest(BaseModel):
+    username: str
+
+
+class CaptureRecordResponse(BaseModel):
+    id: str
+    username: str | None = None
+    event_id: str | None = None
+    event_title: str | None = None
+    original_image_url: str
+    annotated_image_url: str
+    source: str
+    created_at: str
+
+
+class CaptureListItemResponse(CaptureRecordResponse):
+    status_label: str
+    headline: str
+    message: str
+    has_detections: bool
+    has_drinking_action: bool
+    contains_beer: bool
+    crown_eligible: bool
+    drink_count: int
+    drink_types: list[str] = Field(default_factory=list)
+    top_drink: str | None = None
+    top_confidence: float | None = None
+
+
+class AnalyzeCaptureResponse(DetectImageResponse):
+    capture: CaptureRecordResponse

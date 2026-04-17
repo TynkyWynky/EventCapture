@@ -1,4 +1,5 @@
 import { analyzeBeer } from '@/services/beerDetection';
+import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
@@ -10,6 +11,7 @@ import { Colors } from '@/constants/theme';
 
 export default function CameraScreen() {
   const router = useRouter();
+  const { user } = useUser();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -51,9 +53,13 @@ export default function CameraScreen() {
         });
 
         if (photo?.uri) {
-          const analysis = await analyzeBeer(photo.uri);
+          const analysis = await analyzeBeer(photo.uri, {
+            username: user.username,
+          });
           const routeParams = {
             photoUri: photo.uri,
+            storedImageUri: analysis.storedImageUri ?? '',
+            captureId: analysis.captureId ?? '',
             analysisHeadline: analysis.summary.headline,
             analysisMessage: analysis.summary.message,
             detectedDrinks: analysis.detectedDrinks.join('|'),

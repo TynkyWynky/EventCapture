@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
 import { EVENT_RECORDS, EventRecord } from '@/constants/events';
+import { fetchRemoteEvents, upsertRemoteEvent } from '@/services/appDataApi';
 
 interface CreateEventInput {
   title: string;
@@ -71,6 +72,24 @@ function parseStoredEvents(rawValue: string | null): EventRecord[] | null {
   return parsedValue.filter(isValidEventRecord);
 }
 
+function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
+  const merged: EventRecord[] = [];
+  const seenIds = new Set<string>();
+
+  for (const collection of collections) {
+    for (const event of collection) {
+      if (!isValidEventRecord(event) || seenIds.has(event.id)) {
+        continue;
+      }
+
+      seenIds.add(event.id);
+      merged.push(event);
+    }
+  }
+
+  return merged;
+}
+
 export function EventProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<EventRecord[]>(EVENT_RECORDS);
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -87,7 +106,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setEvents(parsedEvents);
+        setEvents(mergeEventCollections(parsedEvents, EVENT_RECORDS));
       } catch {
         try {
           await AsyncStorage.removeItem(STORAGE_KEY);
@@ -117,6 +136,30 @@ export function EventProvider({ children }: { children: ReactNode }) {
       // Keep the app usable even if persistence is unavailable.
     });
   }, [events, hasHydrated]);
+
+  useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
+    let isMounted = true;
+
+    fetchRemoteEvents()
+      .then((remoteEvents) => {
+        if (!isMounted || !remoteEvents.length) {
+          return;
+        }
+
+        setEvents((prev) => mergeEventCollections(remoteEvents, prev, EVENT_RECORDS));
+      })
+      .catch(() => {
+        // Keep the app responsive even when the backend is offline.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasHydrated]);
 
   const value = useMemo<EventContextType>(() => {
     const featuredEventId = events[0]?.id ?? '';
@@ -165,7 +208,20 @@ export function EventProvider({ children }: { children: ReactNode }) {
           newEvent.tags = ['New event', 'Community', 'Live now'];
         }
 
-        setEvents((prev) => [newEvent, ...prev]);
+        setEvents((prev) => mergeEventCollections([newEvent], prev));
+        void upsertRemoteEvent(newEvent)
+          .then((persistedEvent) => {
+            setEvents((prev) =>
+              mergeEventCollections(
+                [persistedEvent],
+                prev.filter((event) => event.id !== persistedEvent.id),
+                EVENT_RECORDS
+              )
+            );
+          })
+          .catch(() => {
+            // Local persistence remains the fallback when the backend is unavailable.
+          });
         return newEvent;
       },
       getEventById: (eventId) => {

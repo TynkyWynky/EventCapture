@@ -9,12 +9,15 @@ FRONTEND_DIR = BACKEND_DIR.parent / "frontend"
 CUSTOM_MODEL_PATH = BACKEND_DIR / "models" / "drink_detector.pt"
 DEFAULT_MODEL_PATH = BACKEND_DIR / "yolov8n.pt"
 DEBUG_DIR = BACKEND_DIR / "debug"
+STORAGE_DIR = BACKEND_DIR / "storage"
+MEDIA_DIR = STORAGE_DIR / "media"
+DATABASE_PATH = BACKEND_DIR / "eventcapture.db"
 
 
 @dataclass(frozen=True)
 class BackendSettings:
     title: str = "Drink Detection AI"
-    version: str = "1.1.0"
+    version: str = "1.2.0"
     model_name: str = "YOLOv8n"
     host: str = "0.0.0.0"
     port: int = 8000

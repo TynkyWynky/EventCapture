@@ -1,5 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
+import {
+  addRemotePostComment,
+  deleteRemotePost,
+  fetchRemotePosts,
+  toggleRemotePostLike,
+  upsertRemotePost,
+} from '@/services/appDataApi';
 import { useToast } from '@/context/ToastContext';
 import React, { createContext, useCallback, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
 
@@ -26,6 +33,7 @@ export interface Post {
   eventTitle?: string;
   likes: string[]; // array of usernames
   comments: PostComment[];
+  captureId?: string;
 }
 
 interface PostContextType {
@@ -103,6 +111,7 @@ function isValidPost(value: unknown): value is Post {
     typeof post.user === 'object' &&
     Array.isArray(post.likes) &&
     Array.isArray(post.comments) &&
+    (post.captureId === undefined || typeof post.captureId === 'string') &&
     (post.eventId === undefined || typeof post.eventId === 'string') &&
     (post.eventTitle === undefined || typeof post.eventTitle === 'string')
   );
@@ -128,6 +137,24 @@ function parseStoredState(rawValue: string | null): StoredPostState | null {
   };
 }
 
+function mergePostCollections(...collections: Post[][]): Post[] {
+  const merged: Post[] = [];
+  const seenIds = new Set<string>();
+
+  for (const collection of collections) {
+    for (const post of collection) {
+      if (!isValidPost(post) || seenIds.has(post.id)) {
+        continue;
+      }
+
+      seenIds.add(post.id);
+      merged.push(post);
+    }
+  }
+
+  return merged;
+}
+
 export function PostProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
   const [posts, setPosts] = useState<Post[]>(DEFAULT_POSTS);
@@ -147,7 +174,7 @@ export function PostProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setPosts(parsedState.posts);
+        setPosts(mergePostCollections(parsedState.posts, DEFAULT_POSTS));
         setCrowns(parsedState.crowns);
       } catch {
         try {
@@ -189,6 +216,30 @@ export function PostProvider({ children }: { children: ReactNode }) {
   }, [crowns, hasHydrated, posts]);
 
   useEffect(() => {
+    if (!hasHydrated) {
+      return;
+    }
+
+    let isMounted = true;
+
+    fetchRemotePosts()
+      .then((remotePosts) => {
+        if (!isMounted || !remotePosts.length) {
+          return;
+        }
+
+        setPosts((prev) => mergePostCollections(remotePosts as Post[], prev, DEFAULT_POSTS));
+      })
+      .catch(() => {
+        // Keep local feed data when the backend is unavailable.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasHydrated]);
+
+  useEffect(() => {
     if (!hasHydrated || !lastAwardedEventTitle) {
       return;
     }
@@ -220,7 +271,20 @@ export function PostProvider({ children }: { children: ReactNode }) {
       comments: [],
     };
 
-    setPosts((prev) => [newPost, ...prev]);
+    setPosts((prev) => mergePostCollections([newPost], prev));
+    void upsertRemotePost(newPost)
+      .then((persistedPost) => {
+        setPosts((prev) =>
+          mergePostCollections(
+            [persistedPost as Post],
+            prev.filter((post) => post.id !== persistedPost.id),
+            DEFAULT_POSTS
+          )
+        );
+      })
+      .catch(() => {
+        // The local feed stays usable even if remote sync fails.
+      });
 
     if (newPostData.isBeerFinished) {
       setLastAwardedEventTitle(newPostData.eventTitle ?? 'your latest capture');
@@ -242,6 +306,19 @@ export function PostProvider({ children }: { children: ReactNode }) {
         return { ...post, likes: newLikes };
       })
     );
+    void toggleRemotePostLike(postId, username)
+      .then((persistedPost) => {
+        setPosts((prev) =>
+          mergePostCollections(
+            [persistedPost as Post],
+            prev.filter((post) => post.id !== postId),
+            DEFAULT_POSTS
+          )
+        );
+      })
+      .catch(() => {
+        // Optimistic local update is retained when sync is unavailable.
+      });
   }, []);
 
   const addPostComment = useCallback((postId: string, user: PostUser, text: string) => {
@@ -262,12 +339,28 @@ export function PostProvider({ children }: { children: ReactNode }) {
         return { ...post, comments: [newComment, ...post.comments] };
       })
     );
+    void addRemotePostComment(postId, user, text.trim())
+      .then((persistedPost) => {
+        setPosts((prev) =>
+          mergePostCollections(
+            [persistedPost as Post],
+            prev.filter((post) => post.id !== postId),
+            DEFAULT_POSTS
+          )
+        );
+      })
+      .catch(() => {
+        // Local comments stay visible if the backend cannot be reached.
+      });
 
     return { ok: true };
   }, []);
 
   const deletePost = useCallback((postId: string) => {
     setPosts((prev) => prev.filter((post) => post.id !== postId));
+    void deleteRemotePost(postId).catch(() => {
+      // Keep the local delete applied if the remote cleanup fails.
+    });
   }, []);
 
   const value = useMemo(
