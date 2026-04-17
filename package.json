@@ -9,7 +9,9 @@
     "start:services": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-all.ps1 -SkipChecks",
     "check:env": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-all.ps1 -CheckOnly",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
+    "build:android": "npm run build:apk",
+    "build:apk": "npx eas-cli build --platform android --profile preview",
+    "build:aab": "npx eas-cli build --platform android --profile production",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint"

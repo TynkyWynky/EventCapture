@@ -68,9 +68,13 @@ export default function CameraScreen() {
         }
       } catch (error) {
         console.error('Failed to take picture:', error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'The photo was captured, but the detector backend could not analyze it.';
         Alert.alert(
           'Detection unavailable',
-          'The photo was captured, but the detector backend could not analyze it. Make sure the backend service is running and reachable from Expo.'
+          message
         );
       } finally {
         setIsProcessing(false);

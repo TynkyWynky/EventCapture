@@ -111,9 +111,10 @@ The backend serves:
 The app resolves the detector base URL in this order:
 
 1. `EXPO_PUBLIC_DETECTION_API_URL`
-2. the Expo debugger host when available
-3. `http://10.0.2.2:8000` on Android emulator
-4. `http://127.0.0.1:8000` elsewhere
+2. Expo-provided local hosts when available, preferring LAN IPs over loopback hosts
+3. `http://127.0.0.1:8000` and `http://localhost:8000` as local fallbacks
+
+On network failures the mobile app now retries across those candidates automatically and surfaces the URLs it tried.
 
 If your phone or simulator cannot reach the backend automatically, set `EXPO_PUBLIC_DETECTION_API_URL` before starting Expo.
 
@@ -123,6 +124,69 @@ Example:
 $env:EXPO_PUBLIC_DETECTION_API_URL="http://192.168.1.20:8000"
 npm start
 ```
+
+## Build a downloadable Android APK
+
+Use this flow if you want an installable Android APK instead of running the app through Expo Go.
+
+### Prerequisites
+
+- An Expo account for EAS builds
+- A detector backend that your Android device can reach over the network
+
+### 1. Start the local detector backend
+
+From the project root:
+
+```powershell
+cd backend
+.\.venv\Scripts\python -m uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Keep this running while you test the APK.
+
+### 2. Log in to Expo EAS
+
+From the project root:
+
+```powershell
+npx eas-cli login
+```
+
+### 3. Build the Android APK
+
+From the project root:
+
+```powershell
+npm run build:apk
+```
+
+This creates a cloud Android build using the `preview` profile from `eas.json`.
+
+### 4. Download the APK
+
+When the build finishes, EAS prints a build URL. Open it and download the generated `.apk` file to your machine.
+
+### 5. Install the APK on your Android device
+
+Transfer the downloaded `.apk` file to your device and open it there. Android may ask you to allow installs from that source before the installation can continue.
+
+### 6. Point the app at a reachable detector server
+
+For reliable detector access on a phone or any separate device, set `EXPO_PUBLIC_DETECTION_API_URL` to a LAN-reachable backend URL before starting Expo or producing a test build.
+
+Example:
+
+```powershell
+$env:EXPO_PUBLIC_DETECTION_API_URL="http://192.168.1.20:8000"
+npm run build:apk
+```
+
+### Troubleshooting
+
+- If `npm run build:apk` fails before building, make sure you are logged in with `npx eas-cli login`.
+- If the APK installs but drink detection fails, confirm the backend is still running and reachable from the same network as your device.
+- If you only want the detailed APK build notes, see `APK_BUILD.md`.
 
 ## Demo credentials
 

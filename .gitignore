@@ -2,6 +2,8 @@
 
 # dependencies
 node_modules/
+.venv/
+backend/.venv/
 
 # Expo
 .expo/
@@ -26,6 +28,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+backend/debug/
 
 # macOS
 .DS_Store
@@ -36,6 +39,8 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+*.pyc
+backend/__pycache__/
 
 app-example
 

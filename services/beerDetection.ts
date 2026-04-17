@@ -61,6 +61,11 @@ interface ExpoConstantsHostShape {
   };
 }
 
+const DETECTION_PORT = 8000;
+const DETECTION_PROBE_TIMEOUT_MS = 2500;
+const DETECTION_REQUEST_TIMEOUT_MS = 20000;
+let cachedDetectionApiBaseUrl: string | null = null;
+
 function trimTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
@@ -77,43 +82,82 @@ function extractHost(value?: string | null): string | null {
   return host?.trim() || null;
 }
 
-function getExpoHost(): string | null {
-  const constants = Constants as unknown as ExpoConstantsHostShape;
+function isLoopbackHost(host: string): boolean {
+  return host === 'localhost' || host === '::1' || host.startsWith('127.');
+}
 
+function isIpv4Host(host: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+}
+
+function isPrivateIpv4Host(host: string): boolean {
+  if (!isIpv4Host(host)) {
+    return false;
+  }
+
+  const [first, second] = host.split('.').map((segment) => Number(segment));
   return (
-    [
-      extractHost(constants.expoConfig?.hostUri),
-      extractHost(constants.expoGoConfig?.debuggerHost),
-      extractHost(constants.manifest2?.extra?.expoClient?.hostUri),
-      extractHost(constants.manifest?.debuggerHost),
-    ].find((host): host is string => Boolean(host)) ?? null
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
   );
 }
 
-export function getDetectionApiBaseUrl(): string {
-  const configuredUrl = process.env.EXPO_PUBLIC_DETECTION_API_URL?.trim();
-  if (configuredUrl) {
-    return trimTrailingSlash(configuredUrl);
+function getHostPriority(host: string): number {
+  if (isPrivateIpv4Host(host)) {
+    return 4;
   }
 
-  const expoHost = getExpoHost();
-  if (expoHost) {
-    return `http://${expoHost}:8000`;
+  if (isLoopbackHost(host)) {
+    return 2;
   }
 
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:8000';
-  }
-
-  return 'http://127.0.0.1:8000';
+  return 1;
 }
 
-async function appendPhoto(formData: FormData, photoUri: string): Promise<void> {
+function getExpoHosts(): string[] {
+  const constants = Constants as unknown as ExpoConstantsHostShape;
+  const hosts = [
+    extractHost(constants.expoGoConfig?.debuggerHost),
+    extractHost(constants.manifest?.debuggerHost),
+    extractHost(constants.manifest2?.extra?.expoClient?.hostUri),
+    extractHost(constants.expoConfig?.hostUri),
+  ].filter((host): host is string => Boolean(host));
+  const uniqueHosts = Array.from(new Set(hosts));
+
+  return uniqueHosts.sort((left, right) => getHostPriority(right) - getHostPriority(left));
+}
+
+export function getDetectionApiBaseUrlCandidates(): string[] {
+  const configuredUrl = process.env.EXPO_PUBLIC_DETECTION_API_URL?.trim();
+  const candidates: string[] = [];
+
+  if (configuredUrl) {
+    candidates.push(trimTrailingSlash(configuredUrl));
+  }
+
+  for (const host of getExpoHosts()) {
+    candidates.push(`http://${host}:${DETECTION_PORT}`);
+  }
+
+  candidates.push(`http://127.0.0.1:${DETECTION_PORT}`);
+  candidates.push(`http://localhost:${DETECTION_PORT}`);
+
+  return Array.from(new Set(candidates.map(trimTrailingSlash)));
+}
+
+export function getDetectionApiBaseUrl(): string {
+  return cachedDetectionApiBaseUrl ?? getDetectionApiBaseUrlCandidates()[0];
+}
+
+async function buildDetectionFormData(photoUri: string): Promise<FormData> {
+  const formData = new FormData();
+
   if (Platform.OS === 'web') {
     const fileResponse = await fetch(photoUri);
     const photoBlob = await fileResponse.blob();
     formData.append('file', photoBlob, 'capture.jpg');
-    return;
+    return formData;
   }
 
   formData.append('file', {
@@ -121,6 +165,8 @@ async function appendPhoto(formData: FormData, photoUri: string): Promise<void> 
     name: 'capture.jpg',
     type: 'image/jpeg',
   } as unknown as Blob);
+
+  return formData;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -157,7 +203,7 @@ function getErrorMessage(payload: unknown): string | null {
 
 async function fetchDetectionResult(url: string, formData: FormData): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), DETECTION_REQUEST_TIMEOUT_MS);
 
   try {
     return await fetch(url, {
@@ -170,20 +216,66 @@ async function fetchDetectionResult(url: string, formData: FormData): Promise<Re
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Detection request timed out. Check that the backend is reachable from your device.');
+      throw new Error(`Detection request to ${url} timed out. Check that the backend is reachable from your device.`);
     }
 
-    throw new Error('Unable to reach the detection backend. Check your API URL and local network access.');
+    throw new Error(`Unable to reach the detection backend at ${url}. Check your API URL and local network access.`);
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-export async function analyzeBeer(photoUri: string): Promise<DrinkAnalysisResult> {
-  const formData = new FormData();
-  await appendPhoto(formData, photoUri);
+async function resolveDetectionApiBaseUrl(): Promise<string> {
+  const candidateBaseUrls = [
+    ...(cachedDetectionApiBaseUrl ? [cachedDetectionApiBaseUrl] : []),
+    ...getDetectionApiBaseUrlCandidates().filter((baseUrl) => baseUrl !== cachedDetectionApiBaseUrl),
+  ];
 
-  const response = await fetchDetectionResult(`${getDetectionApiBaseUrl()}/api/detect`, formData);
+  let lastProbeError: Error | null = null;
+
+  for (const baseUrl of candidateBaseUrls) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), DETECTION_PROBE_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${baseUrl}/api/health`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend probe to ${baseUrl}/api/health returned ${response.status}.`);
+      }
+
+      cachedDetectionApiBaseUrl = baseUrl;
+      return baseUrl;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        lastProbeError = new Error(`Backend probe to ${baseUrl}/api/health timed out.`);
+      } else {
+        lastProbeError =
+          error instanceof Error
+            ? error
+            : new Error(`Unable to reach the detection backend at ${baseUrl}/api/health.`);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  const attemptedUrls = candidateBaseUrls.join(', ');
+  throw new Error(
+    `${lastProbeError?.message ?? 'Unable to reach the detection backend.'} Tried ${attemptedUrls}. If you are testing on a physical phone, set EXPO_PUBLIC_DETECTION_API_URL to your computer's LAN address, for example http://192.168.1.20:${DETECTION_PORT}.`
+  );
+}
+
+export async function analyzeBeer(photoUri: string): Promise<DrinkAnalysisResult> {
+  const baseUrl = await resolveDetectionApiBaseUrl();
+  const formData = await buildDetectionFormData(photoUri);
+  const response = await fetchDetectionResult(`${baseUrl}/api/detect`, formData);
 
   let payload: unknown;
   try {

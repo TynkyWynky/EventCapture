@@ -4,7 +4,7 @@
     "slug": "EventCapture",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/splash-icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "eventcapture",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -12,12 +12,23 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.eventcapture.mobile",
+      "versionCode": 1,
+      "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
         "backgroundColor": "#f68c1f",
-        "foregroundImage": "./assets/images/splash-icon.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -50,11 +61,18 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withAndroidCleartextTraffic"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "109d7956-f3c5-4cf4-831b-60b1299864cb"
+      }
     }
   }
 }
