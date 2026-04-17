@@ -8,6 +8,7 @@ import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
 import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +22,7 @@ export default function ProfileScreen() {
   const { posts, crowns } = usePosts();
   const { events } = useEvents();
   const { user } = useUser();
+  const { t } = useLanguage();
   const rewardProgress = Math.min((crowns / 9) * 100, 100);
   const activeReward = getActiveCrownReward(crowns);
   const crownLevel = getCrownLevelProgress(crowns);
@@ -56,9 +58,9 @@ export default function ProfileScreen() {
           <Text style={styles.bio}>{user.bio}</Text>
 
           <View style={styles.statsRow}>
-            <StatChip label="posts" value={posts.length.toString()} tone="dark" />
-            <StatChip label="crowns" value={crowns.toString()} tone="dark" />
-            <StatChip label="events" value={events.length.toString()} tone="dark" />
+            <StatChip label={t('profileStatPosts')} value={posts.length.toString()} tone="dark" />
+            <StatChip label={t('profileStatCrowns')} value={crowns.toString()} tone="dark" />
+            <StatChip label={t('profileStatEvents')} value={events.length.toString()} tone="dark" />
           </View>
 
           {activeReward ? (
@@ -68,7 +70,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.rewardStripCopy}>
                 <Text style={styles.rewardStripTitle}>
-                  Active crown perk: {activeReward.reward.perk}
+                  {t('activeCrownPerk')} {activeReward.reward.perk}
                 </Text>
                 <Text style={styles.rewardStripText}>{activeReward.reward.detail}</Text>
               </View>
@@ -78,27 +80,27 @@ export default function ProfileScreen() {
           <View style={styles.levelCard}>
             <View style={styles.levelHeader}>
               <View>
-                <Text style={styles.levelEyebrow}>Crown level</Text>
+                <Text style={styles.levelEyebrow}>{t('crownLevelEyebrow')}</Text>
                 <Text style={styles.levelTitle}>
-                  Level {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
+                  {t('levelLabel')} {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
                 </Text>
               </View>
               <Text style={styles.levelMeta}>
                 {crownLevel.nextLevel
-                  ? `${crownLevel.crownsToNextLevel} crown${crownLevel.crownsToNextLevel === 1 ? '' : 's'} to Level ${crownLevel.nextLevel.level}`
-                  : 'Max level reached'}
+                  ? `${crownLevel.crownsToNextLevel} ${t('crownsToNextLevel')} ${crownLevel.nextLevel.level}`
+                  : t('maxLevelReached')}
               </Text>
             </View>
 
             <CrownProgressBar progress={crownLevel.progressWithinLevel} tone="dark" />
           </View>
 
-          <AppButton label="Edit profile" onPress={() => router.push('/profile/edit')} style={styles.editButton} />
+          <AppButton label={t('editProfileBtn')} onPress={() => router.push('/profile/edit')} style={styles.editButton} />
         </LinearGradient>
 
         <SurfaceCard style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Reward progress</Text>
+            <Text style={styles.sectionTitle}>{t('rewardProgressTitle')}</Text>
             <Text style={styles.sectionMeta}>{crowns}/9</Text>
           </View>
 
@@ -116,17 +118,17 @@ export default function ProfileScreen() {
             ))}
           </View>
 
-          <AppButton label="See all rewards" variant="secondary" onPress={() => router.push('/achievements')} />
+          <AppButton label={t('seeAllRewardsBtn')} variant="secondary" onPress={() => router.push('/achievements')} />
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Account snapshot</Text>
+          <Text style={styles.sectionTitle}>{t('accountSnapshotTitle')}</Text>
           <View style={styles.accountRow}>
             <View style={styles.accountIcon}>
               <Ionicons name="mail-outline" size={18} color={Colors.light.tint} />
             </View>
             <View style={styles.accountCopy}>
-              <Text style={styles.accountLabel}>Email</Text>
+              <Text style={styles.accountLabel}>{t('emailLabel')}</Text>
               <Text style={styles.accountValue}>{user.email}</Text>
             </View>
           </View>
@@ -136,14 +138,14 @@ export default function ProfileScreen() {
               <Ionicons name="location-outline" size={18} color={Colors.light.tint} />
             </View>
             <View style={styles.accountCopy}>
-              <Text style={styles.accountLabel}>City</Text>
+              <Text style={styles.accountLabel}>{t('cityLabel')}</Text>
               <Text style={styles.accountValue}>{user.city}</Text>
             </View>
           </View>
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>About</Text>
+          <Text style={styles.sectionTitle}>{t('aboutTitle')}</Text>
           <Text style={styles.aboutText}>{user.bio}</Text>
         </SurfaceCard>
       </ScrollView>

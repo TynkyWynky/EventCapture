@@ -8,6 +8,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useLanguage } from '@/context/LanguageContext';
+
 interface CaptureReviewScreenProps {
   photoUri: string;
   isBeerFinished: boolean;
@@ -21,6 +23,7 @@ export function CaptureReviewScreen({
 }: CaptureReviewScreenProps) {
   const router = useRouter();
   const { events } = useEvents();
+  const { t } = useLanguage();
   const [selectedEventId, setSelectedEventId] = useState('');
   const [isPosting, setIsPosting] = useState(false);
 
@@ -37,13 +40,13 @@ export function CaptureReviewScreen({
 
   const badgeColor = isBeerFinished ? '#0f766e' : '#8a6a52';
   const accentColor = isBeerFinished ? Colors.light.tint : '#8a6a52';
-  const title = isBeerFinished ? 'Crown-worthy capture' : 'Still a moment worth posting';
+  const title = isBeerFinished ? t('reviewSuccessTitle') : t('reviewFailTitle');
   const message = isBeerFinished
-    ? 'Nice shot. Post it to lock in your crown attempt and let the moment land with a little celebration.'
-    : 'No crown this time, but the photo still carries the night. Share it anyway and keep the memory in your feed.';
+    ? t('reviewSuccessMsg')
+    : t('reviewFailMsg');
   const eventHint = isBeerFinished
-    ? 'Pick the event that should get the crown attempt.'
-    : 'Pick the event this memory belongs to.';
+    ? t('reviewSuccessHint')
+    : t('reviewFailHint');
 
   const handleSubmit = async () => {
     if (!selectedEvent || isPosting) {
@@ -64,8 +67,8 @@ export function CaptureReviewScreen({
           </TouchableOpacity>
 
           <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>REVIEW</Text>
-            <Text style={styles.title}>Choose the event</Text>
+            <Text style={styles.eyebrow}>{t('reviewEyebrow')}</Text>
+            <Text style={styles.title}>{t('reviewTitle')}</Text>
           </View>
 
           <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
@@ -75,7 +78,7 @@ export function CaptureReviewScreen({
               color="#fff"
             />
             <Text style={styles.statusBadgeText}>
-              {isBeerFinished ? 'Crown eligible' : 'Share only'}
+              {isBeerFinished ? t('reviewBadgeSuccess') : t('reviewBadgeFail')}
             </Text>
           </View>
         </View>
@@ -109,13 +112,13 @@ export function CaptureReviewScreen({
                   color={accentColor}
                 />
                 <Text style={styles.metaText}>
-                  {isBeerFinished ? 'Eligible for reward' : 'Still worth sharing'}
+                  {isBeerFinished ? t('reviewMetaEligible') : t('reviewMetaWorth')}
                 </Text>
               </View>
               <View style={[styles.metaPill, isBeerFinished ? styles.metaPillWarm : styles.metaPillSoft]}>
                 <Ionicons name="albums-outline" size={14} color={accentColor} />
                 <Text style={styles.metaText}>
-                  {isBeerFinished ? '+1 crown if accepted' : 'Goes to your event story'}
+                  {isBeerFinished ? t('reviewMetaCrown') : t('reviewMetaStory')}
                 </Text>
               </View>
             </View>
@@ -123,7 +126,7 @@ export function CaptureReviewScreen({
         </LinearGradient>
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Post this photo to</Text>
+          <Text style={styles.sectionTitle}>{t('reviewSectionTitle')}</Text>
           <Text style={styles.sectionSubtitle}>{eventHint}</Text>
 
           <View style={styles.eventList}>
@@ -149,7 +152,7 @@ export function CaptureReviewScreen({
                       <Text style={styles.eventTitle}>{event.title}</Text>
                       {isSelected ? (
                         <View style={styles.selectedPill}>
-                          <Text style={styles.selectedPillText}>Selected</Text>
+                          <Text style={styles.selectedPillText}>{t('reviewSelectedPill')}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -169,15 +172,15 @@ export function CaptureReviewScreen({
 
         <View style={styles.footerCard}>
           <View>
-            <Text style={styles.footerLabel}>Selected event</Text>
+            <Text style={styles.footerLabel}>{t('reviewFooterLabel')}</Text>
             <Text style={styles.footerTitle}>
-              {selectedEvent?.title ?? 'Choose an event'}
+              {selectedEvent?.title ?? t('reviewFooterEmpty')}
             </Text>
           </View>
 
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.secondaryAction} onPress={() => router.back()}>
-              <Text style={styles.secondaryActionText}>Retake</Text>
+              <Text style={styles.secondaryActionText}>{t('reviewBtnRetake')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -190,11 +193,11 @@ export function CaptureReviewScreen({
               {isPosting ? (
                 <View style={styles.postingRow}>
                   <ActivityIndicator size="small" color="#fff" />
-                  <Text style={styles.primaryActionText}>Posting...</Text>
+                  <Text style={styles.primaryActionText}>{t('reviewBtnPosting')}</Text>
                 </View>
               ) : (
                 <Text style={styles.primaryActionText}>
-                  {isBeerFinished ? 'Celebrate and post' : 'Share capture'}
+                  {isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
                 </Text>
               )}
             </TouchableOpacity>

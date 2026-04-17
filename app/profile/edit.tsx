@@ -6,6 +6,7 @@ import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -23,22 +24,23 @@ export default function EditProfileScreen() {
   const [city, setCity] = useState(user.city);
   const [email, setEmail] = useState(user.email);
   const [bio, setBio] = useState(user.bio);
+  const { t } = useLanguage();
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete account',
-      'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      t('editProfAlertDelTitle'),
+      t('editProfAlertDelMsg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('editProfAlertCancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('editProfAlertDelete'),
           style: 'destructive',
           onPress: () => {
             signOut();
             showToast({
               tone: 'info',
-              title: 'Account deleted',
-              message: 'Your account has been removed. This is a demo action.',
+              title: t('editProfDelToastTitle'),
+              message: t('editProfDelToastMsg'),
             });
             router.replace('/auth/login');
           },
@@ -70,9 +72,9 @@ export default function EditProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="PROFILE"
-          title="Edit profile"
-          subtitle="Refresh your identity, bio, and public details."
+          eyebrow={t('editProfEyebrow')}
+          title={t('editProfTitle')}
+          subtitle={t('editProfSubtitle')}
           onBack={() => router.back()}
         />
 
@@ -90,22 +92,22 @@ export default function EditProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.heroTitle}>Keep your profile fresh</Text>
+          <Text style={styles.heroTitle}>{t('editProfHeroTitle')}</Text>
           <Text style={styles.heroText}>
-            Update your public details, bio and account presence in one clean flow.
+            {t('editProfHeroText')}
           </Text>
 
           <View style={styles.heroStats}>
-            <StatChip label="username" value={username || user.username} />
-            <StatChip label="city" value={city || user.city} />
+            <StatChip label={t('editProfLblUser')} value={username || user.username} />
+            <StatChip label={t('editProfLblCity')} value={city || user.city} />
           </View>
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Username</Text>
+            <Text style={styles.fieldLabel}>{t('editProfLblUser')}</Text>
             <TextInput
-              placeholder="Update username"
+              placeholder={t('editProfPlhUser')}
               placeholderTextColor="#91867f"
               style={styles.input}
               value={username}
@@ -114,9 +116,9 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Full name</Text>
+            <Text style={styles.fieldLabel}>{t('editProfLblName')}</Text>
             <TextInput
-              placeholder="Update full name"
+              placeholder={t('editProfPlhName')}
               placeholderTextColor="#91867f"
               style={styles.input}
               value={fullName}
@@ -125,9 +127,9 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Email</Text>
+            <Text style={styles.fieldLabel}>{t('editProfLblEmail')}</Text>
             <TextInput
-              placeholder="Update your email"
+              placeholder={t('editProfPlhEmail')}
               placeholderTextColor="#91867f"
               style={styles.input}
               value={email}
@@ -137,9 +139,9 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>City</Text>
+            <Text style={styles.fieldLabel}>{t('editProfLblCity')}</Text>
             <TextInput
-              placeholder="Update your city"
+              placeholder={t('editProfPlhCity')}
               placeholderTextColor="#91867f"
               style={styles.input}
               value={city}
@@ -148,9 +150,9 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>About you</Text>
+            <Text style={styles.fieldLabel}>{t('editProfLblBio')}</Text>
             <TextInput
-              placeholder="Update your bio"
+              placeholder={t('editProfPlhBio')}
               placeholderTextColor="#91867f"
               style={[styles.input, styles.textArea]}
               multiline
@@ -163,19 +165,19 @@ export default function EditProfileScreen() {
 
         <View style={styles.actionRow}>
           <AppButton
-            label="Save profile"
+            label={t('editProfBtnSave')}
             onPress={() => {
               updateProfile({ avatarUri, username, fullName, city, bio, email });
               showToast({
                 tone: 'success',
-                title: 'Profile updated',
-                message: 'Your public profile changes were saved.',
+                title: t('editProfToastTitle'),
+                message: t('editProfToastMsg'),
               });
               router.back();
             }}
           />
-          <AppButton label="Change password" variant="secondary" onPress={() => router.push('/auth/change-password')} />
-          <AppButton label="Delete account" variant="danger" onPress={handleDeleteAccount} />
+          <AppButton label={t('editProfBtnPass')} variant="secondary" onPress={() => router.push('/auth/change-password')} />
+          <AppButton label={t('editProfBtnDel')} variant="danger" onPress={handleDeleteAccount} />
         </View>
       </ScrollView>
     </SafeAreaView>

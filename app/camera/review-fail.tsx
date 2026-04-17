@@ -2,6 +2,7 @@ import { usePosts } from '@/context/PostContext';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { CaptureReviewScreen } from '@/components/capture-review-screen';
 import { Colors } from '@/constants/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ export default function ReviewFailScreen() {
   const { addActivity } = useSocial();
   const { showToast } = useToast();
   const { user } = useUser();
+  const { t } = useLanguage();
 
   const handlePost = (eventId: string, eventTitle: string) => {
     if (photoUri) {
@@ -31,14 +33,14 @@ export default function ReviewFailScreen() {
       });
       addActivity({
         user: user.username,
-        text: `shared a capture from ${eventTitle}`,
+        text: `${t('activitySharedCapture')} ${eventTitle}`,
         icon: 'image-outline',
         color: Colors.light.tint,
       });
       showToast({
         tone: 'info',
-        title: 'Capture shared',
-        message: `Your moment from ${eventTitle} was posted to the feed.`,
+        title: t('toastSharedTitle'),
+        message: `${t('toastSharedMsg')} ${eventTitle} ${t('toastSharedMsgEnd')}`,
       });
       router.replace('/(tabs)');
     }

@@ -7,6 +7,7 @@ import { Colors } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
 import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -14,20 +15,21 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const discoveryPresets = [
-  { id: 'all', label: 'All' },
-  { id: 'tonight', label: 'Tonight' },
-  { id: 'popular', label: 'Popular' },
-  { id: 'cheapest', label: 'Cheapest' },
-  { id: 'open_air', label: 'Open air' },
-] as const;
-
 export default function MyEventsScreen() {
   const router = useRouter();
   const { events } = useEvents();
   const { filteredEvents, activeFilterCount, activePresetId, favoritePresetId, applyPreset, filters } = useFilters();
   const { user } = useUser();
+  const { t } = useLanguage();
   const featuredEvents = (activeFilterCount ? filteredEvents : events).slice(0, 4);
+
+  const discoveryPresets = [
+    { id: 'all', label: t('filterPresetAll') },
+    { id: 'tonight', label: t('filterPresetTonight') },
+    { id: 'popular', label: t('filterPresetPopular') },
+    { id: 'cheapest', label: t('filterPresetCheapest') },
+    { id: 'open_air', label: t('filterPresetOpenAir') },
+  ] as const;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -36,8 +38,8 @@ export default function MyEventsScreen() {
           <View style={styles.titleRow}>
             <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
             <View style={styles.titleCopy}>
-              <Text style={styles.eyebrow}>DISCOVER</Text>
-              <Text style={styles.title}>{user.city} Events</Text>
+              <Text style={styles.eyebrow}>{t('discoverEyebrow')}</Text>
+              <Text style={styles.title}>{user.city}{t('discoverTitle')}</Text>
             </View>
           </View>
 
@@ -49,22 +51,22 @@ export default function MyEventsScreen() {
         </View>
 
         <LinearGradient colors={['#231b17', '#4b2d1f']} style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Your city is active tonight</Text>
+          <Text style={styles.heroTitle}>{t('exploreHeroTitle')}</Text>
           <Text style={styles.heroText}>
-            Browse curated events and jump into the ones your friends are already watching.
+            {t('exploreHeroText')}
           </Text>
 
           <View style={styles.heroStats}>
-            <StatChip label="live picks" value={featuredEvents.length.toString()} tone="dark" />
-            <StatChip label="city" value={user.city} tone="dark" />
-            <StatChip label="sort" value={filters.sortBy.replace('_', ' ')} tone="dark" />
+            <StatChip label={t('livePicksStat')} value={featuredEvents.length.toString()} tone="dark" />
+            <StatChip label={t('cityStat')} value={user.city} tone="dark" />
+            <StatChip label={t('sortStat')} value={filters.sortBy.replace('_', ' ')} tone="dark" />
           </View>
         </LinearGradient>
 
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Featured nights</Text>
-            <Text style={styles.sectionSubtitle}>Curated picks that are already moving</Text>
+            <Text style={styles.sectionTitle}>{t('featuredNightsTitle')}</Text>
+            <Text style={styles.sectionSubtitle}>{t('featuredNightsSub')}</Text>
           </View>
         </View>
 
@@ -74,7 +76,7 @@ export default function MyEventsScreen() {
               style={[styles.presetChip, styles.favoritePresetChip]}
               onPress={() => applyPreset(favoritePresetId)}>
               <Ionicons name="star" size={14} color={Colors.light.tint} />
-              <Text style={styles.favoritePresetText}>Saved</Text>
+              <Text style={styles.favoritePresetText}>{t('savedPreset')}</Text>
             </TouchableOpacity>
           ) : null}
           {discoveryPresets.map((preset) => {
@@ -117,8 +119,8 @@ export default function MyEventsScreen() {
                   <Text style={styles.cardMeta}>{event.description}</Text>
 
                   <View style={styles.metaRow}>
-                    <StatChip label="place" value={event.place} icon="pin-outline" />
-                    <StatChip label="time" value={event.time} icon="time-outline" />
+                    <StatChip label={t('plannerCardPlace')} value={event.place} icon="pin-outline" />
+                    <StatChip label={t('detailStatTime')} value={event.time} icon="time-outline" />
                   </View>
 
                   <View style={styles.bottomRow}>
@@ -137,8 +139,8 @@ export default function MyEventsScreen() {
         ) : (
           <EmptyState
             icon="calendar-clear-outline"
-            title="Nothing matches these filters"
-            message="Try resetting your filters or widen the location and price range."
+            title={t('noFiltersMatchTitle')}
+            message={t('noFiltersMatchSub')}
           />
         )}
       </ScrollView>

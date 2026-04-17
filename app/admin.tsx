@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '@/context/UserContext';
 import { usePosts } from '@/context/PostContext';
 import { useEvents } from '@/context/EventContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Colors } from '@/constants/theme';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { AppButton } from '@/components/ui/app-button';
@@ -61,6 +62,7 @@ export default function AdminScreen() {
   const { user } = useUser();
   const { posts, deletePost } = usePosts();
   const { events, deleteEvent } = useEvents();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'events'>('events');
   const [usersList, setUsersList] = useState(USERS_LIST);
   const [selectedUser, setSelectedUser] = useState<typeof USERS_LIST[0] | null>(null);
@@ -77,10 +79,10 @@ export default function AdminScreen() {
   }
 
   const handleDeletePost = (postId: string) => {
-    Alert.alert('Delete Post', 'Are you sure you want to completely remove this post?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('adminConfirmDelPostTitle'), t('adminConfirmDelPostMsg'), [
+      { text: t('adminBtnCancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('adminBtnDelete'),
         style: 'destructive',
         onPress: () => deletePost(postId),
       },
@@ -88,10 +90,10 @@ export default function AdminScreen() {
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    Alert.alert('Delete Event', 'Are you sure you want to completely remove this event? This action cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('adminConfirmDelEventTitle'), t('adminConfirmDelEventMsg'), [
+      { text: t('adminBtnCancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('adminBtnDelete'),
         style: 'destructive',
         onPress: () => deleteEvent(eventId),
       },
@@ -100,13 +102,13 @@ export default function AdminScreen() {
 
   const handleDeleteUser = (userId: string) => {
     if (userId === 'u_admin') {
-      Alert.alert('Cannot Delete', 'The primary admin account cannot be deleted.');
+      Alert.alert(t('adminCannotDelAdminTitle'), t('adminCannotDelAdminMsg'));
       return;
     }
-    Alert.alert('Ban User', 'Are you sure you want to ban this user? They will lose access to the platform.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('adminConfirmBanUserTitle'), t('adminConfirmBanUserMsg'), [
+      { text: t('adminBtnCancel'), style: 'cancel' },
       {
-        text: 'Ban User',
+        text: t('adminBtnBan'),
         style: 'destructive',
         onPress: () => setUsersList((prev) => prev.filter(u => u.id !== userId)),
       },
@@ -118,17 +120,17 @@ export default function AdminScreen() {
       <SurfaceCard style={styles.statCard}>
         <Ionicons name="calendar" size={24} color="#857a72" />
         <Text style={styles.statValue}>{events.length}</Text>
-        <Text style={styles.statLabel}>Events</Text>
+        <Text style={styles.statLabel}>{t('adminStatEvents')}</Text>
       </SurfaceCard>
       <SurfaceCard style={styles.statCard}>
         <Ionicons name="images" size={24} color="#857a72" />
         <Text style={styles.statValue}>{posts.length}</Text>
-        <Text style={styles.statLabel}>Posts</Text>
+        <Text style={styles.statLabel}>{t('adminStatPosts')}</Text>
       </SurfaceCard>
       <SurfaceCard style={styles.statCard}>
         <Ionicons name="people" size={24} color="#857a72" />
         <Text style={styles.statValue}>{usersList.length}</Text>
-        <Text style={styles.statLabel}>Users</Text>
+        <Text style={styles.statLabel}>{t('adminStatUsers')}</Text>
       </SurfaceCard>
     </View>
   );
@@ -158,7 +160,7 @@ export default function AdminScreen() {
             <View style={styles.modalActions}>
               {selectedUser.role !== 'Admin' && (
                 <AppButton 
-                  label="Ban User" 
+                  label={t('adminBtnBan')} 
                   variant="secondary" 
                   style={styles.deleteButton} 
                   textStyle={styles.deleteButtonText}
@@ -177,7 +179,7 @@ export default function AdminScreen() {
 
   const renderUsersTab = () => (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionHeader}>Platform Users</Text>
+      <Text style={styles.sectionHeader}>{t('adminSectUsers')}</Text>
       {usersList.map((u) => (
         <TouchableOpacity key={u.id} activeOpacity={0.8} onPress={() => setSelectedUser(u)}>
           <SurfaceCard style={styles.userCard}>
@@ -200,9 +202,9 @@ export default function AdminScreen() {
 
   const renderPostsTab = () => (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionHeader}>All Reported & Live Posts</Text>
+      <Text style={styles.sectionHeader}>{t('adminSectPosts')}</Text>
       {posts.length === 0 ? (
-        <Text style={styles.emptyText}>No posts available.</Text>
+        <Text style={styles.emptyText}>{t('adminNoPosts')}</Text>
       ) : null}
       
       {posts.map((post) => (
@@ -230,7 +232,7 @@ export default function AdminScreen() {
                 </View>
               </View>
               <AppButton
-                label="Remove Post"
+                label={t('adminBtnRemovePost')}
                 variant="secondary"
                 onPress={() => handleDeletePost(post.id)}
                 style={styles.deleteButton}
@@ -246,15 +248,15 @@ export default function AdminScreen() {
   const renderEventsTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionHeader}>Manage Events</Text>
+        <Text style={styles.sectionHeader}>{t('adminSectEvents')}</Text>
         <TouchableOpacity style={styles.addEventButton} onPress={() => router.push('/event/create')}>
           <Ionicons name="add" size={16} color="#fff" />
-          <Text style={styles.addEventText}>New Event</Text>
+          <Text style={styles.addEventText}>{t('adminBtnNewEvent')}</Text>
         </TouchableOpacity>
       </View>
       
       {events.length === 0 ? (
-        <Text style={styles.emptyText}>No events available.</Text>
+        <Text style={styles.emptyText}>{t('adminNoEvents')}</Text>
       ) : null}
       
       {events.map((event) => (
@@ -268,14 +270,14 @@ export default function AdminScreen() {
               
               <View style={styles.eventActions}>
                 <AppButton
-                  label="Edit"
+                  label={t('adminBtnEdit')}
                   variant="secondary"
                   onPress={() => router.push({ pathname: '/admin/event-edit', params: { eventId: event.id } })}
                   style={styles.editEventButton}
                   textStyle={styles.editEventButtonText}
                 />
                 <AppButton
-                  label="Delete"
+                  label={t('adminBtnDelete')}
                   variant="secondary"
                   onPress={() => handleDeleteEvent(event.id)}
                   style={styles.deleteButton}
@@ -300,8 +302,8 @@ export default function AdminScreen() {
             <Ionicons name="arrow-back" size={24} color="#1f1a17" />
           </TouchableOpacity>
           <View>
-            <Text style={styles.title}>Admin Panel</Text>
-            <Text style={styles.subtitle}>Manage platform content</Text>
+            <Text style={styles.title}>{t('adminTitle')}</Text>
+            <Text style={styles.subtitle}>{t('adminSubtitle')}</Text>
           </View>
         </View>
 
@@ -315,7 +317,7 @@ export default function AdminScreen() {
               size={20}
               color={activeTab === 'events' ? '#fff' : '#857a72'}
             />
-            <Text style={[styles.tabText, activeTab === 'events' && styles.tabTextActive]}>Events</Text>
+            <Text style={[styles.tabText, activeTab === 'events' && styles.tabTextActive]}>{t('adminTabEvents')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -326,7 +328,7 @@ export default function AdminScreen() {
               size={20}
               color={activeTab === 'posts' ? '#fff' : '#857a72'}
             />
-            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>Posts</Text>
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>{t('adminTabPosts')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -337,7 +339,7 @@ export default function AdminScreen() {
               size={20}
               color={activeTab === 'users' ? '#fff' : '#857a72'}
             />
-            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>Users</Text>
+            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>{t('adminTabUsers')}</Text>
           </TouchableOpacity>
         </View>
 

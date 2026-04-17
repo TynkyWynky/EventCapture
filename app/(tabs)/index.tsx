@@ -10,6 +10,7 @@ import { useFilters } from '@/context/FilterContext';
 import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
 import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -17,24 +18,25 @@ import React, { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const genreFilters = ['Live music', 'Electronic', 'Open air', 'Food', 'Outdoor', 'Late night'];
-const discoveryPresets = [
-  { id: 'all', label: 'All', icon: 'grid-outline' as const },
-  { id: 'tonight', label: 'Tonight', icon: 'moon-outline' as const },
-  { id: 'popular', label: 'Popular', icon: 'flame-outline' as const },
-  { id: 'cheapest', label: 'Cheapest', icon: 'wallet-outline' as const },
-  { id: 'open_air', label: 'Open air', icon: 'sunny-outline' as const },
-] as const;
-const sortOptions = [
-  { value: 'popular' as const, label: 'Popular' },
-  { value: 'soonest' as const, label: 'Soonest' },
-  { value: 'lowest_price' as const, label: 'Cheapest' },
-];
-
 export default function HomeFeed() {
   const router = useRouter();
   const { posts, crowns } = usePosts();
   const { events, featuredEventId } = useEvents();
+  const { t } = useLanguage();
+
+  const genreFilters = [t('filterGenreLive'), t('filterGenreElec'), t('filterGenreOpen'), t('filterGenreFood'), t('filterGenreOutdoor'), t('filterGenreLate')];
+  const discoveryPresets = [
+    { id: 'all', label: t('filterPresetAll'), icon: 'grid-outline' as const },
+    { id: 'tonight', label: t('filterPresetTonight'), icon: 'moon-outline' as const },
+    { id: 'popular', label: t('filterPresetPopular'), icon: 'flame-outline' as const },
+    { id: 'cheapest', label: t('filterPresetCheapest'), icon: 'wallet-outline' as const },
+    { id: 'open_air', label: t('filterPresetOpenAir'), icon: 'sunny-outline' as const },
+  ] as const;
+  const sortOptions = [
+    { value: 'popular' as const, label: t('filterSortPopular') },
+    { value: 'soonest' as const, label: t('filterSortSoonest') },
+    { value: 'lowest_price' as const, label: t('filterSortLowest') },
+  ];
   const {
     filteredEvents,
     filters: activeFilters,
@@ -69,7 +71,7 @@ export default function HomeFeed() {
     setSortBy(sortOptions[nextIndex].value);
   }, [activeFilters.sortBy, setSortBy]);
 
-  const currentSortLabel = sortOptions.find((o) => o.value === activeFilters.sortBy)?.label ?? 'Popular';
+  const currentSortLabel = sortOptions.find((o) => o.value === activeFilters.sortBy)?.label ?? t('filterSortPopular');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -88,8 +90,8 @@ export default function HomeFeed() {
             <View style={styles.profileRow}>
               <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
               <View style={styles.heroCopy}>
-                <Text style={styles.heroEyebrow}>TONIGHT IN BRUSSELS</Text>
-                <Text style={styles.heroTitle}>Find your next vibe, {user.username}</Text>
+                <Text style={styles.heroEyebrow}>{t('heroEyebrow')}</Text>
+                <Text style={styles.heroTitle}>{t('heroTitle')}{user.username}</Text>
               </View>
             </View>
 
@@ -100,7 +102,7 @@ export default function HomeFeed() {
           </View>
 
           <Text style={styles.heroText}>
-            Browse standout events, save memories and move through the city with your crew.
+            {t('heroText')}
           </Text>
 
           {/* ====== SEARCH BOX ====== */}
@@ -109,7 +111,7 @@ export default function HomeFeed() {
             <TextInput
               value={activeFilters.searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search artists, places or moods"
+              placeholder={t('searchPlaceholder')}
               placeholderTextColor="#8d827a"
               style={styles.searchInput}
               returnKeyType="search"
@@ -138,17 +140,17 @@ export default function HomeFeed() {
               </Text>
               <TouchableOpacity onPress={resetFilters} style={styles.clearFiltersBtn}>
                 <Ionicons name="close" size={13} color="#fff" />
-                <Text style={styles.clearFiltersText}>Clear all</Text>
+                <Text style={styles.clearFiltersText}>{t('clearAllBtn')}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
           {/* ====== METRICS ====== */}
           <View style={styles.metricRow}>
-            <StatChip label="events nearby" value={feedEvents.length.toString()} tone="dark" />
-            <StatChip label="captures" value={posts.length.toString().padStart(2, '0')} tone="dark" />
+            <StatChip label={t('feedStatEventsNearby')} value={feedEvents.length.toString()} tone="dark" />
+            <StatChip label={t('feedStatCaptures')} value={posts.length.toString().padStart(2, '0')} tone="dark" />
             <TouchableOpacity onPress={cycleSortBy}>
-              <StatChip label="sort" value={currentSortLabel} tone="dark" icon="swap-vertical-outline" />
+              <StatChip label={t('feedStatSort')} value={currentSortLabel} tone="dark" icon="swap-vertical-outline" />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -156,8 +158,8 @@ export default function HomeFeed() {
         {/* ====== DISCOVERY PRESETS ====== */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Quick picks</Text>
-            <Text style={styles.sectionSubtitle}>Explore by atmosphere</Text>
+            <Text style={styles.sectionTitle}>{t('quickPicksTitle')}</Text>
+            <Text style={styles.sectionSubtitle}>{t('quickPicksSub')}</Text>
           </View>
         </View>
 
@@ -167,7 +169,7 @@ export default function HomeFeed() {
               style={[styles.presetChip, styles.favoritePresetChip]}
               onPress={() => applyPreset(favoritePresetId)}>
               <Ionicons name="star" size={14} color={Colors.light.tint} />
-              <Text style={styles.favoritePresetText}>Saved</Text>
+              <Text style={styles.favoritePresetText}>{t('savedPreset')}</Text>
             </TouchableOpacity>
           ) : null}
           {discoveryPresets.map((preset) => {
@@ -206,24 +208,24 @@ export default function HomeFeed() {
           <LinearGradient colors={['#231b17', '#3a261d']} style={styles.featuredCard}>
             <View style={styles.featuredTop}>
               <View style={styles.featuredCopy}>
-                <Text style={styles.featuredEyebrow}>FEATURED TONIGHT</Text>
+                <Text style={styles.featuredEyebrow}>{t('featuredTonight')}</Text>
                 <Text style={styles.featuredTitle}>{featuredEvent.title}</Text>
               </View>
               <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>LIVE</Text>
+                <Text style={styles.liveBadgeText}>{t('liveBadge')}</Text>
               </View>
             </View>
 
             <Text style={styles.featuredDesc}>{featuredEvent.description}</Text>
 
             <View style={styles.featuredMeta}>
-              <StatChip label="spot" value={featuredEvent.place} icon="pin-outline" tone="dark" />
-              <StatChip label="time" value={featuredEvent.time} icon="time-outline" tone="dark" />
-              <StatChip label="crowd" value={featuredEvent.attendees} icon="people-outline" tone="dark" />
+              <StatChip label={t('feedStatSpot')} value={featuredEvent.place} icon="pin-outline" tone="dark" />
+              <StatChip label={t('detailStatTime')} value={featuredEvent.time} icon="time-outline" tone="dark" />
+              <StatChip label={t('detailStatCrowd')} value={featuredEvent.attendees} icon="people-outline" tone="dark" />
             </View>
 
             <AppButton
-              label="See details"
+              label={t('seeDetailsBtn')}
               onPress={() =>
                 router.push({
                   pathname: '/event/detail',
@@ -240,8 +242,8 @@ export default function HomeFeed() {
           <SurfaceCard style={styles.crownSpotlightCard}>
             <View style={styles.sectionHeader}>
               <View>
-                <Text style={styles.sectionTitle}>Crown spotlight</Text>
-                <Text style={styles.sectionSubtitle}>Your unlocked perk is now live</Text>
+                <Text style={styles.sectionTitle}>{t('crownSpotlightTitle')}</Text>
+                <Text style={styles.sectionSubtitle}>{t('crownSpotlightSub')}</Text>
               </View>
               <View style={styles.crownSpotlightIcon}>
                 <Ionicons name={activeReward.reward.icon} size={18} color={Colors.light.tint} />
@@ -282,7 +284,7 @@ export default function HomeFeed() {
               ) : null}
             </View>
 
-            <AppButton label="Open crown vault" variant="secondary" onPress={() => router.push('/achievements')} />
+            <AppButton label={t('openVaultBtn')} variant="secondary" onPress={() => router.push('/achievements')} />
           </SurfaceCard>
         ) : null}
 
@@ -291,8 +293,8 @@ export default function HomeFeed() {
           <SurfaceCard style={styles.postCard}>
             <View style={styles.sectionHeader}>
               <View>
-                <Text style={styles.sectionTitle}>Latest capture</Text>
-                <Text style={styles.sectionSubtitle}>Your most recent moment</Text>
+                <Text style={styles.sectionTitle}>{t('latestCaptureTitle')}</Text>
+                <Text style={styles.sectionSubtitle}>{t('latestCaptureSub')}</Text>
               </View>
               {latestPost.isBeerFinished ? (
                 <View style={styles.rewardBadge}>
@@ -312,20 +314,20 @@ export default function HomeFeed() {
               <Ionicons name="camera-outline" size={22} color={Colors.light.tint} />
             </View>
             <View style={styles.promptCopy}>
-              <Text style={styles.promptTitle}>Start your capture streak</Text>
+              <Text style={styles.promptTitle}>{t('startCaptureTitle')}</Text>
               <Text style={styles.promptText}>
-                Take your first drink photo to unlock crowns and build your night recap.
+                {t('startCaptureSub')}
               </Text>
             </View>
-            <AppButton label="Open camera" onPress={() => router.push('/camera')} />
+            <AppButton label={t('openCameraBtn')} onPress={() => router.push('/camera')} />
           </SurfaceCard>
         )}
 
         {/* ====== TRENDING EVENTS ====== */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Trending events</Text>
-            <Text style={styles.sectionSubtitle}>Good energy, close to you</Text>
+            <Text style={styles.sectionTitle}>{t('trendingTitle')}</Text>
+            <Text style={styles.sectionSubtitle}>{t('trendingSub')}</Text>
           </View>
           <TouchableOpacity style={styles.sortToggle} onPress={cycleSortBy}>
             <Ionicons name="swap-vertical-outline" size={14} color={Colors.light.tint} />
@@ -359,15 +361,15 @@ export default function HomeFeed() {
                   </View>
 
                   <View style={styles.infoRow}>
-                    <StatChip label="place" value={event.place} icon="pin-outline" />
-                    <StatChip label="date" value={event.date} icon="calendar-outline" />
-                    <StatChip label="time" value={event.time} icon="time-outline" />
+                    <StatChip label={t('plannerCardPlace')} value={event.place} icon="pin-outline" />
+                    <StatChip label={t('detailStatDate')} value={event.date} icon="calendar-outline" />
+                    <StatChip label={t('detailStatTime')} value={event.time} icon="time-outline" />
                   </View>
 
                   <View style={styles.cardFooter}>
                     <View style={styles.friendRow}>
                       <View style={styles.dot} />
-                      <Text style={styles.friendText}>Friends are interested</Text>
+                      <Text style={styles.friendText}>{t('friendsInterested')}</Text>
                     </View>
                     <View style={styles.arrowWrap}>
                       <Ionicons name="arrow-forward" size={16} color="#fff" />
@@ -381,10 +383,10 @@ export default function HomeFeed() {
           <SurfaceCard style={styles.emptyCard}>
             <EmptyState
               icon="options-outline"
-              title="No events match yet"
-              message="Try relaxing a filter or reset your picks to see more nights."
+              title={t('noEventsTitle')}
+              message={t('noEventsSub')}
             />
-            <AppButton label="Reset all filters" variant="secondary" onPress={resetFilters} />
+            <AppButton label={t('clearAllBtn')} variant="secondary" onPress={resetFilters} />
           </SurfaceCard>
         )}
 

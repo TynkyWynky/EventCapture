@@ -8,41 +8,42 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 
-const menuItems = [
+const getMenuItems = (t: any) => [
   {
-    label: 'My Night',
-    subtitle: 'See saved events, your plan and quick notes for tonight',
+    label: t('menuMyNightLabel'),
+    subtitle: t('menuMyNightHint'),
     icon: 'calendar-outline',
     route: '/event/my',
   },
   {
-    label: 'Edit profile',
-    subtitle: 'Update your bio, interests and public details',
+    label: t('menuEditProfileLabel'),
+    subtitle: t('menuEditProfileHint'),
     icon: 'create-outline',
     route: '/profile/edit',
   },
   {
-    label: 'Settings',
-    subtitle: 'Notifications, language and account preferences',
+    label: t('menuSettingsLabel'),
+    subtitle: t('menuSettingsHint'),
     icon: 'settings-outline',
     route: '/settings',
   },
   {
-    label: 'Help & FAQ',
-    subtitle: 'Quick answers for common questions',
+    label: t('menuFaqLabel'),
+    subtitle: t('menuFaqHint'),
     icon: 'help-circle-outline',
     route: '/faq',
   },
   {
-    label: 'Contact',
-    subtitle: 'Reach out for support or feedback',
+    label: t('menuContactLabel'),
+    subtitle: t('menuContactHint'),
     icon: 'mail-outline',
     route: '/contact',
   },
   {
-    label: 'Terms & privacy',
-    subtitle: 'Read the legal and community guidelines',
+    label: t('menuTermsLabel'),
+    subtitle: t('menuTermsHint'),
     icon: 'document-text-outline',
     route: '/terms',
   },
@@ -51,6 +52,8 @@ const menuItems = [
 export default function MenuScreen() {
   const router = useRouter();
   const { user, signOut } = useUser();
+  const { t } = useLanguage();
+  const menuItems = getMenuItems(t);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -62,9 +65,9 @@ export default function MenuScreen() {
 
           <View style={styles.header}>
             <View style={styles.headerCopy}>
-              <Text style={styles.eyebrow}>MORE</Text>
-              <Text style={styles.title}>Extra options</Text>
-              <Text style={styles.subtitle}>Keep your primary navigation clean and manage the rest from here.</Text>
+              <Text style={styles.eyebrow}>{t('menuEyebrow')}</Text>
+              <Text style={styles.title}>{t('menuTitle')}</Text>
+              <Text style={styles.subtitle}>{t('menuSubtitle')}</Text>
             </View>
 
             <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
@@ -77,8 +80,8 @@ export default function MenuScreen() {
               <Ionicons name="sparkles-outline" size={18} color={Colors.light.tint} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>Everything outside the core flow</Text>
-              <Text style={styles.heroText}>Settings, support and account extras live here so the main tabs stay focused.</Text>
+              <Text style={styles.heroTitle}>{t('menuHeroTitle')}</Text>
+              <Text style={styles.heroText}>{t('menuHeroText')}</Text>
             </View>
           </SurfaceCard>
 
@@ -92,8 +95,8 @@ export default function MenuScreen() {
                 </View>
 
                 <View style={styles.menuTextWrap}>
-                  <Text style={styles.menuLabel}>Admin Dashboard</Text>
-                  <Text style={styles.menuHint}>Manage users and platform content</Text>
+                  <Text style={styles.menuLabel}>{t('adminDashTitle')}</Text>
+                  <Text style={styles.menuHint}>{t('adminDashHint')}</Text>
                 </View>
 
                 <Ionicons name="chevron-forward" size={18} color="#8b8078" />
@@ -120,7 +123,7 @@ export default function MenuScreen() {
           </View>
 
           <AppButton
-            label="Sign out"
+            label={t('signOutBtn')}
             variant="secondary"
             style={styles.signOutButton}
             onPress={() => {

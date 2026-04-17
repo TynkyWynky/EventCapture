@@ -9,29 +9,31 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Colors } from '@/constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { notifications, markAllRead } = useSocial();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const items = notifications.map((item, index) => ({
     ...item,
-    section: index < 3 ? 'New' : 'Earlier',
+    section: index < 3 ? t('notifSectionNew') : t('notifSectionEarlier'),
   }));
-  const sections = ['New', 'Earlier'];
+  const sections = [t('notifSectionNew'), t('notifSectionEarlier')];
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="ACTIVITY"
-          title="Notifications"
+          eyebrow={t('notifEyebrow')}
+          title={t('notifTitle')}
           onBack={() => router.back()}
           rightAction={
             <TouchableOpacity style={styles.iconButton} onPress={() => {
               markAllRead();
-              showToast({ tone: 'success', title: 'All cleared', message: 'Notifications have been cleared.' });
+              showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
             }}>
               <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>
@@ -39,15 +41,15 @@ export default function NotificationsScreen() {
         />
 
         <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Stay in the loop</Text>
-          <Text style={styles.heroText}>Track likes, comments and event activity without losing the thread of your night.</Text>
+          <Text style={styles.heroTitle}>{t('notifHeroTitle')}</Text>
+          <Text style={styles.heroText}>{t('notifHeroText')}</Text>
         </SurfaceCard>
 
         {!items.length ? (
           <EmptyState
             icon="notifications-outline"
-            title="No activity yet"
-            message="Likes, saves, and comments will appear here as soon as they happen."
+            title={t('notifEmptyTitle')}
+            message={t('notifEmptyMsg')}
           />
         ) : null}
 

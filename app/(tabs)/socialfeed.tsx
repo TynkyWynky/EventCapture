@@ -9,12 +9,14 @@ import { usePosts, Post } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function SocialFeedScreen() {
   const router = useRouter();
   const { posts, togglePostLike } = usePosts();
   const { user } = useUser();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(() => {
@@ -56,7 +58,7 @@ export default function SocialFeedScreen() {
             <View style={styles.crownBadge}>
               <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.crownGradient}>
                 <Ionicons name="sparkles" size={14} color="#fff" />
-                <Text style={styles.crownText}>1 Crown</Text>
+                <Text style={styles.crownText}>{t('socialCrownBadge')}</Text>
               </LinearGradient>
             </View>
           ) : null}
@@ -90,7 +92,7 @@ export default function SocialFeedScreen() {
         {/* Likes */}
         {item.likes.length > 0 ? (
           <Text style={styles.likesText}>
-            {item.likes.length} like{item.likes.length !== 1 ? 's' : ''}
+            {item.likes.length}{item.likes.length !== 1 ? t('socialLikesPlural') : t('socialLikesSingular')}
           </Text>
         ) : null}
 
@@ -98,7 +100,7 @@ export default function SocialFeedScreen() {
         <View style={styles.captionRow}>
           <Text style={styles.captionText}>
             <Text style={styles.captionUsername}>{item.user?.username || 'user'} </Text>
-            {item.eventTitle ? `Captured a memory at ${item.eventTitle}` : 'Captured a great moment'}
+            {item.eventTitle ? `${t('socialCaptionWithEvent')} ${item.eventTitle}` : t('socialCaptionWithoutEvent')}
           </Text>
         </View>
 
@@ -106,12 +108,12 @@ export default function SocialFeedScreen() {
         {item.comments && item.comments.length > 0 ? (
           <TouchableOpacity onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}>
             <Text style={styles.viewCommentsText}>
-              View all {item.comments.length} comment{item.comments.length !== 1 ? 's' : ''}
+              {t('socialViewAll')} {item.comments.length} {item.comments.length !== 1 ? t('socialCommentsPlural') : t('socialCommentsSingular')}
             </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}>
-            <Text style={styles.viewCommentsText}>Add a comment...</Text>
+            <Text style={styles.viewCommentsText}>{t('socialAddComment')}</Text>
           </TouchableOpacity>
         )}
 

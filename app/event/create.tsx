@@ -8,6 +8,7 @@ import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -20,6 +21,7 @@ export default function CreateEventScreen() {
   const { addActivity } = useSocial();
   const { showToast } = useToast();
   const { user } = useUser();
+  const { t } = useLanguage();
   const [coverUrl, setCoverUrl] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -98,22 +100,22 @@ export default function CreateEventScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="HOST"
-          title="Create Event"
-          subtitle="Shape the page before people even arrive."
+          eyebrow={t('createEyebrow')}
+          title={t('createTitle')}
+          subtitle={t('createSubtitle')}
           onBack={() => router.back()}
-          rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>Draft</Text></View>}
+          rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>{t('createDraft')}</Text></View>}
         />
 
         <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Bring your next night to life</Text>
+          <Text style={styles.heroTitle}>{t('createHeroTitle')}</Text>
           <Text style={styles.heroText}>
-            Create an event page that feels polished before anyone even arrives.
+            {t('createHeroText')}
           </Text>
 
           <View style={styles.heroStats}>
-            <StatChip label="host" value={user.username} />
-            <StatChip label="city" value={user.city} />
+            <StatChip label={t('createStatHost')} value={user.username} />
+            <StatChip label={t('createStatCity')} value={user.city} />
           </View>
         </SurfaceCard>
 
@@ -125,12 +127,12 @@ export default function CreateEventScreen() {
               <Ionicons name="image-outline" size={28} color={Colors.light.tint} />
             </View>
           )}
-          <Text style={styles.uploadTitle}>Event cover image</Text>
+          <Text style={styles.uploadTitle}>{t('createCoverTitle')}</Text>
           <Text style={styles.uploadText}>
-            Paste an image URL to give the event a strong visual identity.
+            {t('createCoverText')}
           </Text>
           <TextInput
-            placeholder="https://images.unsplash.com/..."
+            placeholder={t('createCoverPlh')}
             placeholderTextColor="#91867f"
             style={styles.coverInput}
             value={coverUrl}
@@ -140,12 +142,12 @@ export default function CreateEventScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Basics</Text>
+          <Text style={styles.sectionTitle}>{t('createSectBasics')}</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Event name</Text>
+            <Text style={styles.fieldLabel}>{t('createNameLabel')}</Text>
             <TextInput
-              placeholder="Add event name"
+              placeholder={t('createNamePlh')}
               placeholderTextColor="#91867f"
               style={styles.textField}
               value={title}
@@ -154,9 +156,9 @@ export default function CreateEventScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Description</Text>
+            <Text style={styles.fieldLabel}>{t('createDescLabel')}</Text>
             <TextInput
-              placeholder="Describe the atmosphere, what makes it special, and why people should come."
+              placeholder={t('createDescPlh')}
               placeholderTextColor="#91867f"
               style={[styles.textField, styles.textArea]}
               multiline
@@ -168,18 +170,18 @@ export default function CreateEventScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Details</Text>
+          <Text style={styles.sectionTitle}>{t('createSectDetails')}</Text>
 
-          {input('Location', 'Add address', <Ionicons name="location-outline" size={18} color="#81776f" />, address, setAddress)}
-          {input('Date & time', '18 Jul 2026  20:30 - 01:00', <Ionicons name="calendar-outline" size={18} color="#81776f" />, dateTime, setDateTime)}
-          {input('Music or vibe', 'Add genre or atmosphere', <Ionicons name="musical-notes-outline" size={18} color="#81776f" />, vibe, setVibe)}
-          {input('Price', 'Add price', <MaterialCommunityIcons name="currency-eur" size={18} color="#81776f" />, price, setPrice)}
+          {input(t('createLocLabel'), t('createLocPlh'), <Ionicons name="location-outline" size={18} color="#81776f" />, address, setAddress)}
+          {input(t('createDateLabel'), t('createDatePlh'), <Ionicons name="calendar-outline" size={18} color="#81776f" />, dateTime, setDateTime)}
+          {input(t('createMusicLabel'), t('createMusicPlh'), <Ionicons name="musical-notes-outline" size={18} color="#81776f" />, vibe, setVibe)}
+          {input(t('createPriceLabel'), t('createPricePlh'), <MaterialCommunityIcons name="currency-eur" size={18} color="#81776f" />, price, setPrice)}
         </SurfaceCard>
 
         <View style={styles.actionRow}>
-          <AppButton label="Cancel" variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
+          <AppButton label={t('createBtnCancel')} variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
           <AppButton
-            label="Publish event"
+            label={t('createBtnPublish')}
             onPress={handleCreate}
             disabled={isPublishDisabled}
             style={styles.createBtn}

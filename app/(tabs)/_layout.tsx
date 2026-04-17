@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { useSocial } from '@/context/SocialContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 function TabButton({
@@ -142,6 +143,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const palette = Colors[colorScheme ?? 'light'];
+  const { t } = useLanguage();
 
   return (
     <Tabs
@@ -153,7 +155,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Feed',
+          title: t('feedTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
           ),
@@ -162,7 +164,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="events"
         options={{
-          title: 'Explore',
+          title: t('exploreTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'globe' : 'globe-outline'} size={22} color={color} />
           ),
@@ -171,7 +173,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="camera"
         options={{
-          title: 'Capture',
+          title: t('captureTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'camera' : 'camera-outline'} size={24} color={color} />
           ),
@@ -180,7 +182,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="socialfeed"
         options={{
-          title: 'Social',
+          title: t('socialTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'logo-instagram' : 'logo-instagram'} size={24} color={color} />
           ),
@@ -189,7 +191,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="achievements"
         options={{
-          title: 'Rewards',
+          title: t('rewardsTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'medal' : 'medal-outline'} size={22} color={color} />
           ),
@@ -198,7 +200,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('profileTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={24} color={color} />
           ),
