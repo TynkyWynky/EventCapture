@@ -2,7 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Typography } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -22,6 +22,7 @@ export default function TermsScreen() {
           title={t('termsTitle')}
           subtitle={t('termsSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
 
         {agreed ? (
@@ -51,11 +52,11 @@ export default function TermsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, gap: 16, flex: 1 },
+  container: { padding: Layout.screenPadding, gap: Layout.sectionGap, flex: 1 },
   card: {
     flex: 1,
   },
-  body: { color: '#514943', lineHeight: 22 },
+  body: { ...Typography.body, color: '#514943' },
   actions: { flexDirection: 'row', gap: 12, paddingBottom: 12 },
   action: { flex: 1 },
 });

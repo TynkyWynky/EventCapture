@@ -1,4 +1,4 @@
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -8,6 +8,7 @@ interface StatChipProps {
   value: string;
   icon?: keyof typeof Ionicons.glyphMap;
   tone?: 'light' | 'dark' | 'accent';
+  compact?: boolean;
 }
 
 export function StatChip({
@@ -15,11 +16,13 @@ export function StatChip({
   value,
   icon,
   tone = 'light',
+  compact = false,
 }: StatChipProps) {
   return (
     <View
       style={[
         styles.base,
+        compact && styles.compact,
         tone === 'light' && styles.light,
         tone === 'dark' && styles.dark,
         tone === 'accent' && styles.accent,
@@ -56,10 +59,15 @@ export function StatChip({
 const styles = StyleSheet.create({
   base: {
     minWidth: 92,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     gap: 4,
+  },
+  compact: {
+    minWidth: 84,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   light: {
     backgroundColor: Colors.light.card,
@@ -70,7 +78,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   accent: {
-    backgroundColor: '#fff1e0',
+    backgroundColor: '#fff3e6',
   },
   valueRow: {
     flexDirection: 'row',
@@ -78,9 +86,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   value: {
-    color: '#1f1a17',
-    fontSize: 16,
-    fontWeight: '800',
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
     flexShrink: 1,
   },
   darkValue: {
@@ -90,9 +97,8 @@ const styles = StyleSheet.create({
     color: Colors.light.tint,
   },
   label: {
-    color: '#81776f',
-    fontSize: 12,
-    fontWeight: '600',
+    ...Typography.caption,
+    color: Colors.light.subtitle,
   },
   darkLabel: {
     color: '#e7d2c4',

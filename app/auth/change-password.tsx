@@ -54,6 +54,7 @@ export default function ChangePasswordScreen() {
           title="Change password"
           subtitle="Update your sign-in and keep the account protected."
           onBack={() => router.back()}
+          mode="compact"
         />
 
         <SurfaceCard style={styles.heroCard}>

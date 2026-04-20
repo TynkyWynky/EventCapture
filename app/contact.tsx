@@ -2,7 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'expo-router';
@@ -42,9 +42,10 @@ export default function ContactScreen() {
           title={t('contactTitle')}
           subtitle={t('contactSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
 
-        <SurfaceCard style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard} variant="feature">
           <Text style={styles.heroTitle}>{t('contactHeroTitle')}</Text>
           <Text style={styles.heroText}>
             {t('contactHeroText')}
@@ -97,19 +98,16 @@ export default function ContactScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, gap: 16, paddingBottom: 152 },
-  heroCard: {
-    backgroundColor: '#231b17',
-  },
+  container: { padding: Layout.screenPadding, gap: Layout.sectionGap, paddingBottom: Layout.bottomPad },
+  heroCard: {},
   heroTitle: {
-    color: '#fff7ef',
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.titleSm,
+    color: Colors.light.title,
   },
   heroText: {
-    color: '#d7c7bb',
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
     marginTop: 8,
-    lineHeight: 21,
   },
   sectionCard: {
     gap: 12,
@@ -121,7 +119,7 @@ const styles = StyleSheet.create({
   },
   singleInput: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,
@@ -130,7 +128,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     minHeight: 180,

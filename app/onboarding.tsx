@@ -1,7 +1,7 @@
 import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -46,7 +46,7 @@ export default function OnboardingScreen() {
             </View>
 
             <View style={styles.actionBlock}>
-              <AppButton label="Sign in" onPress={() => router.push('/auth/login')} />
+              <AppButton label="Sign in" onPress={() => router.push('/auth/login')} size="lg" />
               <AppButton label="Create account" variant="secondary" onPress={() => router.push('/profile/create')} />
             </View>
           </SurfaceCard>
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   card: {
-    borderRadius: 30,
+    borderRadius: Radius.xxl,
     gap: 16,
     paddingHorizontal: 22,
     paddingVertical: 28,
@@ -82,15 +82,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.2,
   },
-  title: {
-    color: '#1f1a17',
-    fontSize: 31,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
+  title: { ...Typography.titleLg, color: Colors.light.title, textAlign: 'center' },
   body: {
+    ...Typography.body,
     color: '#6f655e',
-    lineHeight: 22,
     textAlign: 'center',
   },
   highlightList: {
@@ -101,7 +96,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#fff4e8',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },

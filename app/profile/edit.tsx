@@ -3,7 +3,7 @@ import { AppImage } from '@/components/ui/app-image';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -76,9 +76,10 @@ export default function EditProfileScreen() {
           title={t('editProfTitle')}
           subtitle={t('editProfSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
 
-        <SurfaceCard style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard} variant="feature">
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
               {avatarUri ? (
@@ -186,8 +187,8 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
-  heroCard: { backgroundColor: '#231b17', alignItems: 'center', gap: 12 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  heroCard: { alignItems: 'center', gap: 12 },
   avatarWrap: { marginVertical: 6 },
   avatar: {
     width: 112,
@@ -214,15 +215,15 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: Colors.light.background,
   },
-  heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  heroText: { color: '#d7c7bb', lineHeight: 21, textAlign: 'center' },
+  heroTitle: { ...Typography.titleSm, color: Colors.light.title, textAlign: 'center' },
+  heroText: { ...Typography.bodySm, color: Colors.light.subtitle, textAlign: 'center' },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
   sectionCard: { gap: 14 },
   fieldGroup: { gap: 8 },
   fieldLabel: { color: '#81776f', fontWeight: '700', fontSize: 12.5 },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,

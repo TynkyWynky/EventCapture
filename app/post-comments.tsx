@@ -54,6 +54,7 @@ export default function PostCommentsScreen() {
             title={t('postCommentsTitle')}
             subtitle={t('postCommentsNotFound')}
             onBack={() => router.back()}
+            mode="compact"
           />
         </View>
       </SafeAreaView>
@@ -68,6 +69,7 @@ export default function PostCommentsScreen() {
           title={t('postCommentsTitle')}
           subtitle={`${t('postCommentsBy')} ${post.user.username}`}
           onBack={() => router.back()}
+          mode="compact"
         />
       </View>
 

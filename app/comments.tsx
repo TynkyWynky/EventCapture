@@ -46,6 +46,7 @@ export default function CommentsScreen() {
           title={t('commentsTitle')}
           subtitle={event?.title ?? t('commentsSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
       </View>
 

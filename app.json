@@ -16,7 +16,6 @@
         "backgroundColor": "#f68c1f",
         "foregroundImage": "./assets/images/splash-icon.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {

@@ -11,7 +11,7 @@ import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -73,14 +73,14 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <ScreenHeader eyebrow={t('settingsEyebrow')} title={t('settingsTitle')} onBack={() => router.back()} />
+        <ScreenHeader eyebrow={t('settingsEyebrow')} title={t('settingsTitle')} onBack={() => router.back()} mode="compact" />
 
-        <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>{t('heroTitle')}</Text>
-          <Text style={styles.heroText}>{t('heroText')}</Text>
+        <SurfaceCard style={styles.heroCard} variant="feature">
+          <Text style={styles.heroTitle}>{t('settingsHeroTitle')}</Text>
+          <Text style={styles.heroText}>{t('settingsHeroText')}</Text>
         </SurfaceCard>
 
-        <SurfaceCard>
+        <SurfaceCard variant="subtle">
           <Text style={styles.sectionTitle}>{t('langSection')}</Text>
           <View style={styles.langRow}>
             {(['EN', 'NL', 'FR'] as Language[]).map((code) => (
@@ -102,7 +102,7 @@ export default function SettingsScreen() {
           {settingRow(t('likesLabel'), t('likesHint'), likes, setLikes)}
         </SurfaceCard>
 
-        <SurfaceCard>
+        <SurfaceCard variant="subtle">
           <Text style={styles.sectionTitle}>{t('accountSection')}</Text>
           {linkRow(t('changePassLabel'), t('changePassHint'), '/auth/change-password')}
           {linkRow(t('faqLabel'), t('faqHint'), '/faq')}
@@ -111,7 +111,7 @@ export default function SettingsScreen() {
 
         <View style={styles.actionBlock}>
           <AppButton
-            label={t('signOutBtn')}
+            label={t('settingsSignOutBtn')}
             variant="secondary"
             onPress={() => {
               signOut();
@@ -127,24 +127,20 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
-  heroCard: {
-    backgroundColor: '#231b17',
-  },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  heroCard: { gap: 8 },
   heroTitle: {
-    color: '#fff7ef',
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.titleSm,
+    color: Colors.light.title,
   },
   heroText: {
-    color: '#d7c7bb',
-    lineHeight: 21,
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
     marginTop: 8,
   },
   sectionTitle: {
-    color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 20,
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
     marginBottom: 12,
   },
   langRow: {
@@ -154,11 +150,11 @@ const styles = StyleSheet.create({
   lang: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#f3e7da',
+    borderRadius: Radius.md,
+    backgroundColor: Colors.light.cardFeature,
   },
   langActive: {
-    backgroundColor: '#231b17',
+    backgroundColor: Colors.light.panel,
   },
   langText: {
     color: '#1f1a17',
@@ -180,7 +176,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   settingLabel: { fontWeight: '700', color: '#1f1a17' },
-  settingHint: { color: '#81776f', fontSize: 12.5, marginTop: 4, lineHeight: 18 },
+  settingHint: { ...Typography.caption, color: '#81776f', marginTop: 4 },
   actionBlock: {
     gap: 10,
   },

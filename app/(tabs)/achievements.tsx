@@ -6,7 +6,7 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { CROWN_MILESTONES, CROWN_REWARDS, CROWN_TARGET, getCrownLevelProgress } from '@/constants/crowns';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -67,6 +67,12 @@ export default function AchievementsScreen() {
           title={t('achvTitle')}
           subtitle={t('achvSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
+          leading={
+            <View style={styles.headerBadge}>
+              <Ionicons name="medal-outline" size={20} color={Colors.light.tint} />
+            </View>
+          }
           rightAction={
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
@@ -119,7 +125,7 @@ export default function AchievementsScreen() {
           </View>
         </LinearGradient>
 
-        <SurfaceCard style={styles.nextCard}>
+        <SurfaceCard style={styles.nextCard} variant="feature">
           <View style={styles.sectionRow}>
             <View>
               <Text style={styles.sectionTitle}>{t('achvNextUnlock')}</Text>
@@ -245,7 +251,7 @@ export default function AchievementsScreen() {
 
         {recentWins.length > 0 ? (
           recentWins.map((win) => (
-            <SurfaceCard key={win.id} style={styles.winCard}>
+            <SurfaceCard key={win.id} style={styles.winCard} variant="subtle">
               <View style={styles.winBadge}>
                 <Ionicons name={win.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.light.tint} />
               </View>
@@ -271,13 +277,23 @@ export default function AchievementsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
+  safe: { flex: 1, backgroundColor: TabThemes.achievements.background },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   heroCard: {
-    borderRadius: 30,
-    padding: 18,
-    gap: 16,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
     overflow: 'hidden',
+  },
+  headerBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.lg,
+    backgroundColor: '#fff4e8',
+    borderWidth: 1,
+    borderColor: '#f1d7b9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroGlow: {
     position: 'absolute',
@@ -315,7 +331,7 @@ const styles = StyleSheet.create({
   levelStrip: {
     gap: 10,
     backgroundColor: 'rgba(255,247,239,0.08)',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     padding: 12,
   },
   levelStripHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-end' },
@@ -340,7 +356,7 @@ const styles = StyleSheet.create({
   nextBadge: {
     width: 44,
     height: 44,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     backgroundColor: '#fff1e0',
     alignItems: 'center',
     justifyContent: 'center',

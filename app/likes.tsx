@@ -28,6 +28,7 @@ export default function LikesScreen() {
           title={t('likesTitle')}
           subtitle={event?.title ?? t('likesSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
       </View>
 

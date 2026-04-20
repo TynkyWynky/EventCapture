@@ -6,7 +6,7 @@ import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -140,7 +140,7 @@ export default function EventDetailScreen() {
             </View>
           </SurfaceCard>
 
-          <SurfaceCard style={styles.card}>
+          <SurfaceCard style={styles.card} variant="subtle">
             <View style={styles.plannerHeader}>
               <View>
                 <Text style={styles.sectionTitle}>{t('detailSectMyNight')}</Text>
@@ -240,7 +240,7 @@ export default function EventDetailScreen() {
             </View>
           </SurfaceCard>
 
-          <SurfaceCard style={styles.hostCard}>
+          <SurfaceCard style={styles.hostCard} variant="feature">
             <View style={styles.hostRow}>
               <AppImage source={{ uri: event.hostAvatar }} style={styles.hostAvatar} contentFit="cover" />
               <View style={styles.hostCopy}>
@@ -268,19 +268,19 @@ export default function EventDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
+  safe: { flex: 1, backgroundColor: TabThemes.events.background },
   missingWrap: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     justifyContent: 'center',
-    gap: 16,
+    gap: Spacing.lg,
   },
   heroWrap: { height: 430, marginBottom: -26 },
   hero: { width: '100%', height: '100%' },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: Spacing.xl,
     paddingBottom: 42,
   },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   title: { color: '#fff7ef', fontSize: 34, fontWeight: '800', lineHeight: 38, maxWidth: 300 },
   subtitle: { color: '#eadccf', fontSize: 15, lineHeight: 22, maxWidth: 320 },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  body: { paddingHorizontal: 16, gap: 16 },
+  body: { paddingHorizontal: Layout.screenPadding, gap: Layout.sectionGap },
   statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   card: { gap: 12 },
   sectionTitle: { color: '#1f1a17', fontSize: 22, fontWeight: '800' },
@@ -308,13 +308,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#fff3e6',
-    borderRadius: 999,
+    borderRadius: Radius.round,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   socialButtonText: { color: '#1f1a17', fontWeight: '700', fontSize: 12.5 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
-  tag: { backgroundColor: '#f2e4d5', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  tag: { backgroundColor: '#f2e4d5', borderRadius: Radius.round, paddingHorizontal: 12, paddingVertical: 8 },
   tagText: { color: '#4b4038', fontWeight: '700', fontSize: 12.5 },
   plannerHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
   plannerText: { color: '#6f655e', lineHeight: 20, marginTop: 6, maxWidth: 250 },
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     backgroundColor: '#fff1e0',
-    borderRadius: 999,
+    borderRadius: Radius.round,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   detailIconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     backgroundColor: '#f6efe6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -360,8 +360,8 @@ const styles = StyleSheet.create({
   bottomWrap: { position: 'absolute', left: 16, right: 16 },
   bottomCard: {
     backgroundColor: 'rgba(255,250,245,0.98)',
-    borderRadius: 24,
-    padding: 14,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

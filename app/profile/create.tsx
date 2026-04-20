@@ -1,4 +1,6 @@
 import { useUser } from '@/context/UserContext';
+import { AppButton } from '@/components/ui/app-button';
+import { SurfaceCard } from '@/components/ui/surface-card';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
@@ -8,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Typography } from '@/constants/theme';
 
 export default function CreateProfileScreen() {
   const router = useRouter();
@@ -45,7 +47,7 @@ export default function CreateProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <LinearGradient colors={['#1f1612', '#352016', Colors.light.tintDark]} style={styles.background}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-          <View style={styles.card}>
+          <SurfaceCard style={styles.card}>
             <View style={styles.header}>
               <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
                 <Ionicons name="chevron-back" size={20} color="#1f1a17" />
@@ -141,9 +143,11 @@ export default function CreateProfileScreen() {
               />
             </View>
 
-            <TouchableOpacity
-              style={[styles.primary, isCompleteDisabled && styles.primaryDisabled]}
+            <AppButton
+              label="Complete profile"
               disabled={isCompleteDisabled}
+              size="lg"
+              style={styles.primary}
               onPress={() => {
                 createProfile({
                   username,
@@ -155,10 +159,9 @@ export default function CreateProfileScreen() {
                   password,
                 });
                 router.replace('/(tabs)');
-              }}>
-              <Text style={styles.primaryText}>Complete profile</Text>
-            </TouchableOpacity>
-          </View>
+              }}
+            />
+          </SurfaceCard>
         </ScrollView>
       </LinearGradient>
     </SafeAreaView>
@@ -170,8 +173,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 28 },
   card: {
-    backgroundColor: '#fffaf5',
-    borderRadius: 30,
+    borderRadius: Radius.xxl,
     padding: 22,
     gap: 14,
     shadowColor: '#000',
@@ -192,8 +194,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eyebrow: { color: '#857a72', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: '#1f1a17', fontSize: 28, fontWeight: '800' },
-  subtitle: { color: '#7d726a', lineHeight: 21 },
+  title: { ...Typography.titleMd, color: Colors.light.title },
+  subtitle: { ...Typography.bodySm, color: '#7d726a' },
   avatarWrap: {
     alignSelf: 'center',
     marginVertical: 8,
@@ -230,7 +232,7 @@ const styles = StyleSheet.create({
   fieldLabel: { color: '#81776f', fontWeight: '700', fontSize: 12.5 },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,
@@ -238,15 +240,5 @@ const styles = StyleSheet.create({
     color: '#1f1a17',
   },
   textArea: { minHeight: 110 },
-  primary: {
-    backgroundColor: Colors.light.tint,
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  primaryDisabled: {
-    opacity: 0.6,
-  },
-  primaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  primary: { marginTop: 4 },
 });

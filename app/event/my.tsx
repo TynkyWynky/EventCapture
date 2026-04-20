@@ -4,7 +4,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { EventPlanStatus, useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,7 +89,10 @@ export default function MyNightScreen() {
     const draftValue = draftNotes[item.event.id] ?? item.planNote;
 
     return (
-      <SurfaceCard key={item.event.id} style={[styles.eventCard, compact && styles.eventCardCompact]}>
+      <SurfaceCard
+        key={item.event.id}
+        style={[styles.eventCard, compact && styles.eventCardCompact]}
+        variant={compact ? 'subtle' : 'default'}>
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() =>
@@ -173,6 +176,7 @@ export default function MyNightScreen() {
           title={t('plannerTitle')}
           subtitle={t('plannerSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
 
         <LinearGradient colors={['#231b17', '#3b261b', '#6b411f']} style={styles.heroCard}>
@@ -235,14 +239,14 @@ export default function MyNightScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   heroCard: { borderRadius: 28, padding: 18, gap: 14 },
   heroEyebrow: { color: '#f3caa5', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   heroTitle: { color: '#fff7ef', fontSize: 26, fontWeight: '800', lineHeight: 31 },
   heroText: { color: '#dccabd', lineHeight: 21 },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  sectionTitle: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
+  sectionTitle: { ...Typography.sectionTitle, color: '#1f1a17' },
   sectionMeta: { color: '#857a72', fontWeight: '700' },
   eventCard: { padding: 14, gap: 14 },
   eventCardCompact: { backgroundColor: '#fff8f2' },
@@ -252,7 +256,7 @@ const styles = StyleSheet.create({
   eventCopy: { flex: 1 },
   eventTitle: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
   eventMeta: { color: '#80756d', marginTop: 4, lineHeight: 19 },
-  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  statusBadge: { borderRadius: Radius.round, paddingHorizontal: 10, paddingVertical: 7 },
   statusText: { fontWeight: '800', fontSize: 12 },
   cardStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   planRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -262,7 +266,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: Radius.round,
     backgroundColor: '#fff1e0',
   },
   planChipActive: {
@@ -271,7 +275,7 @@ const styles = StyleSheet.create({
   planChipText: { color: Colors.light.tint, fontWeight: '800', fontSize: 12.5 },
   planChipTextActive: { color: '#fff7ef' },
   noteCard: {
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     backgroundColor: '#f8efe6',
     padding: 12,
     gap: 8,

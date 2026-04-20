@@ -50,7 +50,7 @@ export default function EditEventScreen() {
   if (!event) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ScreenHeader eyebrow="ADMIN" title="Event Not Found" onBack={() => router.back()} />
+        <ScreenHeader eyebrow="ADMIN" title="Event Not Found" onBack={() => router.back()} mode="compact" />
       </SafeAreaView>
     );
   }
@@ -131,6 +131,7 @@ export default function EditEventScreen() {
           subtitle="Update event details on the fly."
           onBack={() => router.back()}
           rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>Live</Text></View>}
+          mode="compact"
         />
 
         <SurfaceCard style={styles.heroCard}>

@@ -8,9 +8,10 @@ import { useUser } from '@/context/UserContext';
 import { usePosts } from '@/context/PostContext';
 import { useEvents } from '@/context/EventContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Typography } from '@/constants/theme';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { AppButton } from '@/components/ui/app-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
 
 const USERS_LIST = [
   {
@@ -117,17 +118,17 @@ export default function AdminScreen() {
 
   const renderStatsOverview = () => (
     <View style={styles.statsContainer}>
-      <SurfaceCard style={styles.statCard}>
+      <SurfaceCard style={styles.statCard} variant="subtle">
         <Ionicons name="calendar" size={24} color="#857a72" />
         <Text style={styles.statValue}>{events.length}</Text>
         <Text style={styles.statLabel}>{t('adminStatEvents')}</Text>
       </SurfaceCard>
-      <SurfaceCard style={styles.statCard}>
+      <SurfaceCard style={styles.statCard} variant="subtle">
         <Ionicons name="images" size={24} color="#857a72" />
         <Text style={styles.statValue}>{posts.length}</Text>
         <Text style={styles.statLabel}>{t('adminStatPosts')}</Text>
       </SurfaceCard>
-      <SurfaceCard style={styles.statCard}>
+      <SurfaceCard style={styles.statCard} variant="subtle">
         <Ionicons name="people" size={24} color="#857a72" />
         <Text style={styles.statValue}>{usersList.length}</Text>
         <Text style={styles.statLabel}>{t('adminStatUsers')}</Text>
@@ -261,7 +262,7 @@ export default function AdminScreen() {
       
       {events.map((event) => (
         <TouchableOpacity key={event.id} activeOpacity={0.9} onPress={() => router.push({ pathname: '/event/detail', params: { eventId: event.id } })}>
-          <SurfaceCard style={styles.eventCard}>
+          <SurfaceCard style={styles.eventCard} variant="subtle">
             <Image source={{ uri: event.heroImage || 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1400&q=80' }} style={styles.eventImage} />
             <View style={styles.eventInfo}>
               <Text style={styles.eventTitle}>{event.title}</Text>
@@ -296,15 +297,14 @@ export default function AdminScreen() {
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(250, 245, 240, 0.98)' }]} />
 
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1f1a17" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.title}>{t('adminTitle')}</Text>
-            <Text style={styles.subtitle}>{t('adminSubtitle')}</Text>
-          </View>
+        <View style={styles.headerWrap}>
+          <ScreenHeader
+            eyebrow="ADMIN"
+            title={t('adminTitle')}
+            subtitle={t('adminSubtitle')}
+            onBack={() => router.back()}
+            mode="compact"
+          />
         </View>
 
         {/* Tab Selector */}
@@ -364,42 +364,14 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
+  headerWrap: {
+    paddingHorizontal: Layout.screenPadding,
     paddingTop: 10,
     paddingBottom: 20,
-    gap: 16,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e8e0d5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1f1a17',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#857a72',
-    marginTop: 2,
   },
   tabSelector: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
     marginBottom: 16,
     gap: 12,
   },
@@ -428,7 +400,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
   },
   tabContent: {
     gap: 12,
@@ -441,11 +413,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionHeader: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: '#857a72',
-    textTransform: 'uppercase',
+    ...Typography.eyebrow,
+    color: Colors.light.subtitle,
   },
   userCard: {
     flexDirection: 'row',

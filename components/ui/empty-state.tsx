@@ -1,4 +1,4 @@
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -24,27 +24,30 @@ export function EmptyState({ icon, title, message }: EmptyStateProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.light.card,
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   iconWrap: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: '#fff1e0',
+    borderRadius: Radius.round,
+    backgroundColor: '#fff3e6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 18,
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
+    textAlign: 'center',
   },
   message: {
-    color: '#81776f',
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
     textAlign: 'center',
-    lineHeight: 20,
+    maxWidth: 280,
   },
 });

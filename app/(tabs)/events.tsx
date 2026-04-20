@@ -1,9 +1,10 @@
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { AppImage } from '@/components/ui/app-image';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
 import { useUser } from '@/context/UserContext';
@@ -34,23 +35,27 @@ export default function MyEventsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <View style={styles.topBar}>
-          <View style={styles.titleRow}>
-            <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
-            <View style={styles.titleCopy}>
-              <Text style={styles.eyebrow}>{t('discoverEyebrow')}</Text>
-              <Text style={styles.title}>{user.city}{t('discoverTitle')}</Text>
+        <ScreenHeader
+          eyebrow={t('discoverEyebrow')}
+          title={`${user.city}${t('discoverTitle')}`}
+          subtitle={t('featuredNightsSub')}
+          leading={<AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />}
+          mode="compact"
+          rightAction={
+            <View style={styles.actions}>
+              <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
+              <IconActionButton icon="add" onPress={() => router.push('/event/create')} />
+              <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
             </View>
-          </View>
+          }
+        />
 
-          <View style={styles.actions}>
-            <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
-            <IconActionButton icon="add" onPress={() => router.push('/event/create')} />
-            <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
-          </View>
-        </View>
-
-        <LinearGradient colors={['#231b17', '#4b2d1f']} style={styles.heroCard}>
+        <LinearGradient
+          colors={[TabThemes.events.panel, '#17514c', TabThemes.events.accentDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroCard}>
+          <View style={styles.heroGlow} />
           <Text style={styles.heroTitle}>{t('exploreHeroTitle')}</Text>
           <Text style={styles.heroText}>
             {t('exploreHeroText')}
@@ -75,7 +80,7 @@ export default function MyEventsScreen() {
             <TouchableOpacity
               style={[styles.presetChip, styles.favoritePresetChip]}
               onPress={() => applyPreset(favoritePresetId)}>
-              <Ionicons name="star" size={14} color={Colors.light.tint} />
+              <Ionicons name="star" size={14} color={TabThemes.events.accent} />
               <Text style={styles.favoritePresetText}>{t('savedPreset')}</Text>
             </TouchableOpacity>
           ) : null}
@@ -104,7 +109,9 @@ export default function MyEventsScreen() {
                   params: { eventId: event.id },
                 })
               }>
-              <SurfaceCard style={[styles.eventCard, index % 2 === 0 && styles.eventCardWarm]}>
+              <SurfaceCard
+                style={[styles.eventCard, index % 2 === 0 && styles.eventCardWarm]}
+                variant={index === 0 ? 'feature' : 'default'}>
                 <AppImage source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
 
                 <View style={styles.eventBody}>
@@ -149,26 +156,31 @@ export default function MyEventsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 18 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  safe: { flex: 1, backgroundColor: TabThemes.events.background },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   avatar: { width: 48, height: 48, borderRadius: 24 },
-  titleCopy: { flex: 1 },
-  eyebrow: { color: '#857a72', fontWeight: '800', fontSize: 11, letterSpacing: 1.2 },
-  title: { color: '#1f1a17', fontWeight: '800', fontSize: 26 },
   actions: { flexDirection: 'row', gap: 10 },
   heroCard: {
-    borderRadius: 28,
-    padding: 20,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
     gap: 14,
+    overflow: 'hidden',
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: -34,
+    right: -24,
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    backgroundColor: 'rgba(149, 247, 224, 0.14)',
   },
   heroTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 24 },
   heroText: { color: '#d4c5b8', lineHeight: 21 },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionHeader: { gap: 4 },
-  sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 22 },
-  sectionSubtitle: { color: '#81776f', fontSize: 13 },
+  sectionTitle: { color: TabThemes.events.panel, fontWeight: '800', fontSize: 22 },
+  sectionSubtitle: { color: '#5d7774', fontSize: 13 },
   presetRow: { gap: 10, paddingBottom: 4 },
   presetChip: {
     flexDirection: 'row',
@@ -177,45 +189,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: Colors.light.card,
+    backgroundColor: '#fcfffe',
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: '#d7ece8',
   },
   presetChipActive: {
-    backgroundColor: '#fff1e0',
-    borderColor: Colors.light.tint,
+    backgroundColor: '#e4f6f2',
+    borderColor: TabThemes.events.accent,
   },
   favoritePresetChip: {
-    backgroundColor: '#fff6eb',
-    borderColor: '#f5c28f',
+    backgroundColor: '#effaf8',
+    borderColor: '#9fd2cb',
   },
   presetChipText: { color: '#6e635c', fontWeight: '700' },
-  presetChipTextActive: { color: Colors.light.tint },
-  favoritePresetText: { color: Colors.light.tint, fontWeight: '800' },
-  eventCard: { padding: 12, gap: 12 },
-  eventCardWarm: { backgroundColor: '#fff4eb' },
+  presetChipTextActive: { color: TabThemes.events.accent },
+  favoritePresetText: { color: TabThemes.events.accent, fontWeight: '800' },
+  eventCard: { padding: Spacing.md, gap: Spacing.md },
+  eventCardWarm: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#d7ece8' },
   eventImage: { width: '100%', height: 182, borderRadius: 20 },
   eventBody: { gap: 12 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   badge: {
-    backgroundColor: '#f6eee4',
+    backgroundColor: '#e1f4f0',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  badgeText: { color: '#6c6159', fontWeight: '800', fontSize: 11 },
-  price: { color: Colors.light.tint, fontWeight: '800', fontSize: 14 },
-  cardTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
-  cardMeta: { color: '#81776f', lineHeight: 20 },
+  badgeText: { color: '#25665f', fontWeight: '800', fontSize: 11 },
+  price: { color: TabThemes.events.accent, fontWeight: '800', fontSize: 14 },
+  cardTitle: { color: TabThemes.events.panel, fontWeight: '800', fontSize: 20 },
+  cardMeta: { color: '#5f7471', lineHeight: 20 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   attendeesRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  attendees: { color: '#81776f', fontWeight: '600', fontSize: 12.5 },
+  attendees: { color: '#5f7471', fontWeight: '600', fontSize: 12.5 },
   arrowWrap: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: Colors.light.tint,
+    backgroundColor: TabThemes.events.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

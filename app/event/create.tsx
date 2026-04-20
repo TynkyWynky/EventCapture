@@ -3,7 +3,7 @@ import { AppImage } from '@/components/ui/app-image';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
@@ -104,10 +104,11 @@ export default function CreateEventScreen() {
           title={t('createTitle')}
           subtitle={t('createSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
           rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>{t('createDraft')}</Text></View>}
         />
 
-        <SurfaceCard style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard} variant="feature">
           <Text style={styles.heroTitle}>{t('createHeroTitle')}</Text>
           <Text style={styles.heroText}>
             {t('createHeroText')}
@@ -119,7 +120,7 @@ export default function CreateEventScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.uploadBox}>
+        <SurfaceCard style={styles.uploadBox} variant="subtle">
           {coverUrl ? (
             <AppImage source={{ uri: coverUrl }} style={styles.previewImage} contentFit="cover" />
           ) : (
@@ -169,7 +170,7 @@ export default function CreateEventScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <Text style={styles.sectionTitle}>{t('createSectDetails')}</Text>
 
           {input(t('createLocLabel'), t('createLocPlh'), <Ionicons name="location-outline" size={18} color="#81776f" />, address, setAddress)}
@@ -194,12 +195,12 @@ export default function CreateEventScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   draftChip: {
     minWidth: 64,
     height: 40,
     paddingHorizontal: 14,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -207,18 +208,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   draftText: { color: '#6f655e', fontWeight: '700' },
-  heroCard: {
-    backgroundColor: '#231b17',
-    gap: 12,
-  },
+  heroCard: { gap: 12 },
   heroTitle: {
-    color: '#fff7ef',
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.titleSm,
+    color: Colors.light.title,
   },
   heroText: {
-    color: '#d7c7bb',
-    lineHeight: 21,
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
   },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   uploadBox: {
@@ -230,7 +227,7 @@ const styles = StyleSheet.create({
   uploadIconWrap: {
     width: 62,
     height: 62,
-    borderRadius: 20,
+    borderRadius: Radius.lg,
     backgroundColor: '#fff2e5',
     alignItems: 'center',
     justifyContent: 'center',
@@ -239,7 +236,7 @@ const styles = StyleSheet.create({
   previewImage: {
     width: '100%',
     height: 180,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     marginBottom: 12,
   },
   uploadTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 18 },
@@ -259,9 +256,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   sectionTitle: {
+    ...Typography.sectionTitle,
     color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 20,
     marginBottom: 14,
   },
   fieldGroup: {
@@ -275,7 +271,7 @@ const styles = StyleSheet.create({
   },
   textField: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,
@@ -287,7 +283,7 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,

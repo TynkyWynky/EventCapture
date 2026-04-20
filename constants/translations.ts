@@ -10,8 +10,8 @@ export const translations = {
     // Settings
     settingsTitle: 'Settings',
     settingsEyebrow: 'PREFERENCES',
-    heroTitle: 'Make the app feel like yours',
-    heroText: 'Control notifications, account options and support settings from one clean place.',
+    settingsHeroTitle: 'Make the app feel like yours',
+    settingsHeroText: 'Control notifications, account options and support settings from one clean place.',
     langSection: 'Language',
     notifSection: 'Notifications',
     pushLabel: 'Push notifications',
@@ -27,7 +27,7 @@ export const translations = {
     faqHint: 'Find answers to common questions',
     contactLabel: 'Contact us',
     contactHint: 'Reach out for support or feedback',
-    signOutBtn: 'Sign out',
+    settingsSignOutBtn: 'Sign out',
     deleteAccBtn: 'Delete account',
     // Alerts
     deleteAccAlertTitle: 'Delete account',
@@ -473,8 +473,8 @@ export const translations = {
     // Settings
     settingsTitle: 'Instellingen',
     settingsEyebrow: 'VOORKEUREN',
-    heroTitle: 'Maak de app van jou',
-    heroText: 'Beheer meldingen, accountopties en ondersteuningsinstellingen vanaf één plek.',
+    settingsHeroTitle: 'Maak de app van jou',
+    settingsHeroText: 'Beheer meldingen, accountopties en ondersteuningsinstellingen vanaf één plek.',
     langSection: 'Taal',
     notifSection: 'Meldingen',
     pushLabel: 'Pushmeldingen',
@@ -490,7 +490,7 @@ export const translations = {
     faqHint: 'Vind antwoorden op veelgestelde vragen',
     contactLabel: 'Neem contact op',
     contactHint: 'Neem contact op voor ondersteuning of feedback',
-    signOutBtn: 'Afmelden',
+    settingsSignOutBtn: 'Afmelden',
     deleteAccBtn: 'Account verwijderen',
     // Alerts
     deleteAccAlertTitle: 'Account verwijderen',
@@ -936,8 +936,8 @@ export const translations = {
     // Settings
     settingsTitle: 'Paramètres',
     settingsEyebrow: 'PRÉFÉRENCES',
-    heroTitle: 'Personnalisez l\'application',
-    heroText: 'Gérez les notifications, les options de compte et l\'assistance depuis un seul endroit.',
+    settingsHeroTitle: 'Personnalisez l\'application',
+    settingsHeroText: 'Gérez les notifications, les options de compte et l\'assistance depuis un seul endroit.',
     langSection: 'Langue',
     notifSection: 'Notifications',
     pushLabel: 'Notifications push',
@@ -953,7 +953,7 @@ export const translations = {
     faqHint: 'Trouvez des réponses aux questions fréquentes',
     contactLabel: 'Nous contacter',
     contactHint: 'Contactez-nous pour toute assistance',
-    signOutBtn: 'Se déconnecter',
+    settingsSignOutBtn: 'Se déconnecter',
     deleteAccBtn: 'Supprimer le compte',
     // Alerts
     deleteAccAlertTitle: 'Supprimer le compte',

@@ -2,7 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useFilters } from '@/context/FilterContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -64,10 +64,11 @@ export default function FiltersScreen() {
           title={t('filtersTitle')}
           subtitle={t('filtersSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
           rightAction={<IconActionButton icon="refresh-outline" onPress={resetFilters} />}
         />
 
-        <SurfaceCard style={styles.heroCard}>
+        <SurfaceCard style={styles.heroCard} variant="feature">
           <Text style={styles.heroTitle}>{t('filtersHeroTitle')}</Text>
           <Text style={styles.heroText}>
             {t('filtersHeroText')}
@@ -78,7 +79,7 @@ export default function FiltersScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <Text style={styles.sectionTitle}>{t('filtersSectPresets')}</Text>
           <View style={styles.chipRow}>
             {discoveryPresets.map((preset) => {
@@ -122,7 +123,7 @@ export default function FiltersScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <Text style={styles.sectionTitle}>{t('filtersSectGenres')}</Text>
           <View style={styles.chipRow}>
             {genres.map((genre) => {
@@ -164,7 +165,7 @@ export default function FiltersScreen() {
           </TouchableOpacity>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <Text style={styles.sectionTitle}>{t('filtersSectSort')}</Text>
           <View style={styles.chipRow}>
             {sortOptions.map((option) => {
@@ -196,7 +197,7 @@ export default function FiltersScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('filtersSectPrice')}</Text>
             <Text style={styles.priceHint}>
@@ -230,12 +231,12 @@ export default function FiltersScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
-  heroCard: { backgroundColor: '#231b17', gap: 8 },
-  heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800' },
-  heroText: { color: '#d7c7bb', lineHeight: 21 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  heroCard: { gap: 8 },
+  heroTitle: { ...Typography.titleSm, color: Colors.light.title },
+  heroText: { ...Typography.bodySm, color: Colors.light.subtitle },
   heroMeta: { flexDirection: 'row', gap: 18, marginTop: 4 },
-  heroMetaText: { color: '#f6d6bb', fontWeight: '700' },
+  heroMetaText: { color: Colors.light.tint, fontWeight: '700' },
   sectionCard: { gap: 12 },
   sectionHeader: {
     flexDirection: 'row',
@@ -243,9 +244,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionTitle: {
-    color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 19,
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
   },
   chipRow: {
     flexDirection: 'row',
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   genreChip: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: Radius.round,
     backgroundColor: '#f3e7da',
   },
   genreChipActive: {
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   favoriteButton: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.round,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff1e0',
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   pill: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 16,
+    borderRadius: Radius.md,
     backgroundColor: '#f3e7da',
     alignItems: 'center',
   },
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   pillTextActive: { color: Colors.light.tint },
   optionCard: {
     backgroundColor: '#f8f1ea',
-    borderRadius: 16,
+    borderRadius: Radius.md,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',

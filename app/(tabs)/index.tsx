@@ -4,12 +4,13 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { AppImage } from '@/components/ui/app-image';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { getActiveCrownReward, getCrownLevelProgress, getNextCrownReward } from '@/constants/crowns';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
 import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, TabThemes } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -65,11 +66,11 @@ export default function HomeFeed() {
     setTimeout(() => setRefreshing(false), 800);
   }, []);
 
-  const cycleSortBy = useCallback(() => {
+  const cycleSortBy = () => {
     const currentIndex = sortOptions.findIndex((o) => o.value === activeFilters.sortBy);
     const nextIndex = (currentIndex + 1) % sortOptions.length;
     setSortBy(sortOptions[nextIndex].value);
-  }, [activeFilters.sortBy, setSortBy]);
+  };
 
   const currentSortLabel = sortOptions.find((o) => o.value === activeFilters.sortBy)?.label ?? t('filterSortPopular');
 
@@ -86,24 +87,20 @@ export default function HomeFeed() {
         <LinearGradient colors={['#241813', '#4a2a18', Colors.light.tintDark]} style={styles.hero}>
           <View style={styles.heroGlow} />
 
-          <View style={styles.heroTop}>
-            <View style={styles.profileRow}>
-              <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroEyebrow}>{t('heroEyebrow')}</Text>
-                <Text style={styles.heroTitle}>{t('heroTitle')}{user.username}</Text>
+          <ScreenHeader
+            eyebrow={t('heroEyebrow')}
+            title={`${t('heroTitle')}${user.username}`}
+            subtitle={t('heroText')}
+            leading={<AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />}
+            rightAction={
+              <View style={styles.heroActions}>
+                <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
+                <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
               </View>
-            </View>
-
-            <View style={styles.heroActions}>
-              <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
-              <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
-            </View>
-          </View>
-
-          <Text style={styles.heroText}>
-            {t('heroText')}
-          </Text>
+            }
+            surface={false}
+            tone="inverse"
+          />
 
           {/* ====== SEARCH BOX ====== */}
           <View style={styles.searchBox}>
@@ -147,10 +144,10 @@ export default function HomeFeed() {
 
           {/* ====== METRICS ====== */}
           <View style={styles.metricRow}>
-            <StatChip label={t('feedStatEventsNearby')} value={feedEvents.length.toString()} tone="dark" />
-            <StatChip label={t('feedStatCaptures')} value={posts.length.toString().padStart(2, '0')} tone="dark" />
+            <StatChip label={t('feedStatEventsNearby')} value={feedEvents.length.toString()} tone="dark" compact />
+            <StatChip label={t('feedStatCaptures')} value={posts.length.toString().padStart(2, '0')} tone="dark" compact />
             <TouchableOpacity onPress={cycleSortBy}>
-              <StatChip label={t('feedStatSort')} value={currentSortLabel} tone="dark" icon="swap-vertical-outline" />
+              <StatChip label={t('feedStatSort')} value={currentSortLabel} tone="dark" icon="swap-vertical-outline" compact />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -239,7 +236,7 @@ export default function HomeFeed() {
 
         {/* ====== CROWN SPOTLIGHT ====== */}
         {activeReward ? (
-          <SurfaceCard style={styles.crownSpotlightCard}>
+          <SurfaceCard style={styles.crownSpotlightCard} variant="subtle">
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionTitle}>{t('crownSpotlightTitle')}</Text>
@@ -309,7 +306,7 @@ export default function HomeFeed() {
             <Text style={styles.cardMeta}>{latestPost.date}</Text>
           </SurfaceCard>
         ) : (
-          <SurfaceCard style={styles.capturePrompt}>
+          <SurfaceCard style={styles.capturePrompt} variant="subtle">
             <View style={styles.promptIcon}>
               <Ionicons name="camera-outline" size={22} color={Colors.light.tint} />
             </View>
@@ -380,7 +377,7 @@ export default function HomeFeed() {
             </TouchableOpacity>
           ))
         ) : (
-          <SurfaceCard style={styles.emptyCard}>
+          <SurfaceCard style={styles.emptyCard} variant="subtle">
             <EmptyState
               icon="options-outline"
               title={t('noEventsTitle')}
@@ -402,13 +399,13 @@ export default function HomeFeed() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
-  content: { padding: 16, paddingBottom: 160 },
+  safe: { flex: 1, backgroundColor: TabThemes.index.background },
+  content: { padding: Layout.screenPadding, paddingBottom: 160 },
   hero: {
-    marginHorizontal: -16,
-    marginTop: -16,
+    marginHorizontal: -Layout.screenPadding,
+    marginTop: -Layout.screenPadding,
     paddingTop: 58,
-    paddingHorizontal: 16,
+    paddingHorizontal: Layout.screenPadding,
     paddingBottom: 32,
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
@@ -425,19 +422,15 @@ const styles = StyleSheet.create({
     borderRadius: 90,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   heroActions: { flexDirection: 'row', gap: 8 },
-  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  heroCopy: { flex: 1 },
   avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)' },
-  heroEyebrow: { color: '#f3caa5', fontSize: 11, fontWeight: '800', letterSpacing: 1.3 },
-  heroTitle: { color: '#fff8f2', fontSize: 24, fontWeight: '800' },
-  heroText: { color: '#ebddd1', fontSize: 16, lineHeight: 24, maxWidth: 320 },
 
   // ---- Search ----
   searchBox: {
-    backgroundColor: '#fffaf5',
-    borderRadius: 18,
+    backgroundColor: Colors.light.card,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -466,7 +459,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -561,7 +554,7 @@ const styles = StyleSheet.create({
   featuredButton: { marginTop: 2 },
 
   // ---- Crown ----
-  crownSpotlightCard: { marginBottom: 20, gap: 12, backgroundColor: '#fff7ef' },
+  crownSpotlightCard: { marginBottom: 20, gap: 12 },
   crownSpotlightIcon: {
     width: 40,
     height: 40,

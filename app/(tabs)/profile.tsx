@@ -1,13 +1,14 @@
 import { AppButton } from '@/components/ui/app-button';
 import { CrownProgressBar } from '@/components/ui/crown-progress-bar';
 import { IconActionButton } from '@/components/ui/icon-action-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
 import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -30,9 +31,17 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <LinearGradient colors={['#231b17', '#4b2d1f']} style={styles.headerCard}>
-          <View style={styles.headerTop}>
-            <View style={styles.profileWrap}>
+        <LinearGradient
+          colors={[TabThemes.profile.panel, '#30495f', TabThemes.profile.accentDark]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerCard}>
+          <View style={styles.headerGlow} />
+          <ScreenHeader
+            eyebrow={t('profileTab')}
+            title={user.username}
+            subtitle={`${user.fullName} · ${user.city}`}
+            leading={
               <View style={styles.avatarWrap}>
                 <Image source={{ uri: user.avatarUri }} style={[styles.avatar, activeReward && styles.avatarRewarded]} />
                 {activeReward ? (
@@ -41,19 +50,17 @@ export default function ProfileScreen() {
                   </View>
                 ) : null}
               </View>
-              <View style={styles.identity}>
-                <Text style={styles.name}>{user.username}</Text>
-                <Text style={styles.sub}>
-                  {user.fullName} · {user.city}
-                </Text>
+            }
+            rightAction={
+              <View style={styles.headerActions}>
+                <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
+                <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
               </View>
-            </View>
-
-            <View style={styles.headerActions}>
-              <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
-              <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
-            </View>
-          </View>
+            }
+            mode="compact"
+            surface={false}
+            tone="inverse"
+          />
 
           <Text style={styles.bio}>{user.bio}</Text>
 
@@ -98,7 +105,7 @@ export default function ProfileScreen() {
           <AppButton label={t('editProfileBtn')} onPress={() => router.push('/profile/edit')} style={styles.editButton} />
         </LinearGradient>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t('rewardProgressTitle')}</Text>
             <Text style={styles.sectionMeta}>{crowns}/9</Text>
@@ -144,7 +151,7 @@ export default function ProfileScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <Text style={styles.sectionTitle}>{t('aboutTitle')}</Text>
           <Text style={styles.aboutText}>{user.bio}</Text>
         </SurfaceCard>
@@ -154,22 +161,30 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 18 },
+  safe: { flex: 1, backgroundColor: TabThemes.profile.background },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   headerCard: {
-    borderRadius: 28,
-    padding: 18,
-    gap: 16,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
   },
-  headerTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  profileWrap: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  headerGlow: {
+    position: 'absolute',
+    top: -42,
+    right: -28,
+    width: 168,
+    height: 168,
+    borderRadius: 84,
+    backgroundColor: 'rgba(171, 212, 255, 0.14)',
+  },
   avatarWrap: { position: 'relative' },
-  avatar: { width: 76, height: 76, borderRadius: 38, borderWidth: 2, borderColor: 'rgba(255,255,255,0.14)' },
+  avatar: { width: 58, height: 58, borderRadius: 29, borderWidth: 2, borderColor: 'rgba(255,255,255,0.14)' },
   avatarRewarded: {
     borderColor: 'rgba(244,123,32,0.72)',
     shadowColor: '#f7b06a',
@@ -183,17 +198,14 @@ const styles = StyleSheet.create({
     bottom: -3,
     width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: '#fff4e6',
+    borderRadius: Radius.md,
+    backgroundColor: '#f2f7ff',
     borderWidth: 1,
-    borderColor: '#ffd3a5',
+    borderColor: '#c4d7e8',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  identity: { flex: 1 },
-  name: { color: '#fff7ef', fontWeight: '800', fontSize: 24 },
-  sub: { color: '#decfc2', marginTop: 4 },
-  bio: { color: '#decfc2', lineHeight: 21 },
+  bio: { color: '#d6e1eb', lineHeight: 21 },
   headerActions: { gap: 10 },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   rewardStrip: {
@@ -210,7 +222,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 16,
-    backgroundColor: '#fff6ee',
+    backgroundColor: '#f0f5fa',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -227,17 +239,22 @@ const styles = StyleSheet.create({
   levelEyebrow: { color: '#d6c4b7', fontSize: 11, fontWeight: '800', letterSpacing: 1.1, textTransform: 'uppercase' },
   levelTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 16, marginTop: 4 },
   levelMeta: { color: '#d9c6b8', fontSize: 12.5, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
-  editButton: { marginTop: 2 },
-  sectionCard: { gap: 14 },
+  editButton: { marginTop: 2, backgroundColor: TabThemes.profile.accent },
+  sectionCard: {
+    gap: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d9e6f0',
+  },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
-  sectionMeta: { color: '#8a7f77', fontWeight: '700' },
+  sectionTitle: { color: TabThemes.profile.panel, fontWeight: '800', fontSize: 20 },
+  sectionMeta: { color: '#6d8091', fontWeight: '700' },
   crownGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   crownBadge: {
     width: '30%',
     aspectRatio: 1,
-    borderRadius: 14,
-    backgroundColor: '#f4ece3',
+    borderRadius: Radius.md,
+    backgroundColor: '#e8f0f7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -246,13 +263,13 @@ const styles = StyleSheet.create({
   accountIcon: {
     width: 42,
     height: 42,
-    borderRadius: 16,
-    backgroundColor: '#fff1e0',
+    borderRadius: Radius.md,
+    backgroundColor: '#e5eff7',
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountCopy: { flex: 1, gap: 2 },
-  accountLabel: { color: '#7b7068', fontSize: 12.5, fontWeight: '700' },
-  accountValue: { color: '#1f1a17', fontSize: 15, fontWeight: '700' },
-  aboutText: { color: '#81776f', lineHeight: 22 },
+  accountLabel: { color: '#698095', fontSize: 12.5, fontWeight: '700' },
+  accountValue: { color: TabThemes.profile.panel, fontSize: 15, fontWeight: '700' },
+  aboutText: { color: '#65798a', lineHeight: 22 },
 });
