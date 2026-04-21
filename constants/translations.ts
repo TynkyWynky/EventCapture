@@ -117,6 +117,9 @@ export const translations = {
     cameraHint: 'Center the glass inside the guide',
     cameraLoadingTitle: 'Checking your capture',
     cameraLoadingText: 'Looking for the best reward match and preparing the review.',
+    cameraErrorTitle: 'Detection could not run',
+    cameraErrorText: 'Check that the detector backend is running and that this device can reach EXPO_PUBLIC_API_URL, then try again.',
+    cameraErrorRetry: 'Try again',
     cameraTip: 'Best result: keep the glass fully visible.',
     // Camera Review
     reviewEyebrow: 'REVIEW',
@@ -580,6 +583,9 @@ export const translations = {
     cameraHint: 'Centreer het glas in de gids',
     cameraLoadingTitle: 'Je opname controleren',
     cameraLoadingText: 'Op zoek naar de beste beloningsovereenkomst...',
+    cameraErrorTitle: 'Detectie kon niet starten',
+    cameraErrorText: 'Controleer of de detector-backend draait en of dit toestel EXPO_PUBLIC_API_URL kan bereiken. Probeer daarna opnieuw.',
+    cameraErrorRetry: 'Opnieuw proberen',
     cameraTip: 'Beste resultaat: houd het glas volledig zichtbaar.',
     // Camera Review
     reviewEyebrow: 'BEOORDELING',
@@ -1043,6 +1049,9 @@ export const translations = {
     cameraHint: 'Centrez le verre dans le guide',
     cameraLoadingTitle: 'Vérification de votre capture',
     cameraLoadingText: 'Recherche de la meilleure correspondance de récompense...',
+    cameraErrorTitle: 'La détection n\'a pas pu démarrer',
+    cameraErrorText: 'Vérifiez que le backend de détection fonctionne et que cet appareil peut atteindre EXPO_PUBLIC_API_URL, puis réessayez.',
+    cameraErrorRetry: 'Réessayer',
     cameraTip: 'Meilleur résultat : gardez le verre visible.',
     // Camera Review
     reviewEyebrow: 'ÉVALUATION',

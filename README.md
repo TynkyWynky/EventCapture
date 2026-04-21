@@ -149,7 +149,24 @@ cd C:\Unique_Projects\EventCapture
 npm install
 ```
 
-### 2. Start the Expo app
+### 2. Configure the mobile detector backend URL
+
+The mobile camera flow uploads captures to the FastAPI detector through `EXPO_PUBLIC_API_URL`.
+For a physical phone, use your computer's LAN IP address instead of `localhost`.
+
+```bash
+# Windows PowerShell example
+$env:EXPO_PUBLIC_API_URL="http://192.168.1.20:8000"
+```
+
+```bash
+# macOS/Linux example
+export EXPO_PUBLIC_API_URL="http://192.168.1.20:8000"
+```
+
+Use `http://localhost:8000` only when the app runtime is on the same machine, such as Expo web or some emulator setups. Restart Expo after changing `EXPO_PUBLIC_API_URL`.
+
+### 3. Start the Expo app
 
 ```bash
 npm start
@@ -162,7 +179,7 @@ Then choose a target in the Expo terminal:
 - Press `w` for web.
 - Scan the QR code with Expo Go for a physical device.
 
-### 3. Start the drink detection backend
+### 4. Start the drink detection backend
 
 Open a second terminal:
 
@@ -239,21 +256,26 @@ When using the `uvicorn backend.app:app` form, run it from the repository root.
 
 ### Running Mobile and Backend Together
 
-Use two terminals:
+Use two terminals. Start the backend first, then start Expo with the API URL set to the machine running the backend.
 
 ```bash
-# Terminal 1
-npm start
-```
-
-```bash
-# Terminal 2
+# Terminal 1: backend
 cd backend
 .\.venv\Scripts\Activate.ps1
 python app.py
 ```
 
-Important: the Expo mobile capture flow currently uses `services/beerDetection.ts`, which simulates analysis locally. The YOLO backend is available through the separate browser UI in `frontend/` and through the backend API. The mobile capture flow is not yet wired to upload photos to `/api/detect`.
+`python app.py` runs Uvicorn on `0.0.0.0:8000`, so other devices on the same network can reach it through your computer's LAN IP address.
+
+```bash
+# Terminal 2: Expo mobile app
+$env:EXPO_PUBLIC_API_URL="http://192.168.1.20:8000"
+npm start
+```
+
+Replace `192.168.1.20` with your own computer's LAN IP. On Windows, `ipconfig` shows it as the IPv4 address for your active Wi-Fi/Ethernet adapter.
+
+The Expo mobile capture flow now uses `services/beerDetection.ts` to upload each captured photo to `${EXPO_PUBLIC_API_URL}/api/detect`. A capture is crown-worthy when the backend returns at least one drink detection.
 
 ## Accounts
 
@@ -345,11 +367,12 @@ Mobile camera flow:
 
 1. `app/(tabs)/camera.tsx` requests camera permission through `expo-camera`.
 2. The user captures a photo.
-3. `services/beerDetection.ts` simulates analysis with a short delay and random boolean result.
-4. A successful result routes to `/camera/review-success`.
-5. A failed result routes to `/camera/review-fail`.
-6. `components/capture-review-screen.tsx` lets the user select an event and post the capture.
-7. Successful captures can award crowns through `PostProvider`.
+3. `services/beerDetection.ts` uploads the image to `${EXPO_PUBLIC_API_URL}/api/detect`.
+4. If the backend returns one or more detections, the app routes to `/camera/review-success`.
+5. If the backend returns no detections, the app routes to `/camera/review-fail`.
+6. If the backend cannot be reached or rejects the upload, the camera screen shows a retryable error state.
+7. `components/capture-review-screen.tsx` lets the user select an event and post the capture.
+8. Successful captures can award crowns through `PostProvider`.
 
 Backend detector flow:
 
@@ -678,6 +701,7 @@ Important values:
 | Web output | `static` |
 | Typed routes | enabled |
 | React compiler | enabled |
+| Mobile detector URL | `EXPO_PUBLIC_API_URL` |
 
 Splash/icon assets:
 
@@ -798,7 +822,14 @@ npx expo start -c
 
 `localhost` on a physical phone points to the phone, not your computer. Use your computer LAN IP address, or use an Expo tunnel for mobile app network work.
 
-The current mobile camera flow does not call the backend yet, but this matters if you wire `services/beerDetection.ts` to `/api/detect`.
+Set the mobile app URL before starting Expo:
+
+```bash
+$env:EXPO_PUBLIC_API_URL="http://YOUR_LAN_IP:8000"
+npm start
+```
+
+Then confirm your phone and computer are on the same network and that the backend is running on `0.0.0.0:8000`.
 
 ### Backend install is slow or fails
 
@@ -850,8 +881,8 @@ python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ## Known Limitations
 
 - The mobile app uses local/demo data and AsyncStorage, not a remote production database.
-- The mobile capture analyzer in `services/beerDetection.ts` is currently simulated and random.
-- The FastAPI YOLO backend is separate from the mobile app until the mobile service is wired to `/api/detect`.
+- The mobile capture analyzer depends on `EXPO_PUBLIC_API_URL` reaching the FastAPI detector backend.
+- The browser detector UI in `frontend/` is still a separate local demo surface.
 - The admin user system is local/demo only.
 - There is no dedicated automated test suite in `package.json` yet.
 - The browser detector is designed for local development and demos; production hosting needs HTTPS, resource sizing, and model deployment planning.

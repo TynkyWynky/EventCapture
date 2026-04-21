@@ -14,6 +14,7 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [detectionError, setDetectionError] = useState('');
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
@@ -45,6 +46,7 @@ export default function CameraScreen() {
   const takePicture = async () => {
     if (cameraRef.current && !isProcessing) {
       setIsProcessing(true);
+      setDetectionError('');
       try {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
@@ -53,10 +55,9 @@ export default function CameraScreen() {
         });
 
         if (photo?.uri) {
-          // Analyze the beer
-          const isBeerFinished = await analyzeBeer(photo.uri);
+          const analysis = await analyzeBeer(photo.uri);
 
-          if (isBeerFinished) {
+          if (analysis.isCrownWorthy) {
             router.push({
               pathname: '/camera/review-success',
               params: { photoUri: photo.uri },
@@ -70,6 +71,7 @@ export default function CameraScreen() {
         }
       } catch (error) {
         console.error('Failed to take picture:', error);
+        setDetectionError(t('cameraErrorText'));
       } finally {
         setIsProcessing(false);
       }
@@ -117,6 +119,19 @@ export default function CameraScreen() {
         </View>
 
         <View style={[styles.controlDock, { paddingBottom: Math.max(insets.bottom, 18) }]}>
+          {detectionError ? (
+            <View style={styles.errorCard}>
+              <View style={styles.errorHeader}>
+                <Ionicons name="warning-outline" size={18} color="#b91c1c" />
+                <Text style={styles.errorTitle}>{t('cameraErrorTitle')}</Text>
+              </View>
+              <Text style={styles.errorText}>{detectionError}</Text>
+              <TouchableOpacity style={styles.errorRetryButton} onPress={takePicture} disabled={isProcessing}>
+                <Text style={styles.errorRetryText}>{t('cameraErrorRetry')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <View style={styles.tipPill}>
             <Ionicons name="beer-outline" size={16} color="#fff7ef" />
             <Text style={styles.tipText}>{t('cameraTip')}</Text>
@@ -254,6 +269,39 @@ const styles = StyleSheet.create({
   },
   controlDock: {
     gap: 12,
+  },
+  errorCard: {
+    backgroundColor: '#fff7ef',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 14,
+    gap: 10,
+  },
+  errorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  errorTitle: {
+    color: '#7f1d1d',
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  errorText: {
+    color: '#6f655e',
+    lineHeight: 20,
+  },
+  errorRetryButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  errorRetryText: {
+    color: '#991b1b',
+    fontWeight: '800',
   },
   tipPill: {
     alignSelf: 'center',
