@@ -139,7 +139,7 @@ def _save_debug_artifacts(
         detection_count=len(detections),
         person_count=len(debug_regions.get("persons", [])),
         face_count=len(debug_regions.get("faces", [])),
-        mouth_zone_count=len(debug_regions.get("mouth_zones", [])),
+        head_zone_count=len(debug_regions.get("head_zones", [])),
         saved_frame=str(frame_path),
         saved_annotated=str(annotated_path),
         updated_at=time.time(),

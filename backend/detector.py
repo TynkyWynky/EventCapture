@@ -22,7 +22,9 @@ class Detection:
     bbox: tuple  # (x1, y1, x2, y2)
     drink_type: str = ""
     is_drinking: bool = False
-    mouth_bbox: tuple | None = None
+    head_bbox: tuple | None = None
+    rotation_degrees: float = 90.0
+    rotated_bbox: tuple[tuple[int, int], ...] | None = None
 
 
 # COCO classes relevant to drinks
@@ -64,8 +66,9 @@ class DrinkDetector:
         self.drink_history: list[Detection] = []
         self._drinking_tracks: list[dict[str, object]] = []
         self._person_bboxes: list[tuple] = []
-        self._person_mouth_zones: list[tuple] = []
+        self._person_head_zones: list[tuple] = []
         self._face_bboxes: list[tuple] = []
+        self._active_head_bbox: tuple | None = None
 
     def detect(self, frame: np.ndarray, conf_threshold: float = 0.35) -> list[Detection]:
         detections: list[Detection] = []
@@ -96,17 +99,31 @@ class DrinkDetector:
                         continue
                     label = DRINK_COCO_CLASSES[cls_id]
                     drink_type = self._infer_drink_type(frame, bbox, label)
+                    rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
                     detections.append(Detection(
                         label=label,
                         confidence=confidence,
                         bbox=bbox,
                         drink_type=drink_type,
+                        rotation_degrees=rotation_degrees,
+                        rotated_bbox=rotated_bbox,
                     ))
+
+        # Extra drink-only passes recover bottles/glasses that YOLO misses when they
+        # are heavily tilted. Rotating the frame makes a sideways bottle look upright
+        # to the detector, then we map the result back into the original image.
+        fallback_detections = self._detect_drinks_multi_orientation(
+            frame,
+            conf_threshold=max(0.14, conf_threshold - 0.18),
+            imgsz=960,
+        )
+        detections = self._merge_drink_detections(detections, fallback_detections)
 
         if not persons:
             persons = self._detect_persons(frame, person_conf_threshold=0.08)
         if not persons:
             persons = self._detect_persons_from_faces(frame)
+        persons = self._select_primary_person(frame, persons)
 
         # Run custom model if available
         if self.custom_model is not None:
@@ -130,7 +147,8 @@ class DrinkDetector:
 
         # Detect drinking action
         self._person_bboxes = persons
-        self._person_mouth_zones = [self._get_best_mouth_bbox(person_bbox) for person_bbox in persons]
+        self._person_head_zones = [self._get_best_head_bbox(person_bbox) for person_bbox in persons]
+        self._active_head_bbox = self._get_best_head_bbox(persons[0]) if persons else None
         self._detect_drinking_action(detections, persons)
         self.drink_history = detections
         return detections
@@ -138,7 +156,7 @@ class DrinkDetector:
     def get_debug_regions(self) -> dict[str, list[list[int]]]:
         return {
             "persons": [list(bbox) for bbox in self._person_bboxes],
-            "mouth_zones": [list(bbox) for bbox in self._person_mouth_zones],
+            "head_zones": [list(bbox) for bbox in self._person_head_zones],
             "faces": [list(bbox) for bbox in self._face_bboxes],
         }
 
@@ -169,6 +187,163 @@ class DrinkDetector:
                     person_bboxes.append(bbox)
 
         return self._dedupe_boxes(person_bboxes)
+
+    def _select_primary_person(self, frame: np.ndarray, persons: list[tuple]) -> list[tuple]:
+        if not persons:
+            return []
+
+        frame_h, frame_w = frame.shape[:2]
+        frame_center_x = frame_w / 2
+
+        def person_score(person_bbox: tuple) -> float:
+            px1, py1, px2, py2 = person_bbox
+            width = max(1, px2 - px1)
+            height = max(1, py2 - py1)
+            area_ratio = (width * height) / max(1, frame_w * frame_h)
+            center_x = (px1 + px2) / 2
+            center_penalty = abs(center_x - frame_center_x) / max(1, frame_w)
+            return area_ratio * 2.2 - center_penalty * 0.7 - max(0, py1) / max(1, frame_h) * 0.12
+
+        primary_person = max(persons, key=person_score)
+        return [primary_person]
+
+    def _detect_drinks(
+        self,
+        frame: np.ndarray,
+        conf_threshold: float = 0.18,
+        imgsz: int = 960,
+    ) -> list[Detection]:
+        """Fallback drink-only pass for harder object poses like tilted bottles/glasses."""
+        drink_detections: list[Detection] = []
+        results = self.model(
+            frame,
+            conf=conf_threshold,
+            classes=sorted(DRINK_CLASS_IDS),
+            imgsz=imgsz,
+            verbose=False,
+        )
+
+        for result in results:
+            boxes = result.boxes
+            if boxes is None:
+                continue
+
+            for box in boxes:
+                cls_id = int(box.cls[0])
+                confidence = float(box.conf[0])
+                if cls_id not in DRINK_CLASS_IDS or confidence < conf_threshold:
+                    continue
+
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                bbox = (int(x1), int(y1), int(x2), int(y2))
+                if not self._is_reasonable_drink_bbox(frame, bbox):
+                    continue
+
+                label = DRINK_COCO_CLASSES[cls_id]
+                rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
+                drink_detections.append(Detection(
+                    label=label,
+                    confidence=confidence,
+                    bbox=bbox,
+                    drink_type=self._infer_drink_type(frame, bbox, label),
+                    rotation_degrees=rotation_degrees,
+                    rotated_bbox=rotated_bbox,
+                ))
+
+        return self._merge_drink_detections([], drink_detections)
+
+    def _detect_drinks_multi_orientation(
+        self,
+        frame: np.ndarray,
+        conf_threshold: float = 0.14,
+        imgsz: int = 960,
+    ) -> list[Detection]:
+        detections = self._detect_drinks(frame, conf_threshold=conf_threshold, imgsz=imgsz)
+
+        for orientation in ("rot90_cw", "rot90_ccw"):
+            rotated_frame = self._rotate_frame(frame, orientation)
+            rotated_detections = self._detect_drinks(
+                rotated_frame,
+                conf_threshold=conf_threshold,
+                imgsz=imgsz,
+            )
+            restored_detections = [
+                self._restore_detection_from_rotation(det, frame.shape[:2], orientation)
+                for det in rotated_detections
+            ]
+            detections = self._merge_drink_detections(detections, restored_detections)
+
+        return detections
+
+    def _rotate_frame(self, frame: np.ndarray, orientation: str) -> np.ndarray:
+        if orientation == "rot90_cw":
+            return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        if orientation == "rot90_ccw":
+            return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        return frame
+
+    def _restore_detection_from_rotation(
+        self,
+        detection: Detection,
+        original_shape: tuple[int, int],
+        orientation: str,
+    ) -> Detection:
+        restored_points = None
+        if detection.rotated_bbox is not None:
+            restored_points = tuple(
+                self._map_point_from_rotation(point, original_shape, orientation)
+                for point in detection.rotated_bbox
+            )
+
+        restored_bbox = self._bbox_from_points(
+            restored_points if restored_points is not None else (
+                self._map_point_from_rotation((detection.bbox[0], detection.bbox[1]), original_shape, orientation),
+                self._map_point_from_rotation((detection.bbox[2], detection.bbox[1]), original_shape, orientation),
+                self._map_point_from_rotation((detection.bbox[2], detection.bbox[3]), original_shape, orientation),
+                self._map_point_from_rotation((detection.bbox[0], detection.bbox[3]), original_shape, orientation),
+            ),
+            original_shape,
+        )
+
+        restored_rotation = self._rotation_from_polygon(restored_points)
+        if restored_rotation is None:
+            restored_rotation = self._default_rotation_from_bbox(restored_bbox)
+
+        return Detection(
+            label=detection.label,
+            confidence=detection.confidence,
+            bbox=restored_bbox,
+            drink_type=detection.drink_type,
+            is_drinking=detection.is_drinking,
+            head_bbox=detection.head_bbox,
+            rotation_degrees=restored_rotation,
+            rotated_bbox=restored_points,
+        )
+
+    def _map_point_from_rotation(
+        self,
+        point: tuple[int, int],
+        original_shape: tuple[int, int],
+        orientation: str,
+    ) -> tuple[int, int]:
+        x, y = point
+        original_h, original_w = original_shape
+
+        if orientation == "rot90_cw":
+            return (int(y), int(original_h - 1 - x))
+        if orientation == "rot90_ccw":
+            return (int(original_w - 1 - y), int(x))
+        return (int(x), int(y))
+
+    def _bbox_from_points(
+        self,
+        points: tuple[tuple[int, int], ...],
+        original_shape: tuple[int, int],
+    ) -> tuple:
+        original_h, original_w = original_shape
+        xs = [min(max(0, point[0]), original_w - 1) for point in points]
+        ys = [min(max(0, point[1]), original_h - 1) for point in points]
+        return (min(xs), min(ys), max(xs), max(ys))
 
     def _detect_persons_from_faces(self, frame: np.ndarray) -> list[tuple]:
         """Fallback for webcam framing: detect a face and expand it to an approximate upper-body box."""
@@ -223,6 +398,21 @@ class DrinkDetector:
             and area_ratio >= min_area_ratio
         )
 
+    def _is_reasonable_drink_bbox(self, frame: np.ndarray, bbox: tuple) -> bool:
+        x1, y1, x2, y2 = bbox
+        frame_h, frame_w = frame.shape[:2]
+        width = max(1, x2 - x1)
+        height = max(1, y2 - y1)
+        area_ratio = (width * height) / max(1, frame_w * frame_h)
+        aspect_ratio = max(width, height) / max(1, min(width, height))
+
+        return (
+            width >= frame_w * 0.02
+            and height >= frame_h * 0.04
+            and area_ratio >= 0.0012
+            and aspect_ratio <= 8.0
+        )
+
     def _dedupe_boxes(self, boxes: list[tuple]) -> list[tuple]:
         deduped: list[tuple] = []
 
@@ -233,30 +423,43 @@ class DrinkDetector:
 
         return deduped
 
-    def _get_mouth_bbox(self, person_bbox: tuple) -> tuple:
+    def _merge_drink_detections(
+        self,
+        primary: list[Detection],
+        secondary: list[Detection],
+    ) -> list[Detection]:
+        merged = list(primary)
+
+        for candidate in secondary:
+            duplicate_idx = None
+            for idx, existing in enumerate(merged):
+                if existing.label != candidate.label:
+                    continue
+                if self._bbox_iou(existing.bbox, candidate.bbox) >= 0.45:
+                    duplicate_idx = idx
+                    break
+
+            if duplicate_idx is None:
+                merged.append(candidate)
+                continue
+
+            if candidate.confidence > merged[duplicate_idx].confidence:
+                merged[duplicate_idx] = candidate
+
+        return merged
+
+    def _get_head_bbox(self, person_bbox: tuple) -> tuple:
         px1, py1, px2, py2 = person_bbox
         person_width = max(1, px2 - px1)
         person_height = max(1, py2 - py1)
         return (
-            int(px1 + person_width * 0.34),
-            int(py1 + person_height * 0.24),
-            int(px2 - person_width * 0.34),
-            int(py1 + person_height * 0.38),
+            int(px1 + person_width * 0.28),
+            int(py1 + person_height * 0.08),
+            int(px2 - person_width * 0.28),
+            int(py1 + person_height * 0.69),
         )
 
-    def _get_face_mouth_bbox(self, face_bbox: tuple) -> tuple:
-        fx1, fy1, fx2, fy2 = face_bbox
-        face_width = max(1, fx2 - fx1)
-        face_height = max(1, fy2 - fy1)
-        return (
-            int(fx1 + face_width * 0.24),
-            int(fy1 + face_height * 0.62),
-            int(fx2 - face_width * 0.24),
-            int(fy1 + face_height * 0.92),
-        )
-
-    def _get_best_mouth_bbox(self, person_bbox: tuple) -> tuple:
-        base_mouth_bbox = self._get_mouth_bbox(person_bbox)
+    def _get_best_head_bbox(self, person_bbox: tuple) -> tuple:
         person_center_x = (person_bbox[0] + person_bbox[2]) / 2
         best_face = None
         best_distance = None
@@ -268,18 +471,171 @@ class DrinkDetector:
                 best_distance = distance
                 best_face = face_bbox
 
-        if best_face is None:
-            return base_mouth_bbox
+        if best_face is not None:
+            return best_face
 
-        face_mouth_bbox = self._get_face_mouth_bbox(best_face)
-        px1, py1, px2, py2 = person_bbox
-        mx1, my1, mx2, my2 = face_mouth_bbox
+        return self._get_head_bbox(person_bbox)
+
+    def _expand_bbox(self, bbox: tuple, x_pad: float, y_pad: float) -> tuple:
+        x1, y1, x2, y2 = bbox
+        width = max(1, x2 - x1)
+        height = max(1, y2 - y1)
         return (
-            max(px1, mx1),
-            max(py1, my1),
-            min(px2, mx2),
-            min(py2, my2),
+            int(x1 - width * x_pad),
+            int(y1 - height * y_pad),
+            int(x2 + width * x_pad),
+            int(y2 + height * y_pad),
         )
+
+    def _distance_point_to_bbox(self, point: tuple[float, float], bbox: tuple) -> float:
+        px, py = point
+        x1, y1, x2, y2 = bbox
+        dx = max(x1 - px, 0.0, px - x2)
+        dy = max(y1 - py, 0.0, py - y2)
+        return float(np.hypot(dx, dy))
+
+    def _get_drink_contact_points(self, det: Detection) -> list[tuple[float, float]]:
+        if det.rotated_bbox and len(det.rotated_bbox) == 4:
+            points = [tuple(map(float, point)) for point in det.rotated_bbox]
+            center_x = sum(point[0] for point in points) / 4
+            center_y = sum(point[1] for point in points) / 4
+            midpoints = [
+                ((points[idx][0] + points[(idx + 1) % 4][0]) / 2, (points[idx][1] + points[(idx + 1) % 4][1]) / 2)
+                for idx in range(4)
+            ]
+            return [*points, *midpoints, (center_x, center_y)]
+
+        dx1, dy1, dx2, dy2 = det.bbox
+        width = max(1, dx2 - dx1)
+        height = max(1, dy2 - dy1)
+        center_x = (dx1 + dx2) / 2
+
+        return [
+            (center_x, dy1),
+            (dx1 + width * 0.2, dy1 + height * 0.12),
+            (dx2 - width * 0.2, dy1 + height * 0.12),
+            (center_x, dy1 + height * 0.18),
+            (dx1 + width * 0.3, dy1 + height * 0.28),
+            (dx2 - width * 0.3, dy1 + height * 0.28),
+            (dx1 + width * 0.18, dy1 + height * 0.5),
+            (dx2 - width * 0.18, dy1 + height * 0.5),
+        ]
+
+    def _is_sideways_drink(self, det: Detection) -> bool:
+        normalized_rotation = self._normalize_rotation_angle(det.rotation_degrees)
+        if normalized_rotation is not None:
+            return abs(normalized_rotation) <= 32
+
+        dx1, dy1, dx2, dy2 = det.bbox
+        width = max(1, dx2 - dx1)
+        height = max(1, dy2 - dy1)
+        return width > height * 1.05
+
+    def _estimate_drink_pose(
+        self,
+        frame: np.ndarray,
+        bbox: tuple,
+    ) -> tuple[float, tuple[tuple[int, int], ...] | None]:
+        x1, y1, x2, y2 = bbox
+        frame_h, frame_w = frame.shape[:2]
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(frame_w, x2)
+        y2 = min(frame_h, y2)
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return 90.0, None
+
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 40, 140)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return self._default_rotation_from_bbox(bbox), None
+
+        crop_center = ((x2 - x1) / 2, (y2 - y1) / 2)
+        best_contour = None
+        best_score = None
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < max(20.0, crop.shape[0] * crop.shape[1] * 0.04):
+                continue
+
+            moments = cv2.moments(contour)
+            if moments["m00"] == 0:
+                continue
+            cx = moments["m10"] / moments["m00"]
+            cy = moments["m01"] / moments["m00"]
+            distance_penalty = np.hypot(cx - crop_center[0], cy - crop_center[1])
+            score = area - distance_penalty * 3.0
+            if best_score is None or score > best_score:
+                best_score = score
+                best_contour = contour
+
+        if best_contour is None:
+            return self._default_rotation_from_bbox(bbox), None
+
+        rect = cv2.minAreaRect(best_contour)
+        ((_, _), (rect_w, rect_h), raw_angle) = rect
+        if rect_w <= 1 or rect_h <= 1:
+            return self._default_rotation_from_bbox(bbox), None
+
+        box_points = cv2.boxPoints(rect)
+        rotated_bbox = tuple(
+            (int(round(point[0] + x1)), int(round(point[1] + y1)))
+            for point in box_points
+        )
+        contour_angle = self._estimate_contour_angle(best_contour)
+        if contour_angle is None:
+            contour_angle = self._rotation_from_polygon(rotated_bbox)
+        if contour_angle is None:
+            contour_angle = raw_angle + 90 if rect_w < rect_h else raw_angle
+        return float(contour_angle), rotated_bbox
+
+    def _default_rotation_from_bbox(self, bbox: tuple) -> float:
+        x1, y1, x2, y2 = bbox
+        width = max(1, x2 - x1)
+        height = max(1, y2 - y1)
+        return 0.0 if width > height else 90.0
+
+    def _estimate_contour_angle(self, contour: np.ndarray) -> float | None:
+        if contour is None or len(contour) < 5:
+            return None
+
+        try:
+            line = cv2.fitLine(contour, cv2.DIST_L2, 0, 0.01, 0.01)
+        except cv2.error:
+            return None
+
+        vx, vy = float(line[0]), float(line[1])
+        return float(np.degrees(np.arctan2(vy, vx)))
+
+    def _rotation_from_polygon(
+        self,
+        polygon: tuple[tuple[int, int], ...] | None,
+    ) -> float | None:
+        if polygon is None or len(polygon) < 2:
+            return None
+
+        best_angle = None
+        best_length = 0.0
+        for idx, start in enumerate(polygon):
+            end = polygon[(idx + 1) % len(polygon)]
+            dx = float(end[0] - start[0])
+            dy = float(end[1] - start[1])
+            length = float(np.hypot(dx, dy))
+            if length > best_length:
+                best_length = length
+                best_angle = np.degrees(np.arctan2(dy, dx))
+
+        return float(best_angle) if best_angle is not None else None
+
+    def _normalize_rotation_angle(self, angle: float | None) -> float | None:
+        if angle is None:
+            return None
+        normalized = ((angle + 90.0) % 180.0) - 90.0
+        return normalized
 
     def _infer_drink_type(self, frame: np.ndarray, bbox: tuple, base_label: str) -> str:
         x1, y1, x2, y2 = bbox
@@ -341,7 +697,7 @@ class DrinkDetector:
         return "Hot Beverage"
 
     def _detect_drinking_action(self, detections: list[Detection], persons: list[tuple]) -> None:
-        """Detect active drinking using a tighter mouth-zone heuristic plus short streak smoothing."""
+        """Detect active drinking using a single head-zone heuristic plus short streak smoothing."""
         if not detections:
             self._drinking_tracks = []
             return
@@ -349,86 +705,118 @@ class DrinkDetector:
         raw_candidates: list[Detection] = []
         for det in detections:
             det.is_drinking = False
-            det.mouth_bbox = None
-            if persons and self._is_drink_near_mouth(det, persons):
+            det.head_bbox = self._active_head_bbox
+            if persons and self._is_drink_near_head(det, persons):
                 raw_candidates.append(det)
 
         self._update_drinking_tracks(raw_candidates)
 
-    def _is_drink_near_mouth(self, det: Detection, persons: list[tuple]) -> bool:
+    def _is_drink_near_head(self, det: Detection, persons: list[tuple]) -> bool:
         dx1, dy1, dx2, dy2 = det.bbox
         drink_width = max(1, dx2 - dx1)
         drink_height = max(1, dy2 - dy1)
         drink_center_x = (dx1 + dx2) / 2
 
         best_score = 0.0
-        best_mouth_bbox = None
+        best_head_bbox = None
 
-        for person_bbox in persons:
+        for person_bbox in persons[:1]:
             px1, py1, px2, py2 = person_bbox
             person_width = max(1, px2 - px1)
             person_height = max(1, py2 - py1)
-
-            mouth_left, mouth_top, mouth_right, mouth_bottom = self._get_best_mouth_bbox(person_bbox)
-            mouth_center_x = (mouth_left + mouth_right) / 2
-            mouth_center_y = (mouth_top + mouth_bottom) / 2
-
-            mouth_height = max(1, mouth_bottom - mouth_top)
-            contact_y = dy1 + drink_height * 0.18
-            vertical_gap = abs(contact_y - mouth_center_y) / mouth_height
-            horizontal_gap = abs(drink_center_x - mouth_center_x) / person_width
-
-            overlap_x = max(0.0, min(dx2, mouth_right) - max(dx1, mouth_left))
-            overlap_ratio = overlap_x / drink_width
-            overlap_y = max(0.0, min(dy2, mouth_bottom) - max(dy1, mouth_top))
-            mouth_overlap_ratio = overlap_y / mouth_height
-            top_near_mouth = abs(dy1 - mouth_center_y) / person_height
-
-            in_upper_body = dy1 < py1 + person_height * 0.65 and dy2 > py1 + person_height * 0.08
-            touches_mouth_band = dy1 <= mouth_bottom and dy2 >= mouth_top
-            reasonable_size = (
-                drink_height < person_height * 0.42
-                and drink_width < person_width * 0.45
-                and drink_height > person_height * 0.05
+            head_bbox = self._active_head_bbox or self._get_best_head_bbox(person_bbox)
+            expanded_head_bbox = self._expand_bbox(
+                head_bbox,
+                x_pad=0.45 if self._is_sideways_drink(det) else 0.3,
+                y_pad=0.34 if self._is_sideways_drink(det) else 0.24,
             )
+            head_left, head_top, head_right, head_bottom = head_bbox
+            head_width = max(1, head_right - head_left)
+            head_height = max(1, head_bottom - head_top)
+            head_center_x = (head_left + head_right) / 2
+            head_center_y = (head_top + head_bottom) / 2
+            contact_points = self._get_drink_contact_points(det)
+            head_distance = min(
+                self._distance_point_to_bbox(point, expanded_head_bbox)
+                for point in contact_points
+            )
+            head_distance_score = 1.0 - min(head_distance / max(head_width, head_height, drink_width), 1.4)
+            contact_y = dy1 + drink_height * 0.24
+            vertical_gap = abs(contact_y - head_center_y) / head_height
+            horizontal_gap = abs(drink_center_x - head_center_x) / person_width
 
-            if not (in_upper_body and touches_mouth_band and reasonable_size):
+            overlap_x = max(0.0, min(dx2, head_right) - max(dx1, head_left))
+            head_overlap_ratio = overlap_x / max(1, min(drink_width, head_width))
+            overlap_y = max(0.0, min(dy2, head_bottom) - max(dy1, head_top))
+            vertical_overlap_ratio = overlap_y / head_height
+            top_near_head = abs(dy1 - head_center_y) / person_height
+
+            in_upper_body = dy1 < py1 + person_height * 0.62 and dy2 > py1 - person_height * 0.02
+            touches_head_band = dy1 <= expanded_head_bbox[3] and dy2 >= expanded_head_bbox[1]
+            reasonable_size = (
+                drink_height < person_height * 0.55
+                and drink_width < person_width * 0.52
+                and drink_height > person_height * 0.04
+            )
+            near_head = head_distance_score >= (0.22 if self._is_sideways_drink(det) else 0.34)
+            sideways_near_head = self._is_sideways_drink(det) and head_distance_score >= 0.18
+
+            if not (
+                in_upper_body
+                and reasonable_size
+                and (touches_head_band or near_head or sideways_near_head)
+            ):
                 continue
 
-            score = overlap_ratio * 1.5 + mouth_overlap_ratio * 1.2 - horizontal_gap * 1.5 - vertical_gap * 0.9
+            score = (
+                head_overlap_ratio * 1.15
+                + vertical_overlap_ratio * 0.6
+                + head_distance_score * 1.55
+                - horizontal_gap * 1.0
+                - vertical_gap * 0.55
+            )
             if det.label == "bottle":
+                score += 0.15
+            if det.label == "wine glass":
                 score += 0.12
-            if top_near_mouth < 0.18:
-                score += 0.18
-            if dy1 < mouth_bottom:
-                score += 0.08
+            if top_near_head < 0.16:
+                score += 0.14
+            if near_head:
+                score += 0.15
+            if sideways_near_head:
+                score += 0.36
 
             if score > best_score:
                 best_score = score
-                best_mouth_bbox = (mouth_left, mouth_top, mouth_right, mouth_bottom)
+                best_head_bbox = head_bbox
 
-        det.mouth_bbox = best_mouth_bbox
+        det.head_bbox = best_head_bbox
 
-        return best_score >= 0.45
+        return best_score >= 0.34
 
     def _update_drinking_tracks(self, raw_candidates: list[Detection]) -> None:
         updated_tracks: list[dict[str, object]] = []
 
         for det in raw_candidates:
             matched_track = None
-            matched_iou = 0.0
+            matched_score = 0.0
 
             for track in self._drinking_tracks:
                 if track["label"] != det.label:
                     continue
 
                 iou = self._bbox_iou(det.bbox, track["bbox"])
-                if iou > matched_iou:
-                    matched_iou = iou
+                center_distance = self._bbox_center_distance_ratio(det.bbox, track["bbox"])
+                if iou < 0.1 and center_distance > 0.65:
+                    continue
+
+                match_score = iou + max(0.0, 0.65 - center_distance)
+                if match_score > matched_score:
+                    matched_score = match_score
                     matched_track = track
 
             streak = 1
-            if matched_track is not None and matched_iou >= 0.2:
+            if matched_track is not None:
                 streak = min(int(matched_track["streak"]) + 1, 6)
 
             det.is_drinking = streak >= 3
@@ -439,6 +827,20 @@ class DrinkDetector:
             })
 
         self._drinking_tracks = updated_tracks
+
+    def _bbox_center_distance_ratio(self, box_a: tuple, box_b: tuple) -> float:
+        ax1, ay1, ax2, ay2 = box_a
+        bx1, by1, bx2, by2 = box_b
+
+        center_a = ((ax1 + ax2) / 2, (ay1 + ay2) / 2)
+        center_b = ((bx1 + bx2) / 2, (by1 + by2) / 2)
+        distance = float(np.hypot(center_a[0] - center_b[0], center_a[1] - center_b[1]))
+        scale = max(
+            1.0,
+            max(ax2 - ax1, ay2 - ay1),
+            max(bx2 - bx1, by2 - by1),
+        )
+        return distance / scale
 
     def _bbox_iou(self, box_a: tuple, box_b: tuple) -> float:
         ax1, ay1, ax2, ay2 = box_a
@@ -463,13 +865,13 @@ class DrinkDetector:
     def annotate_frame(self, frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
         annotated = frame.copy()
 
-        for person_bbox, mouth_bbox in zip(self._person_bboxes, self._person_mouth_zones):
-            mx1, my1, mx2, my2 = mouth_bbox
-            cv2.rectangle(annotated, (mx1, my1), (mx2, my2), (255, 200, 0), 1)
+        for person_bbox, head_bbox in zip(self._person_bboxes, self._person_head_zones):
+            hx1, hy1, hx2, hy2 = head_bbox
+            cv2.rectangle(annotated, (hx1, hy1), (hx2, hy2), (255, 200, 0), 1)
             cv2.putText(
                 annotated,
-                "Mouth zone",
-                (mx1, max(15, my1 - 4)),
+                "Head zone",
+                (hx1, max(15, hy1 - 4)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.45,
                 (255, 200, 0),
@@ -483,25 +885,34 @@ class DrinkDetector:
             if det.is_drinking:
                 color = (0, 165, 255)  # Orange for drinking action
 
-            if det.mouth_bbox is not None:
-                mx1, my1, mx2, my2 = det.mouth_bbox
-                mouth_color = (255, 255, 0) if det.is_drinking else (255, 200, 0)
-                cv2.rectangle(annotated, (mx1, my1), (mx2, my2), mouth_color, 1)
+            if det.head_bbox is not None:
+                hx1, hy1, hx2, hy2 = det.head_bbox
+                head_color = (255, 255, 0) if det.is_drinking else (255, 200, 0)
+                cv2.rectangle(annotated, (hx1, hy1), (hx2, hy2), head_color, 1)
                 cv2.putText(
                     annotated,
-                    "Mouth zone",
-                    (mx1, max(15, my1 - 4)),
+                    "Head zone",
+                    (hx1, max(15, hy1 - 4)),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.45,
-                    mouth_color,
+                    head_color,
                     1,
                 )
 
-            # Draw bounding box
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+            # Draw bounding box or rotated pose overlay when available.
+            if det.rotated_bbox is not None and len(det.rotated_bbox) == 4:
+                points = np.array(det.rotated_bbox, dtype=np.int32).reshape((-1, 1, 2))
+                cv2.polylines(annotated, [points], isClosed=True, color=color, thickness=2)
+            else:
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
 
             # Label
-            label = f"{det.drink_type} ({det.confidence:.0%})"
+            angle_label = self._normalize_rotation_angle(det.rotation_degrees)
+            if angle_label is None:
+                angle_text = ""
+            else:
+                angle_text = f" {angle_label:+.0f}deg"
+            label = f"{det.drink_type} ({det.confidence:.0%}){angle_text}"
             if det.is_drinking:
                 label += " - DRINKING!"
 

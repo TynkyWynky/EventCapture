@@ -163,7 +163,7 @@ class DrinkDetectionApp {
 
     handleDetectionResult(data) {
         // Draw bounding boxes on overlay canvas (webcam stays live)
-        this.drawDetections(data.detections, data.debug || { persons: [], mouth_zones: [], faces: [] });
+        this.drawDetections(data.detections, data.debug || { persons: [], head_zones: [], faces: [] });
 
         // Update FPS
         this.fpsDisplay.textContent = data.fps || '0';
@@ -196,7 +196,7 @@ class DrinkDetectionApp {
 
         const debugLines = [
             `Faces: ${(debug.faces || []).length}`,
-            `Mouth: ${(debug.mouth_zones || []).length}`,
+            `Head: ${(debug.head_zones || []).length}`,
             `Drinks: ${detections.length}`,
         ];
 
@@ -218,15 +218,15 @@ class DrinkDetectionApp {
             ctx.fillText('FACE', x1 + 6, Math.max(2, y1 - 22));
         }
 
-        for (const mouth of debug.mouth_zones || []) {
-            const [x1, y1, x2, y2] = mouth;
+        for (const head of debug.head_zones || []) {
+            const [x1, y1, x2, y2] = head;
             ctx.strokeStyle = '#ffd166';
             ctx.lineWidth = 3;
             ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
             ctx.fillStyle = '#ffd166';
-            ctx.fillRect(x1, Math.max(0, y1 - 24), 86, 24);
+            ctx.fillRect(x1, Math.max(0, y1 - 24), 70, 24);
             ctx.fillStyle = '#000000';
-            ctx.fillText('MOUTH', x1 + 6, Math.max(2, y1 - 22));
+            ctx.fillText('HEAD', x1 + 6, Math.max(2, y1 - 22));
         }
 
         for (const d of detections) {
@@ -236,13 +236,28 @@ class DrinkDetectionApp {
 
             const color = d.is_drinking ? '#ff9100' : '#00d4ff';
 
-            // Box
             ctx.strokeStyle = color;
             ctx.lineWidth = 4;
-            ctx.strokeRect(x1, y1, w, h);
+            if (Array.isArray(d.rotated_bbox) && d.rotated_bbox.length === 4) {
+                ctx.beginPath();
+                d.rotated_bbox.forEach(([px, py], index) => {
+                    if (index === 0) {
+                        ctx.moveTo(px, py);
+                    } else {
+                        ctx.lineTo(px, py);
+                    }
+                });
+                ctx.closePath();
+                ctx.stroke();
+            } else {
+                ctx.strokeRect(x1, y1, w, h);
+            }
 
             // Label background
-            const label = `${d.drink_type} ${(d.confidence * 100).toFixed(0)}%`;
+            const angleText = typeof d.rotation_degrees === 'number'
+                ? ` ${Math.round(d.rotation_degrees)}deg`
+                : '';
+            const label = `${d.drink_type} ${(d.confidence * 100).toFixed(0)}%${angleText}`;
             ctx.font = 'bold 14px sans-serif';
             const textW = ctx.measureText(label).width + 8;
             ctx.fillStyle = color;

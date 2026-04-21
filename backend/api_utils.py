@@ -16,6 +16,8 @@ def serialize_detections(detections: list[Detection]) -> list[DetectionResponse]
             confidence=round(det.confidence, 3),
             bbox=list(det.bbox),
             is_drinking=det.is_drinking,
+            rotation_degrees=round((((det.rotation_degrees + 90.0) % 180.0) - 90.0), 2),
+            rotated_bbox=[list(point) for point in det.rotated_bbox] if det.rotated_bbox else [],
         )
         for det in detections
     ]
@@ -25,7 +27,7 @@ def serialize_debug_regions(debug_regions: dict) -> DebugRegionsResponse:
     return DebugRegionsResponse(
         persons=[list(bbox) for bbox in debug_regions.get("persons", [])],
         faces=[list(bbox) for bbox in debug_regions.get("faces", [])],
-        mouth_zones=[list(bbox) for bbox in debug_regions.get("mouth_zones", [])],
+        head_zones=[list(bbox) for bbox in debug_regions.get("head_zones", [])],
     )
 
 
@@ -54,7 +56,7 @@ def build_analysis_summary(detections: list[Detection]) -> AnalysisSummaryRespon
     if has_drinking_action:
         status_label = "drinking_detected"
         headline = "Drinking moment detected"
-        message = "The detector found a drink close enough to the mouth zone to count as an active drinking moment."
+        message = "The detector found a drink close enough to the head zone to count as an active drinking moment."
     elif contains_beer:
         status_label = "beer_detected"
         headline = "Beer-like drink detected"

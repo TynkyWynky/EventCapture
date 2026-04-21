@@ -17,12 +17,14 @@ class DetectionResponse(BaseModel):
     confidence: float
     bbox: list[int]
     is_drinking: bool
+    rotation_degrees: float | None = None
+    rotated_bbox: list[list[int]] = Field(default_factory=list)
 
 
 class DebugRegionsResponse(BaseModel):
     persons: list[list[int]] = Field(default_factory=list)
     faces: list[list[int]] = Field(default_factory=list)
-    mouth_zones: list[list[int]] = Field(default_factory=list)
+    head_zones: list[list[int]] = Field(default_factory=list)
 
 
 class AnalysisSummaryResponse(BaseModel):
@@ -58,7 +60,7 @@ class DebugSnapshotResponse(BaseModel):
     detection_count: int = 0
     person_count: int = 0
     face_count: int = 0
-    mouth_zone_count: int = 0
+    head_zone_count: int = 0
     saved_frame: str | None = None
     saved_annotated: str | None = None
     updated_at: float | None = None

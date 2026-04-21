@@ -7,6 +7,8 @@ export interface DrinkDetection {
   confidence: number;
   bbox: number[];
   is_drinking: boolean;
+  rotation_degrees?: number | null;
+  rotated_bbox?: number[][];
 }
 
 export interface DrinkAnalysisSummary {
@@ -26,7 +28,7 @@ export interface DrinkAnalysisSummary {
 export interface DrinkAnalysisDebug {
   persons: number[][];
   faces: number[][];
-  mouth_zones: number[][];
+  head_zones: number[][];
 }
 
 export interface StoredCaptureRecord {
