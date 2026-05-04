@@ -38,7 +38,7 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 
 ### Prerequisites
 
-- Node.js with npm available on Windows
+- Node.js with npm available on your machine
 - Python 3.10+ for the backend
 - A working backend virtual environment at `backend/.venv`
 
@@ -52,9 +52,20 @@ npm install
 
 If `backend/.venv` does not exist yet:
 
-```powershell
+```bash
 cd backend
 python -m venv .venv
+```
+
+On macOS or Linux:
+
+```bash
+./.venv/bin/pip install -r requirements.txt
+```
+
+On Windows PowerShell:
+
+```powershell
 .\.venv\Scripts\pip install -r requirements.txt
 ```
 
@@ -73,7 +84,7 @@ npm run check
 This validates:
 
 - Node.js and npm availability
-- `backend/.venv/Scripts/python.exe`
+- the backend virtualenv Python executable for your current platform
 - `backend/yolov8n.pt`
 - frontend `node_modules`
 - backend imports
@@ -86,7 +97,7 @@ npm run check
 npm run start:services
 ```
 
-`npm run start:services` skips the checks and opens the backend and Expo in separate PowerShell windows.
+`npm run start:services` skips the checks and starts the backend plus Expo using your current shell on macOS/Linux, or separate PowerShell windows on Windows.
 
 ### Run checks and start everything in one command
 
@@ -97,6 +108,13 @@ npm run start:all
 ## Manual backend start
 
 If you want to run the detector without the helper script:
+
+```bash
+cd backend
+./.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+On Windows PowerShell:
 
 ```powershell
 cd backend
@@ -142,6 +160,13 @@ Use this flow if you want an installable Android APK instead of running the app 
 ### 1. Start the local detector backend
 
 From the project root:
+
+```bash
+cd backend
+./.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+On Windows PowerShell:
 
 ```powershell
 cd backend

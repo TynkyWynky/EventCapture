@@ -73,6 +73,8 @@ export default function RootLayout() {
                         <Stack.Screen name="contact" />
                         <Stack.Screen name="faq" />
                         <Stack.Screen name="settings" />
+                        <Stack.Screen name="admin/index" />
+                        <Stack.Screen name="admin/event-edit" />
                         <Stack.Screen name="event/create" />
                         <Stack.Screen name="event/detail" />
                         <Stack.Screen name="event/my" />

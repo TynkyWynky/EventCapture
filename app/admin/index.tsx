@@ -273,7 +273,7 @@ export default function AdminScreen() {
                 <AppButton
                   label={t('adminBtnEdit')}
                   variant="secondary"
-                  onPress={() => router.push({ pathname: '/admin/event-edit', params: { eventId: event.id } })}
+                  onPress={() => router.push({ pathname: './event-edit', params: { eventId: event.id } })}
                   style={styles.editEventButton}
                   textStyle={styles.editEventButtonText}
                 />

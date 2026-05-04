@@ -4,16 +4,18 @@ import { AppButton } from '@/components/ui/app-button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { Href, useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
 
-const getMenuItems = (t: any) => [
+const getMenuItems = (
+  t: ReturnType<typeof useLanguage>['t']
+): { label: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap; route: Href }[] => [
   {
     label: t('menuMyNightLabel'),
     subtitle: t('menuMyNightHint'),
@@ -110,7 +112,7 @@ export default function MenuScreen() {
               <TouchableOpacity
                 style={styles.menuItem}
                 activeOpacity={0.9}
-                onPress={() => router.push('/admin' as any)}>
+                onPress={() => router.push('/admin')}>
                 <View style={[styles.menuIconWrap, { backgroundColor: '#fcd34d' }]}>
                   <Ionicons name="shield-checkmark-outline" size={20} color="#78350f" />
                 </View>
@@ -129,9 +131,9 @@ export default function MenuScreen() {
                 key={item.label}
                 style={styles.menuItem}
                 activeOpacity={0.9}
-                onPress={() => router.push(item.route as any)}>
+                onPress={() => router.push(item.route)}>
                 <View style={styles.menuIconWrap}>
-                  <Ionicons name={item.icon as any} size={20} color="#1f1a17" />
+                  <Ionicons name={item.icon} size={20} color="#1f1a17" />
                 </View>
 
                 <View style={styles.menuTextWrap}>
