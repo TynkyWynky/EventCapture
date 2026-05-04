@@ -69,6 +69,7 @@ class DrinkDetector:
         self._person_head_zones: list[tuple] = []
         self._face_bboxes: list[tuple] = []
         self._active_head_bbox: tuple | None = None
+        self._smoothed_head_bbox: tuple | None = None
 
     def detect(self, frame: np.ndarray, conf_threshold: float = 0.35) -> list[Detection]:
         detections: list[Detection] = []
@@ -147,8 +148,8 @@ class DrinkDetector:
 
         # Detect drinking action
         self._person_bboxes = persons
-        self._person_head_zones = [self._get_best_head_bbox(person_bbox) for person_bbox in persons]
-        self._active_head_bbox = self._get_best_head_bbox(persons[0]) if persons else None
+        self._person_head_zones = self._get_stabilized_head_zones(persons)
+        self._active_head_bbox = self._person_head_zones[0] if self._person_head_zones else None
         self._detect_drinking_action(detections, persons)
         self.drink_history = detections
         return detections
@@ -475,6 +476,56 @@ class DrinkDetector:
             return best_face
 
         return self._get_head_bbox(person_bbox)
+
+    def _get_stabilized_head_zones(self, persons: list[tuple]) -> list[tuple]:
+        if not persons:
+            self._smoothed_head_bbox = None
+            return []
+
+        raw_head_zones = [self._get_best_head_bbox(person_bbox) for person_bbox in persons]
+        stabilized_primary = self._smooth_bbox(self._smoothed_head_bbox, raw_head_zones[0])
+        self._smoothed_head_bbox = stabilized_primary
+        raw_head_zones[0] = stabilized_primary
+        return raw_head_zones
+
+    def _smooth_bbox(self, previous_bbox: tuple | None, current_bbox: tuple) -> tuple:
+        if previous_bbox is None:
+            return current_bbox
+
+        px1, py1, px2, py2 = previous_bbox
+        cx1, cy1, cx2, cy2 = current_bbox
+
+        prev_width = max(1.0, px2 - px1)
+        prev_height = max(1.0, py2 - py1)
+        curr_width = max(1.0, cx2 - cx1)
+        curr_height = max(1.0, cy2 - cy1)
+        scale = max(prev_width, prev_height, curr_width, curr_height)
+
+        prev_center = ((px1 + px2) / 2.0, (py1 + py2) / 2.0)
+        curr_center = ((cx1 + cx2) / 2.0, (cy1 + cy2) / 2.0)
+        center_shift = float(np.hypot(curr_center[0] - prev_center[0], curr_center[1] - prev_center[1]))
+        shift_ratio = center_shift / max(1.0, scale)
+        size_delta = max(
+            abs(curr_width - prev_width) / prev_width,
+            abs(curr_height - prev_height) / prev_height,
+        )
+
+        # Hold nearly identical detections steady so face-box noise does not show up as shake.
+        if shift_ratio < 0.045 and size_delta < 0.12:
+            return previous_bbox
+
+        # Follow real movement faster once the detector meaningfully relocates the head.
+        alpha = 0.22
+        if shift_ratio > 0.1 or size_delta > 0.18:
+            alpha = 0.38
+        if shift_ratio > 0.2:
+            alpha = 0.6
+
+        smoothed = tuple(
+            int(round(prev + (curr - prev) * alpha))
+            for prev, curr in zip(previous_bbox, current_bbox)
+        )
+        return smoothed
 
     def _expand_bbox(self, bbox: tuple, x_pad: float, y_pad: float) -> tuple:
         x1, y1, x2, y2 = bbox

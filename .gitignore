@@ -50,4 +50,4 @@ app-example
 /ios
 /android
 
-backend/debug
+backend/debug/
