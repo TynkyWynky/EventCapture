@@ -1,0 +1,69 @@
+import { usePosts } from '@/context/PostContext';
+import { useSocial } from '@/context/SocialContext';
+import { useToast } from '@/context/ToastContext';
+import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { CaptureReviewScreen } from '@/components/capture-review-screen';
+import { Colors } from '@/constants/theme';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React from 'react';
+
+export default function ReviewFailScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const photoUri = params.photoUri as string;
+  const storedImageUri = params.storedImageUri as string | undefined;
+  const captureId = params.captureId as string | undefined;
+  const analysisHeadline = params.analysisHeadline as string | undefined;
+  const analysisMessage = params.analysisMessage as string | undefined;
+  const detectedDrinks = typeof params.detectedDrinks === 'string' && params.detectedDrinks.length
+    ? params.detectedDrinks.split('|').filter(Boolean)
+    : [];
+  const topDrink = params.topDrink as string | undefined;
+  const { addPost } = usePosts();
+  const { addActivity } = useSocial();
+  const { showToast } = useToast();
+  const { user } = useUser();
+  const { t } = useLanguage();
+
+  const handlePost = (eventId: string, eventTitle: string) => {
+    if (photoUri) {
+      addPost({
+        user: {
+          id: user.username, // In a real app this would be a proper ID
+          username: user.username,
+          avatarUri: user.avatarUri,
+        },
+        imageUri: storedImageUri || photoUri,
+        isBeerFinished: false,
+        eventId,
+        eventTitle,
+        captureId: captureId || undefined,
+      });
+      addActivity({
+        user: user.username,
+        text: `${t('activitySharedCapture')} ${eventTitle}`,
+        icon: 'image-outline',
+        color: Colors.light.tint,
+      });
+      showToast({
+        tone: 'info',
+        title: t('toastSharedTitle'),
+        message: `${t('toastSharedMsg')} ${eventTitle} ${t('toastSharedMsgEnd')}`,
+      });
+      router.replace('/(tabs)');
+    }
+  };
+
+  return (
+    <CaptureReviewScreen
+      photoUri={photoUri}
+      isBeerFinished={false}
+      onPost={handlePost}
+      analysisHeadline={analysisHeadline}
+      analysisMessage={analysisMessage}
+      detectedDrinks={detectedDrinks}
+      topDrink={topDrink}
+    />
+  );
+}

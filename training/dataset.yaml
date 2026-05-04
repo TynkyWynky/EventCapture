@@ -1,0 +1,25 @@
+# Dataset configuration for custom drink detection training
+# Place your dataset in the structure below, then run train.py
+
+path: ../datasets/drinks  # dataset root dir
+train: images/train
+val: images/val
+test: images/test
+
+# Drink classes
+names:
+  0: water_bottle
+  1: coffee_cup
+  2: tea_cup
+  3: soda_can
+  4: soda_bottle
+  5: beer_bottle
+  6: beer_can
+  7: wine_glass
+  8: wine_bottle
+  9: juice_box
+  10: juice_bottle
+  11: energy_drink
+  12: cocktail
+  13: mug
+  14: tumbler

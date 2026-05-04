@@ -1,0 +1,368 @@
+:root {
+    --bg-primary: #0f0f1a;
+    --bg-secondary: #1a1a2e;
+    --bg-card: #16213e;
+    --accent: #00d4ff;
+    --accent-dim: #0a7c94;
+    --success: #00e676;
+    --warning: #ff9100;
+    --danger: #ff1744;
+    --text-primary: #e8eaf6;
+    --text-secondary: #9fa8da;
+    --border: #2a2a4a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+}
+
+.app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    font-size: 2.2rem;
+    background: linear-gradient(135deg, var(--accent), #7c4dff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    margin-top: 5px;
+}
+
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+}
+
+/* Video Section */
+.video-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.video-container {
+    position: relative;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 16/10;
+    border: 2px solid var(--border);
+}
+
+.video-container video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+    z-index: 1;
+}
+
+.video-container canvas#overlayCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.video-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+    z-index: 2;
+}
+
+.no-camera {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.no-camera p:first-child {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.controls {
+    display: flex;
+    gap: 12px;
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #33ddff;
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #ff4569;
+}
+
+.btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--bg-secondary);
+}
+
+.settings {
+    display: flex;
+    gap: 24px;
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: 8px;
+}
+
+.settings label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.settings input[type="range"] {
+    accent-color: var(--accent);
+}
+
+.settings select {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* Info Section */
+.info-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.status-card, .detections-card, .drinking-card, .history-card, .legend-card {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+}
+
+.status-card h3, .detections-card h3, .drinking-card h3, .history-card h3, .legend-card h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.status {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 10px;
+}
+
+.status.connected {
+    background: rgba(0, 230, 118, 0.15);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.status.disconnected {
+    background: rgba(255, 23, 68, 0.15);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.status.connecting {
+    background: rgba(255, 145, 0, 0.15);
+    color: var(--warning);
+    border: 1px solid var(--warning);
+}
+
+.stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+}
+
+.stat span:last-child {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* Detections */
+.detections-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.detection-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--accent);
+}
+
+.detection-item.drinking {
+    border-left-color: var(--warning);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.detection-item .drink-name {
+    font-weight: 600;
+}
+
+.detection-item .drink-conf {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.empty-state {
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Drinking Alert */
+.drinking-card {
+    background: linear-gradient(135deg, rgba(255, 145, 0, 0.2), rgba(255, 23, 68, 0.1));
+    border-color: var(--warning);
+    animation: pulse 2s infinite;
+}
+
+.drinking-card h3 {
+    color: var(--warning) !important;
+    font-size: 1.1rem !important;
+}
+
+/* Detection Log */
+.detection-log {
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+}
+
+.log-entry {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.log-entry .time {
+    color: var(--accent-dim);
+    margin-right: 8px;
+}
+
+/* Drink Grid */
+.drink-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.drink-tag {
+    padding: 6px 12px;
+    background: var(--bg-card);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}

@@ -1,0 +1,92 @@
+import { AppButton } from '@/components/ui/app-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { Colors, Layout, Typography } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { LayoutAnimation, ScrollView, StyleSheet, Text, TouchableOpacity, UIManager, View, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const getFaqs = (t: any) => [
+  { q: t('faqQ1'), a: t('faqA1') },
+  { q: t('faqQ2'), a: t('faqA2') },
+  { q: t('faqQ3'), a: t('faqA3') },
+  { q: t('faqQ4'), a: t('faqA4') },
+];
+
+export default function FAQScreen() {
+  const [open, setOpen] = useState(0);
+  const router = useRouter();
+  const { t } = useLanguage();
+  const faqs = getFaqs(t);
+
+  const handleToggle = (idx: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen(open === idx ? -1 : idx);
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        <ScreenHeader
+          eyebrow={t('faqEyebrow')}
+          title={t('faqTitle')}
+          subtitle={t('faqSubtitle')}
+          onBack={() => router.back()}
+          mode="compact"
+        />
+
+        <SurfaceCard style={styles.heroCard} variant="feature">
+          <Text style={styles.heroTitle}>{t('faqHeroTitle')}</Text>
+          <Text style={styles.heroText}>{t('faqHeroText')}</Text>
+        </SurfaceCard>
+
+        {faqs.map((item, idx) => {
+          const active = open === idx;
+          return (
+            <TouchableOpacity key={item.q} activeOpacity={0.92} onPress={() => handleToggle(idx)}>
+              <SurfaceCard style={[styles.faqRow, active && styles.faqRowActive]} variant={active ? 'feature' : 'default'}>
+                <View style={styles.faqTop}>
+                  <Text style={styles.faqQuestion}>{item.q}</Text>
+                  <Ionicons name={active ? 'remove' : 'add'} size={18} color="#6f655e" />
+                </View>
+                {active ? <Text style={styles.answer}>{item.a}</Text> : null}
+              </SurfaceCard>
+            </TouchableOpacity>
+          );
+        })}
+
+        <AppButton label={t('faqBtn')} onPress={() => router.push('/contact')} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.light.background },
+  container: { padding: Layout.screenPadding, gap: 12, paddingBottom: Layout.bottomPad },
+  heroCard: {},
+  heroTitle: { ...Typography.titleSm, color: Colors.light.title },
+  heroText: { ...Typography.bodySm, color: Colors.light.subtitle, marginTop: 8 },
+  faqRow: {
+    gap: 10,
+  },
+  faqRowActive: {
+    borderWidth: 1,
+    borderColor: '#f0caa9',
+  },
+  faqTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  faqQuestion: { flex: 1, color: '#1f1a17', fontWeight: '800', fontSize: 15 },
+  answer: { ...Typography.bodySm, color: '#6f655e' },
+});

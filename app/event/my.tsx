@@ -1,0 +1,287 @@
+import { AppButton } from '@/components/ui/app-button';
+import { AppImage } from '@/components/ui/app-image';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { StatChip } from '@/components/ui/stat-chip';
+import { SurfaceCard } from '@/components/ui/surface-card';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
+import { useEvents } from '@/context/EventContext';
+import { EventPlanStatus, useSocial } from '@/context/SocialContext';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { useLanguage } from '@/context/LanguageContext';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+const PLAN_OPTIONS: {
+  status: Exclude<EventPlanStatus, null>;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { status: 'going', label: 'Going', icon: 'checkmark-circle-outline' },
+  { status: 'maybe', label: 'Maybe', icon: 'time-outline' },
+  { status: 'skip', label: 'Skip', icon: 'close-circle-outline' },
+];
+
+function statusMeta(status: EventPlanStatus) {
+  if (status === 'going') {
+    return { label: 'Going', color: '#0f766e' };
+  }
+
+  if (status === 'maybe') {
+    return { label: 'Maybe', color: Colors.light.tint };
+  }
+
+  if (status === 'skip') {
+    return { label: 'Skip', color: '#857a72' };
+  }
+
+  return { label: 'Saved', color: '#8a7f77' };
+}
+
+export default function MyNightScreen() {
+  const router = useRouter();
+  const { events } = useEvents();
+  const { getEventSocial, getPlannedEvents, setEventPlanNote, setEventPlanStatus } = useSocial();
+  const { t } = useLanguage();
+  const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
+
+  const plannedEvents = getPlannedEvents()
+    .map((entry) => {
+      const event = events.find((item) => item.id === entry.eventId);
+
+      if (!event) {
+        return null;
+      }
+
+      return {
+        event,
+        saved: entry.saved,
+        planStatus: entry.planStatus,
+        planNote: entry.planNote,
+        social: getEventSocial(entry.eventId),
+      };
+    })
+    .filter(Boolean) as {
+    event: (typeof events)[number];
+    saved: boolean;
+    planStatus: EventPlanStatus;
+    planNote: string;
+    social: ReturnType<typeof getEventSocial>;
+  }[];
+
+  const goingEvents = plannedEvents.filter((entry) => entry.planStatus === 'going');
+  const maybeEvents = plannedEvents.filter((entry) => entry.planStatus === 'maybe');
+  const savedEvents = plannedEvents.filter((entry) => !entry.planStatus || entry.planStatus === 'skip');
+
+  const renderEventCard = (
+    item: {
+      event: (typeof events)[number];
+      saved: boolean;
+      planStatus: EventPlanStatus;
+      planNote: string;
+    },
+    compact = false
+  ) => {
+    const meta = statusMeta(item.planStatus);
+    const draftValue = draftNotes[item.event.id] ?? item.planNote;
+
+    return (
+      <SurfaceCard
+        key={item.event.id}
+        style={[styles.eventCard, compact && styles.eventCardCompact]}
+        variant={compact ? 'subtle' : 'default'}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() =>
+            router.push({
+              pathname: '/event/detail',
+              params: { eventId: item.event.id },
+            })
+          }>
+          <AppImage source={{ uri: item.event.heroImage }} style={styles.eventImage} contentFit="cover" />
+        </TouchableOpacity>
+
+        <View style={styles.eventBody}>
+          <View style={styles.eventTop}>
+            <View style={styles.eventCopy}>
+              <Text style={styles.eventTitle}>{item.event.title}</Text>
+              <Text style={styles.eventMeta}>
+                {item.event.fullDate} · {item.event.time}
+              </Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: `${meta.color}18` }]}>
+              <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardStats}>
+            <StatChip label={t('plannerCardPlace')} value={item.event.place} icon="pin-outline" />
+            <StatChip label={t('plannerCardPrice')} value={item.event.price} icon="pricetag-outline" />
+          </View>
+
+          <View style={styles.planRow}>
+            {PLAN_OPTIONS.map((option) => {
+              const active = item.planStatus === option.status;
+
+              return (
+                <TouchableOpacity
+                  key={option.status}
+                  style={[styles.planChip, active && styles.planChipActive]}
+                  onPress={() => setEventPlanStatus(item.event.id, item.event.title, active ? null : option.status)}>
+                  <Ionicons
+                    name={option.icon}
+                    size={14}
+                    color={active ? '#fff7ef' : Colors.light.tint}
+                  />
+                  <Text style={[styles.planChipText, active && styles.planChipTextActive]}>{option.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.noteCard}>
+            <View style={styles.noteHeader}>
+              <Text style={styles.noteLabel}>{t('plannerNoteLabel')}</Text>
+              <TouchableOpacity onPress={() => setEventPlanNote(item.event.id, draftValue)}>
+                <Text style={styles.noteAction}>{t('plannerNoteAction')}</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              value={draftValue}
+              onChangeText={(value) =>
+                setDraftNotes((prev) => ({
+                  ...prev,
+                  [item.event.id]: value,
+                }))
+              }
+              placeholder={t('plannerNotePlh')}
+              placeholderTextColor="#978a80"
+              style={styles.noteInput}
+              multiline
+            />
+          </View>
+        </View>
+      </SurfaceCard>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        <ScreenHeader
+          eyebrow={t('plannerEyebrow')}
+          title={t('plannerTitle')}
+          subtitle={t('plannerSubtitle')}
+          onBack={() => router.back()}
+          mode="compact"
+        />
+
+        <LinearGradient colors={['#231b17', '#3b261b', '#6b411f']} style={styles.heroCard}>
+          <Text style={styles.heroEyebrow}>{t('plannerHeroEyebrow')}</Text>
+          <Text style={styles.heroTitle}>{t('plannerHeroTitle')}</Text>
+          <Text style={styles.heroText}>
+            {t('plannerHeroText')}
+          </Text>
+
+          <View style={styles.heroStats}>
+            <StatChip label={t('plannerStatsGoing')} value={goingEvents.length.toString()} tone="dark" />
+            <StatChip label={t('plannerStatsMaybe')} value={maybeEvents.length.toString()} tone="dark" />
+            <StatChip label={t('plannerStatsSaved')} value={plannedEvents.length.toString()} tone="dark" />
+          </View>
+        </LinearGradient>
+
+        {goingEvents.length ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('plannerSectLockedIn')}</Text>
+              <Text style={styles.sectionMeta}>{t('plannerSectLockedInMeta')}</Text>
+            </View>
+            {goingEvents.map((item) => renderEventCard(item))}
+          </>
+        ) : null}
+
+        {maybeEvents.length ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('plannerSectMaybe')}</Text>
+              <Text style={styles.sectionMeta}>{t('plannerSectMaybeMeta')}</Text>
+            </View>
+            {maybeEvents.map((item) => renderEventCard(item, true))}
+          </>
+        ) : null}
+
+        {savedEvents.length ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('plannerSectSaved')}</Text>
+              <Text style={styles.sectionMeta}>{t('plannerSectSavedMeta')}</Text>
+            </View>
+            {savedEvents.map((item) => renderEventCard(item, true))}
+          </>
+        ) : null}
+
+        {!plannedEvents.length ? (
+          <EmptyState
+            icon="calendar-outline"
+            title={t('plannerEmptyTitle')}
+            message={t('plannerEmptyMsg')}
+          />
+        ) : null}
+
+        <AppButton label={t('plannerBtnBrowse')} onPress={() => router.push('/(tabs)/events')} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.light.background },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  heroCard: { borderRadius: 28, padding: 18, gap: 14 },
+  heroEyebrow: { color: '#f3caa5', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+  heroTitle: { color: '#fff7ef', fontSize: 26, fontWeight: '800', lineHeight: 31 },
+  heroText: { color: '#dccabd', lineHeight: 21 },
+  heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  sectionTitle: { ...Typography.sectionTitle, color: '#1f1a17' },
+  sectionMeta: { color: '#857a72', fontWeight: '700' },
+  eventCard: { padding: 14, gap: 14 },
+  eventCardCompact: { backgroundColor: '#fff8f2' },
+  eventImage: { width: '100%', height: 180, borderRadius: 18 },
+  eventBody: { gap: 12 },
+  eventTop: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  eventCopy: { flex: 1 },
+  eventTitle: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
+  eventMeta: { color: '#80756d', marginTop: 4, lineHeight: 19 },
+  statusBadge: { borderRadius: Radius.round, paddingHorizontal: 10, paddingVertical: 7 },
+  statusText: { fontWeight: '800', fontSize: 12 },
+  cardStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  planRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  planChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.round,
+    backgroundColor: '#fff1e0',
+  },
+  planChipActive: {
+    backgroundColor: '#231b17',
+  },
+  planChipText: { color: Colors.light.tint, fontWeight: '800', fontSize: 12.5 },
+  planChipTextActive: { color: '#fff7ef' },
+  noteCard: {
+    borderRadius: Radius.lg,
+    backgroundColor: '#f8efe6',
+    padding: 12,
+    gap: 8,
+  },
+  noteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  noteLabel: { color: '#6f655e', fontWeight: '800', fontSize: 12.5 },
+  noteAction: { color: Colors.light.tint, fontWeight: '800', fontSize: 12.5 },
+  noteInput: { minHeight: 58, color: '#1f1a17', textAlignVertical: 'top', lineHeight: 20 },
+});

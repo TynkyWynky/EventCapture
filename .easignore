@@ -1,0 +1,8 @@
+# Mobile builds do not need the local Python detector workspace.
+backend/
+training/
+frontend/
+.idea/
+.venv/
+*.pyc
+__pycache__/
