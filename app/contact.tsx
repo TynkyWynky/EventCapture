@@ -2,8 +2,9 @@ import { AppButton } from '@/components/ui/app-button';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput } from 'react-native';
@@ -15,6 +16,7 @@ export default function ContactScreen() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<'idle' | 'error' | 'success'>('idle');
+  const { t } = useLanguage();
 
   const handleSend = () => {
     if (!subject.trim() || !message.trim()) {
@@ -27,8 +29,8 @@ export default function ContactScreen() {
     setMessage('');
     showToast({
       tone: 'success',
-      title: 'Support note staged',
-      message: 'Your message was queued in this mock support flow.',
+      title: t('contactToastTitle'),
+      message: t('contactToastMsg'),
     });
   };
 
@@ -36,49 +38,50 @@ export default function ContactScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="SUPPORT"
-          title="Contact"
-          subtitle="Questions, bug reports, and product feedback all belong here."
+          eyebrow={t('contactEyebrow')}
+          title={t('contactTitle')}
+          subtitle={t('contactSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
 
-        <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>We would love to hear from you</Text>
+        <SurfaceCard style={styles.heroCard} variant="feature">
+          <Text style={styles.heroTitle}>{t('contactHeroTitle')}</Text>
           <Text style={styles.heroText}>
-            Tell us what broke, what felt great, or what would make the app more useful for your nights out.
+            {t('contactHeroText')}
           </Text>
         </SurfaceCard>
 
         {status === 'error' ? (
           <FeedbackBanner
             tone="error"
-            title="Add a subject and message"
-            message="A little more context helps support feel a lot more real."
+            title={t('contactErrTitle')}
+            message={t('contactErrMsg')}
           />
         ) : null}
 
         {status === 'success' ? (
           <FeedbackBanner
             tone="success"
-            title="Message queued"
-            message="This is a mock flow for now, but your note has been staged like a real support request."
+            title={t('contactSuccTitle')}
+            message={t('contactSuccMsg')}
           />
         ) : null}
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.label}>Subject</Text>
+          <Text style={styles.label}>{t('contactLblSubj')}</Text>
           <TextInput
             style={styles.singleInput}
-            placeholder="Bug report, feature idea, account issue..."
+            placeholder={t('contactPlhSubj')}
             placeholderTextColor="#91867f"
             value={subject}
             onChangeText={setSubject}
           />
 
-          <Text style={styles.label}>Your message</Text>
+          <Text style={styles.label}>{t('contactLblMsg')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Tell us what happened, what you need, or what we can improve."
+            placeholder={t('contactPlhMsg')}
             placeholderTextColor="#91867f"
             multiline
             textAlignVertical="top"
@@ -86,7 +89,7 @@ export default function ContactScreen() {
             onChangeText={setMessage}
           />
 
-          <AppButton label="Send message" onPress={handleSend} />
+          <AppButton label={t('contactBtn')} onPress={handleSend} />
         </SurfaceCard>
       </ScrollView>
     </SafeAreaView>
@@ -95,19 +98,16 @@ export default function ContactScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, gap: 16, paddingBottom: 152 },
-  heroCard: {
-    backgroundColor: '#231b17',
-  },
+  container: { padding: Layout.screenPadding, gap: Layout.sectionGap, paddingBottom: Layout.bottomPad },
+  heroCard: {},
   heroTitle: {
-    color: '#fff7ef',
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.titleSm,
+    color: Colors.light.title,
   },
   heroText: {
-    color: '#d7c7bb',
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
     marginTop: 8,
-    lineHeight: 21,
   },
   sectionCard: {
     gap: 12,
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   },
   singleInput: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     minHeight: 180,

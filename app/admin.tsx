@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUser } from '@/context/UserContext';
 import { usePosts } from '@/context/PostContext';
-import { Colors } from '@/constants/theme';
+import { useEvents } from '@/context/EventContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { Colors, Layout, Typography } from '@/constants/theme';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { AppButton } from '@/components/ui/app-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
 
 const USERS_LIST = [
   {
@@ -59,7 +62,11 @@ export default function AdminScreen() {
   const router = useRouter();
   const { user } = useUser();
   const { posts, deletePost } = usePosts();
-  const [activeTab, setActiveTab] = useState<'users' | 'posts'>('users');
+  const { events, deleteEvent } = useEvents();
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'events'>('events');
+  const [usersList, setUsersList] = useState(USERS_LIST);
+  const [selectedUser, setSelectedUser] = useState<typeof USERS_LIST[0] | null>(null);
 
   useEffect(() => {
     // If not admin, redirect back to home
@@ -73,75 +80,214 @@ export default function AdminScreen() {
   }
 
   const handleDeletePost = (postId: string) => {
-    Alert.alert('Delete Post', 'Are you sure you want to completely remove this post?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('adminConfirmDelPostTitle'), t('adminConfirmDelPostMsg'), [
+      { text: t('adminBtnCancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('adminBtnDelete'),
         style: 'destructive',
         onPress: () => deletePost(postId),
       },
     ]);
   };
 
+  const handleDeleteEvent = (eventId: string) => {
+    Alert.alert(t('adminConfirmDelEventTitle'), t('adminConfirmDelEventMsg'), [
+      { text: t('adminBtnCancel'), style: 'cancel' },
+      {
+        text: t('adminBtnDelete'),
+        style: 'destructive',
+        onPress: () => deleteEvent(eventId),
+      },
+    ]);
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    if (userId === 'u_admin') {
+      Alert.alert(t('adminCannotDelAdminTitle'), t('adminCannotDelAdminMsg'));
+      return;
+    }
+    Alert.alert(t('adminConfirmBanUserTitle'), t('adminConfirmBanUserMsg'), [
+      { text: t('adminBtnCancel'), style: 'cancel' },
+      {
+        text: t('adminBtnBan'),
+        style: 'destructive',
+        onPress: () => setUsersList((prev) => prev.filter(u => u.id !== userId)),
+      },
+    ]);
+  };
+
+  const renderStatsOverview = () => (
+    <View style={styles.statsContainer}>
+      <SurfaceCard style={styles.statCard} variant="subtle">
+        <Ionicons name="calendar" size={24} color="#857a72" />
+        <Text style={styles.statValue}>{events.length}</Text>
+        <Text style={styles.statLabel}>{t('adminStatEvents')}</Text>
+      </SurfaceCard>
+      <SurfaceCard style={styles.statCard} variant="subtle">
+        <Ionicons name="images" size={24} color="#857a72" />
+        <Text style={styles.statValue}>{posts.length}</Text>
+        <Text style={styles.statLabel}>{t('adminStatPosts')}</Text>
+      </SurfaceCard>
+      <SurfaceCard style={styles.statCard} variant="subtle">
+        <Ionicons name="people" size={24} color="#857a72" />
+        <Text style={styles.statValue}>{usersList.length}</Text>
+        <Text style={styles.statLabel}>{t('adminStatUsers')}</Text>
+      </SurfaceCard>
+    </View>
+  );
+
+  const renderUserModal = () => {
+    if (!selectedUser) return null;
+    return (
+      <Modal visible={true} animationType="fade" transparent onRequestClose={() => setSelectedUser(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setSelectedUser(null)}>
+              <Ionicons name="close" size={24} color="#1f1a17" />
+            </TouchableOpacity>
+            
+            <Image source={{ uri: selectedUser.avatar }} style={styles.modalAvatar} />
+            <Text style={styles.modalName}>{selectedUser.username}</Text>
+            <Text style={styles.modalEmail}>{selectedUser.email}</Text>
+            
+            <View style={styles.modalRoleWrap}>
+              <View style={[styles.roleBadge, selectedUser.role === 'Admin' && styles.roleBadgeAdmin]}>
+                <Text style={[styles.roleText, selectedUser.role === 'Admin' && styles.roleTextAdmin]}>
+                  {selectedUser.role}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.modalActions}>
+              {selectedUser.role !== 'Admin' && (
+                <AppButton 
+                  label={t('adminBtnBan')} 
+                  variant="secondary" 
+                  style={styles.deleteButton} 
+                  textStyle={styles.deleteButtonText}
+                  onPress={() => {
+                    handleDeleteUser(selectedUser.id);
+                    setSelectedUser(null);
+                  }}
+                />
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const renderUsersTab = () => (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionHeader}>Platform Users</Text>
-      {USERS_LIST.map((u) => (
-        <SurfaceCard key={u.id} style={styles.userCard}>
-          <Image source={{ uri: u.avatar }} style={styles.userAvatar} />
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{u.username}</Text>
-            <Text style={styles.userEmail}>{u.email}</Text>
-          </View>
-          <View style={[styles.roleBadge, u.role === 'Admin' && styles.roleBadgeAdmin]}>
-            <Text style={[styles.roleText, u.role === 'Admin' && styles.roleTextAdmin]}>
-              {u.role}
-            </Text>
-          </View>
-        </SurfaceCard>
+      <Text style={styles.sectionHeader}>{t('adminSectUsers')}</Text>
+      {usersList.map((u) => (
+        <TouchableOpacity key={u.id} activeOpacity={0.8} onPress={() => setSelectedUser(u)}>
+          <SurfaceCard style={styles.userCard}>
+            <Image source={{ uri: u.avatar }} style={styles.userAvatar} />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{u.username}</Text>
+              <Text style={styles.userEmail}>{u.email}</Text>
+            </View>
+            <View style={[styles.roleBadge, u.role === 'Admin' && styles.roleBadgeAdmin]}>
+              <Text style={[styles.roleText, u.role === 'Admin' && styles.roleTextAdmin]}>
+                {u.role}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#857a72" />
+          </SurfaceCard>
+        </TouchableOpacity>
       ))}
     </View>
   );
 
   const renderPostsTab = () => (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionHeader}>All Reported & Live Posts</Text>
+      <Text style={styles.sectionHeader}>{t('adminSectPosts')}</Text>
       {posts.length === 0 ? (
-        <Text style={styles.emptyText}>No posts available.</Text>
+        <Text style={styles.emptyText}>{t('adminNoPosts')}</Text>
       ) : null}
       
       {posts.map((post) => (
-        <SurfaceCard key={post.id} style={styles.postCard}>
-          <View style={styles.postHeader}>
-            <Image source={{ uri: post.user.avatarUri }} style={styles.postAvatar} />
-            <View style={styles.postHeaderText}>
-              <Text style={styles.postUserName}>{post.user.username}</Text>
-              <Text style={styles.postDate}>{post.date} • {post.eventTitle || 'No Event'}</Text>
+        <TouchableOpacity key={post.id} activeOpacity={0.9} onPress={() => router.push({ pathname: '/post-comments', params: { postId: post.id } })}>
+          <SurfaceCard style={styles.postCard}>
+            <View style={styles.postHeader}>
+              <Image source={{ uri: post.user.avatarUri }} style={styles.postAvatar} />
+              <View style={styles.postHeaderText}>
+                <Text style={styles.postUserName}>{post.user.username}</Text>
+                <Text style={styles.postDate}>{post.date} • {post.eventTitle || 'No Event'}</Text>
+              </View>
             </View>
-          </View>
 
-          <Image source={{ uri: post.imageUri }} style={styles.postImage} />
-          
-          <View style={styles.postFooter}>
-            <View style={styles.postMeta}>
-              <View style={styles.metaBadge}>
-                <Ionicons name="heart" size={14} color="#e45b5b" />
-                <Text style={styles.metaCount}>{post.likes.length}</Text>
+            <Image source={{ uri: post.imageUri }} style={styles.postImage} />
+            
+            <View style={styles.postFooter}>
+              <View style={styles.postMeta}>
+                <View style={styles.metaBadge}>
+                  <Ionicons name="heart" size={14} color="#e45b5b" />
+                  <Text style={styles.metaCount}>{post.likes.length}</Text>
+                </View>
+                <View style={styles.metaBadge}>
+                  <Ionicons name="chatbubble" size={14} color="#857a72" />
+                  <Text style={styles.metaCount}>{post.comments.length}</Text>
+                </View>
               </View>
-              <View style={styles.metaBadge}>
-                <Ionicons name="chatbubble" size={14} color="#857a72" />
-                <Text style={styles.metaCount}>{post.comments.length}</Text>
+              <AppButton
+                label={t('adminBtnRemovePost')}
+                variant="secondary"
+                onPress={() => handleDeletePost(post.id)}
+                style={styles.deleteButton}
+                textStyle={styles.deleteButtonText}
+              />
+            </View>
+          </SurfaceCard>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  const renderEventsTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeader}>{t('adminSectEvents')}</Text>
+        <TouchableOpacity style={styles.addEventButton} onPress={() => router.push('/event/create')}>
+          <Ionicons name="add" size={16} color="#fff" />
+          <Text style={styles.addEventText}>{t('adminBtnNewEvent')}</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {events.length === 0 ? (
+        <Text style={styles.emptyText}>{t('adminNoEvents')}</Text>
+      ) : null}
+      
+      {events.map((event) => (
+        <TouchableOpacity key={event.id} activeOpacity={0.9} onPress={() => router.push({ pathname: '/event/detail', params: { eventId: event.id } })}>
+          <SurfaceCard style={styles.eventCard} variant="subtle">
+            <Image source={{ uri: event.heroImage || 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1400&q=80' }} style={styles.eventImage} />
+            <View style={styles.eventInfo}>
+              <Text style={styles.eventTitle}>{event.title}</Text>
+              <Text style={styles.eventDate}>{event.fullDate}</Text>
+              <Text style={styles.eventPlace}>{event.place}</Text>
+              
+              <View style={styles.eventActions}>
+                <AppButton
+                  label={t('adminBtnEdit')}
+                  variant="secondary"
+                  onPress={() => router.push({ pathname: '/admin/event-edit', params: { eventId: event.id } })}
+                  style={styles.editEventButton}
+                  textStyle={styles.editEventButtonText}
+                />
+                <AppButton
+                  label={t('adminBtnDelete')}
+                  variant="secondary"
+                  onPress={() => handleDeleteEvent(event.id)}
+                  style={styles.deleteButton}
+                  textStyle={styles.deleteButtonText}
+                />
               </View>
             </View>
-            <AppButton
-              label="Remove Post"
-              variant="secondary"
-              onPress={() => handleDeletePost(post.id)}
-              style={styles.deleteButton}
-              textStyle={styles.deleteButtonText}
-            />
-          </View>
-        </SurfaceCard>
+          </SurfaceCard>
+        </TouchableOpacity>
       ))}
     </View>
   );
@@ -151,28 +297,27 @@ export default function AdminScreen() {
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(250, 245, 240, 0.98)' }]} />
 
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1f1a17" />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.title}>Admin Panel</Text>
-            <Text style={styles.subtitle}>Manage platform content</Text>
-          </View>
+        <View style={styles.headerWrap}>
+          <ScreenHeader
+            eyebrow="ADMIN"
+            title={t('adminTitle')}
+            subtitle={t('adminSubtitle')}
+            onBack={() => router.back()}
+            mode="compact"
+          />
         </View>
 
         {/* Tab Selector */}
         <View style={styles.tabSelector}>
           <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'users' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('users')}>
+            style={[styles.tabButton, activeTab === 'events' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('events')}>
             <Ionicons
-              name={activeTab === 'users' ? 'people' : 'people-outline'}
+              name={activeTab === 'events' ? 'calendar' : 'calendar-outline'}
               size={20}
-              color={activeTab === 'users' ? '#fff' : '#857a72'}
+              color={activeTab === 'events' ? '#fff' : '#857a72'}
             />
-            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>Users</Text>
+            <Text style={[styles.tabText, activeTab === 'events' && styles.tabTextActive]}>{t('adminTabEvents')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -183,16 +328,30 @@ export default function AdminScreen() {
               size={20}
               color={activeTab === 'posts' ? '#fff' : '#857a72'}
             />
-            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>Posts</Text>
+            <Text style={[styles.tabText, activeTab === 'posts' && styles.tabTextActive]}>{t('adminTabPosts')}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'users' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('users')}>
+            <Ionicons
+              name={activeTab === 'users' ? 'people' : 'people-outline'}
+              size={20}
+              color={activeTab === 'users' ? '#fff' : '#857a72'}
+            />
+            <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>{t('adminTabUsers')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Content */}
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {activeTab === 'users' ? renderUsersTab() : renderPostsTab()}
+          {renderStatsOverview()}
+          {activeTab === 'users' ? renderUsersTab() : activeTab === 'posts' ? renderPostsTab() : renderEventsTab()}
           <View style={styles.bottomPadding} />
         </ScrollView>
       </SafeAreaView>
+      
+      {renderUserModal()}
     </View>
   );
 }
@@ -205,42 +364,14 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
+  headerWrap: {
+    paddingHorizontal: Layout.screenPadding,
     paddingTop: 10,
     paddingBottom: 20,
-    gap: 16,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e8e0d5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#1f1a17',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#857a72',
-    marginTop: 2,
   },
   tabSelector: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
     marginBottom: 16,
     gap: 12,
   },
@@ -269,19 +400,21 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
   },
   tabContent: {
     gap: 12,
   },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: '#857a72',
-    textTransform: 'uppercase',
-    marginBottom: 8,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 8,
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    ...Typography.eyebrow,
+    color: Colors.light.subtitle,
   },
   userCard: {
     flexDirection: 'row',
@@ -398,6 +531,140 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 13,
     color: '#b91c1c',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1f1a17',
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#857a72',
+    textTransform: 'uppercase',
+  },
+  addEventButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1f1a17',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    gap: 4,
+  },
+  addEventText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  eventCard: {
+    padding: 0,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  eventImage: {
+    width: '100%',
+    height: 140,
+  },
+  eventInfo: {
+    padding: 16,
+    gap: 6,
+  },
+  eventTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1f1a17',
+  },
+  eventDate: {
+    fontSize: 14,
+    color: '#857a72',
+    fontWeight: '500',
+  },
+  eventPlace: {
+    fontSize: 14,
+    color: '#857a72',
+    marginBottom: 8,
+  },
+  eventActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  editEventButton: {
+    flex: 1,
+    height: 36,
+    backgroundColor: '#f3e7da',
+    borderWidth: 0,
+  },
+  editEventButtonText: {
+    fontSize: 13,
+    color: '#1f1a17',
+  },
+  iconButton: {
+    padding: 8,
+    marginLeft: 'auto',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(31, 26, 23, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  modalClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+  },
+  modalAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f3e7da',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  modalName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1f1a17',
+    marginBottom: 4,
+  },
+  modalEmail: {
+    fontSize: 15,
+    color: '#857a72',
+    marginBottom: 16,
+  },
+  modalRoleWrap: {
+    marginBottom: 24,
+  },
+  modalActions: {
+    width: '100%',
+    gap: 12,
   },
   bottomPadding: {
     height: 80,

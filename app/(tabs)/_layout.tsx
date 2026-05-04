@@ -3,12 +3,12 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Shadows, Spacing, TabRouteName, TabThemes, Typography } from '@/constants/theme';
 import { useSocial } from '@/context/SocialContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useLanguage } from '@/context/LanguageContext';
 
 function TabButton({
   children,
@@ -17,7 +17,7 @@ function TabButton({
 }: {
   children: React.ReactNode;
   onPress: () => void;
-  style?: object;
+  style?: StyleProp<ViewStyle>;
 }) {
   const scale = React.useRef(new Animated.Value(1)).current;
 
@@ -48,8 +48,6 @@ function TabButton({
 }
 
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const colorScheme = useColorScheme();
-  const palette = Colors[colorScheme ?? 'light'];
   const insets = useSafeAreaInsets();
   const focusedRoute = state.routes[state.index];
   const { unreadCount } = useSocial();
@@ -58,81 +56,73 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     return null;
   }
 
-  const leftRoutes = state.routes.slice(0, 2);
-  const centerRoutes = state.routes.slice(2, 4);
-  const rightRoutes = state.routes.slice(4, 6);
-
-  const renderNormalButton = (route: any, index: number) => {
+  const renderButton = (route: (typeof state.routes)[number], index: number) => {
     const { options } = descriptors[route.key];
     const isFocused = state.index === index;
+    const routeName = route.name as TabRouteName;
+    const routeTheme = TabThemes[routeName] ?? TabThemes.index;
+    const label = typeof options.title === 'string' ? options.title : route.name;
+    const isCameraButton = routeName === 'camera';
     const onPress = () => {
       const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
       if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
     };
 
     return (
-      <TabButton key={route.key} onPress={onPress} style={[styles.item, isFocused && styles.itemFocused]}>
-        <View style={[styles.inner, isFocused && styles.innerFocused]}>
-          {options.tabBarIcon?.({ focused: isFocused, color: isFocused ? '#1f1a17' : palette.muted, size: 22 })}
-          {route.name === 'profile' && unreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+      <TabButton key={route.key} onPress={onPress} style={styles.item}>
+        <View style={styles.itemContent}>
+          <View
+            style={[
+              styles.activeMarker,
+              isFocused && !isCameraButton
+                ? { backgroundColor: routeTheme.accent, opacity: 1 }
+                : styles.activeMarkerHidden,
+            ]}
+          />
+
+          {isCameraButton ? (
+            <LinearGradient
+              colors={[routeTheme.accent, routeTheme.accentDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.cameraWrap, isFocused && styles.cameraWrapFocused]}>
+              {options.tabBarIcon?.({ focused: isFocused, color: '#fff7ef', size: 24 })}
+            </LinearGradient>
+          ) : (
+            <View style={styles.iconWrap}>
+              {options.tabBarIcon?.({
+                focused: isFocused,
+                color: isFocused ? routeTheme.accent : '#b8ada4',
+                size: 22,
+              })}
+              {routeName === 'profile' && unreadCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
+          )}
+
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={[
+              styles.label,
+              isFocused ? { color: routeTheme.accent } : isCameraButton ? styles.cameraLabel : styles.labelMuted,
+            ]}>
+            {label}
+          </Text>
         </View>
       </TabButton>
     );
   };
 
-  const renderCenterButton = (route: any, index: number, isFirst: boolean) => {
-    const { options } = descriptors[route.key];
-    const isFocused = state.index === index;
-    const onPress = () => {
-      const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-      if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name, route.params);
-    };
-
-    return (
-      <View key={route.key} style={{ flexDirection: 'row', alignItems: 'center' }}>
-        {/* Divider if it's the second center button */}
-        {!isFirst && <View style={styles.centerDivider} />}
-        <TabButton onPress={onPress}>
-          <View style={[styles.centerItemInner, isFocused && styles.centerItemFocused]}>
-            {options.tabBarIcon?.({ 
-              focused: isFocused, 
-              color: isFocused ? '#ffffff' : 'rgba(255,255,255,0.5)', 
-              size: route.name === 'camera' ? 24 : 22 
-            })}
-          </View>
-        </TabButton>
-      </View>
-    );
-  };
-
   return (
-    <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, 14) }]}>
-      <View style={[styles.bar, { borderColor: palette.border, backgroundColor: palette.card }]}>
-        <View style={styles.barGlow} />
-
-        <View style={styles.sideGroup}>
-          {leftRoutes.map((route) => {
-            const index = state.routes.indexOf(route);
-            return renderNormalButton(route, index);
-          })}
-        </View>
-
-        <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.centerGroup}>
-          {centerRoutes.map((route, i) => {
-            const index = state.routes.indexOf(route);
-            return renderCenterButton(route, index, i === 0);
-          })}
-        </LinearGradient>
-
-        <View style={styles.sideGroup}>
-          {rightRoutes.map((route) => {
-            const index = state.routes.indexOf(route);
-            return renderNormalButton(route, index);
-          })}
+    <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, Layout.tabBarInset) }]}>
+      <View style={styles.bar}>
+        <View style={styles.row}>
+          {state.routes.map((route, index) => renderButton(route, index))}
         </View>
       </View>
     </View>
@@ -140,20 +130,23 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const palette = Colors[colorScheme ?? 'light'];
+  const { t } = useLanguage();
 
   return (
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{
-        sceneStyle: { backgroundColor: palette.background },
-        headerShown: false,
+      screenOptions={({ route }) => {
+        const routeTheme = TabThemes[(route.name as TabRouteName) ?? 'index'] ?? TabThemes.index;
+
+        return {
+          sceneStyle: { backgroundColor: routeTheme.background },
+          headerShown: false,
+        };
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Feed',
+          title: t('feedTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
           ),
@@ -162,7 +155,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="events"
         options={{
-          title: 'Explore',
+          title: t('exploreTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'globe' : 'globe-outline'} size={22} color={color} />
           ),
@@ -171,7 +164,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="camera"
         options={{
-          title: 'Capture',
+          title: t('captureTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'camera' : 'camera-outline'} size={24} color={color} />
           ),
@@ -180,7 +173,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="socialfeed"
         options={{
-          title: 'Social',
+          title: t('socialTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'logo-instagram' : 'logo-instagram'} size={24} color={color} />
           ),
@@ -189,7 +182,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="achievements"
         options={{
-          title: 'Rewards',
+          title: t('rewardsTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'medal' : 'medal-outline'} size={22} color={color} />
           ),
@@ -198,7 +191,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('profileTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={24} color={color} />
           ),
@@ -217,100 +210,93 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: '92%',
-    minHeight: 82,
-    borderRadius: 36,
+    minHeight: 84,
+    borderRadius: Radius.xxl,
     borderWidth: 1,
-    backgroundColor: '#ffffff',
+    borderColor: Colors.light.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    ...Shadows.floating,
+    overflow: 'hidden',
+  },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-    overflow: 'hidden',
-  },
-  barGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 24,
-    right: 24,
-    height: 14,
-    borderBottomLeftRadius: 999,
-    borderBottomRightRadius: 999,
-    backgroundColor: '#fff7ef',
-  },
-  sideGroup: {
-    flexDirection: 'row',
-    flex: 1,
-    justifyContent: 'space-around',
   },
   item: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 6,
+    paddingHorizontal: 2,
   },
-  itemFocused: {
+  itemContent: {
+    alignItems: 'center',
+    gap: 4,
+    width: '100%',
   },
-  inner: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  activeMarker: {
+    width: 18,
+    height: 3,
+    borderRadius: Radius.round,
+  },
+  activeMarkerHidden: {
+    opacity: 0,
+  },
+  iconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  innerFocused: {
-    backgroundColor: '#f7f1ea',
+    backgroundColor: 'transparent',
   },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: -2,
+    right: -2,
     minWidth: 18,
     height: 18,
-    borderRadius: 9,
-    backgroundColor: '#e45b5b',
+    borderRadius: Radius.round,
+    backgroundColor: Colors.light.danger,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: Colors.light.card,
   },
   badgeText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: '800',
   },
-  centerGroup: {
-    flexDirection: 'row',
+  cameraWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.round,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 30,
-    padding: 6,
-    marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    ...Shadows.card,
+    marginTop: -10,
   },
-  centerDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginHorizontal: 2,
+  cameraWrapFocused: {
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
   },
-  centerItemInner: {
-    minWidth: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
+  label: {
+    ...Typography.caption,
+    color: Colors.light.title,
+    textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 1,
   },
-  centerItemFocused: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  labelMuted: {
+    color: Colors.light.subtitle,
+  },
+  cameraLabel: {
+    color: Colors.light.subtitle,
   },
 });

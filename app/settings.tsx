@@ -1,5 +1,7 @@
 import { useUser } from '@/context/UserContext';
 import { useToast } from '@/context/ToastContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { Language } from '@/constants/translations';
 import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
@@ -9,31 +11,32 @@ import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useUser();
   const { showToast } = useToast();
+  const { language, setLanguage, t } = useLanguage();
   const [push, setPush] = useState(true);
   const [reminder, setReminder] = useState(true);
   const [likes, setLikes] = useState(true);
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Delete account',
-      'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      t('deleteAccAlertTitle'),
+      t('deleteAccAlertMsg'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancelBtn'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('deleteBtn'),
           style: 'destructive',
           onPress: () => {
             signOut();
             showToast({
               tone: 'info',
-              title: 'Account deleted',
-              message: 'Your account has been removed. This is a demo action.',
+              title: t('accDeletedTitle'),
+              message: t('accDeletedMsg'),
             });
             router.replace('/auth/login');
           },
@@ -70,48 +73,52 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <ScreenHeader eyebrow="PREFERENCES" title="Settings" onBack={() => router.back()} />
+        <ScreenHeader eyebrow={t('settingsEyebrow')} title={t('settingsTitle')} onBack={() => router.back()} mode="compact" />
 
-        <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Make the app feel like yours</Text>
-          <Text style={styles.heroText}>Control notifications, account options and support settings from one clean place.</Text>
+        <SurfaceCard style={styles.heroCard} variant="feature">
+          <Text style={styles.heroTitle}>{t('settingsHeroTitle')}</Text>
+          <Text style={styles.heroText}>{t('settingsHeroText')}</Text>
         </SurfaceCard>
 
-        <SurfaceCard>
-          <Text style={styles.sectionTitle}>Language</Text>
+        <SurfaceCard variant="subtle">
+          <Text style={styles.sectionTitle}>{t('langSection')}</Text>
           <View style={styles.langRow}>
-            {['EN', 'NL', 'FR'].map((code) => (
-              <View key={code} style={[styles.lang, code === 'NL' && styles.langActive]}>
-                <Text style={[styles.langText, code === 'NL' && styles.langTextActive]}>{code}</Text>
-              </View>
+            {(['EN', 'NL', 'FR'] as Language[]).map((code) => (
+              <TouchableOpacity 
+                key={code} 
+                activeOpacity={0.8}
+                onPress={() => setLanguage(code)}
+                style={[styles.lang, language === code && styles.langActive]}>
+                <Text style={[styles.langText, language === code && styles.langTextActive]}>{code}</Text>
+              </TouchableOpacity>
             ))}
           </View>
         </SurfaceCard>
 
         <SurfaceCard>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          {settingRow('Push notifications', 'Receive general updates and activity alerts', push, setPush)}
-          {settingRow('Event reminders', 'Get reminded before saved events start', reminder, setReminder)}
-          {settingRow('Likes & comments', 'Stay informed when people interact with your posts', likes, setLikes)}
+          <Text style={styles.sectionTitle}>{t('notifSection')}</Text>
+          {settingRow(t('pushLabel'), t('pushHint'), push, setPush)}
+          {settingRow(t('reminderLabel'), t('reminderHint'), reminder, setReminder)}
+          {settingRow(t('likesLabel'), t('likesHint'), likes, setLikes)}
         </SurfaceCard>
 
-        <SurfaceCard>
-          <Text style={styles.sectionTitle}>Account & support</Text>
-          {linkRow('Change password', 'Update your sign-in credentials', '/auth/change-password')}
-          {linkRow('Help & FAQ', 'Find answers to common questions', '/faq')}
-          {linkRow('Contact us', 'Reach out for support or feedback', '/contact')}
+        <SurfaceCard variant="subtle">
+          <Text style={styles.sectionTitle}>{t('accountSection')}</Text>
+          {linkRow(t('changePassLabel'), t('changePassHint'), '/auth/change-password')}
+          {linkRow(t('faqLabel'), t('faqHint'), '/faq')}
+          {linkRow(t('contactLabel'), t('contactHint'), '/contact')}
         </SurfaceCard>
 
         <View style={styles.actionBlock}>
           <AppButton
-            label="Sign out"
+            label={t('settingsSignOutBtn')}
             variant="secondary"
             onPress={() => {
               signOut();
               router.replace('/auth/login');
             }}
           />
-          <AppButton label="Delete account" variant="danger" onPress={handleDeleteAccount} />
+          <AppButton label={t('deleteAccBtn')} variant="danger" onPress={handleDeleteAccount} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -120,24 +127,20 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
-  heroCard: {
-    backgroundColor: '#231b17',
-  },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  heroCard: { gap: 8 },
   heroTitle: {
-    color: '#fff7ef',
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.titleSm,
+    color: Colors.light.title,
   },
   heroText: {
-    color: '#d7c7bb',
-    lineHeight: 21,
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
     marginTop: 8,
   },
   sectionTitle: {
-    color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 20,
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
     marginBottom: 12,
   },
   langRow: {
@@ -147,11 +150,11 @@ const styles = StyleSheet.create({
   lang: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#f3e7da',
+    borderRadius: Radius.md,
+    backgroundColor: Colors.light.cardFeature,
   },
   langActive: {
-    backgroundColor: '#231b17',
+    backgroundColor: Colors.light.panel,
   },
   langText: {
     color: '#1f1a17',
@@ -173,7 +176,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   settingLabel: { fontWeight: '700', color: '#1f1a17' },
-  settingHint: { color: '#81776f', fontSize: 12.5, marginTop: 4, lineHeight: 18 },
+  settingHint: { ...Typography.caption, color: '#81776f', marginTop: 4 },
   actionBlock: {
     gap: 10,
   },

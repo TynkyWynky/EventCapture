@@ -9,6 +9,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AppImage } from '@/components/ui/app-image';
+import { useLanguage } from '@/context/LanguageContext';
 
 import { Colors } from '@/constants/theme';
 
@@ -18,6 +19,7 @@ export default function PostCommentsScreen() {
   const { posts, addPostComment } = usePosts();
   const { user } = useUser();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [text, setText] = useState('');
   
   const post = posts.find((p) => p.id === postId);
@@ -39,7 +41,7 @@ export default function PostCommentsScreen() {
     if (result.ok) {
       setText('');
     } else if (result.error) {
-      showToast({ title: 'Comment failed', message: result.error, tone: 'error' });
+      showToast({ title: t('commentsFailed'), message: result.error, tone: 'error' });
     }
   };
 
@@ -48,10 +50,11 @@ export default function PostCommentsScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.headerWrap}>
           <ScreenHeader
-            eyebrow="ENGAGEMENT"
-            title="Comments"
-            subtitle="Post not found"
+            eyebrow={t('postCommentsEyebrow')}
+            title={t('postCommentsTitle')}
+            subtitle={t('postCommentsNotFound')}
             onBack={() => router.back()}
+            mode="compact"
           />
         </View>
       </SafeAreaView>
@@ -62,10 +65,11 @@ export default function PostCommentsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.headerWrap}>
         <ScreenHeader
-          eyebrow="ENGAGEMENT"
-          title="Comments"
-          subtitle={`Post by ${post.user.username}`}
+          eyebrow={t('postCommentsEyebrow')}
+          title={t('postCommentsTitle')}
+          subtitle={`${t('postCommentsBy')} ${post.user.username}`}
           onBack={() => router.back()}
+          mode="compact"
         />
       </View>
 
@@ -90,7 +94,7 @@ export default function PostCommentsScreen() {
                 <Text style={styles.time}>{post.date}</Text>
               </View>
               <Text style={styles.comment}>
-                {post.eventTitle ? `Captured a memory at ${post.eventTitle}` : 'Captured a great moment'}
+                {post.eventTitle ? `${t('postCommentsCapturedAt')} ${post.eventTitle}` : t('postCommentsCaptured')}
               </Text>
             </View>
           </View>
@@ -122,15 +126,15 @@ export default function PostCommentsScreen() {
           ) : (
             <EmptyState
               icon="chatbubble-ellipses-outline"
-              title="No comments yet"
-              message="Be the first to comment on this photo."
+              title={t('postCommentsEmptyTitle')}
+              message={t('postCommentsEmptyMsg')}
             />
           )}
         </ScrollView>
 
         <View style={styles.inputRow}>
           <TextInput
-            placeholder="Add a comment..."
+            placeholder={t('postCommentsPlh')}
             style={styles.input}
             placeholderTextColor="#8c827a"
             value={text}

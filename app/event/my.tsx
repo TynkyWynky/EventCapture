@@ -4,12 +4,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { EventPlanStatus, useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useLanguage } from '@/context/LanguageContext';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,6 +45,7 @@ export default function MyNightScreen() {
   const router = useRouter();
   const { events } = useEvents();
   const { getEventSocial, getPlannedEvents, setEventPlanNote, setEventPlanStatus } = useSocial();
+  const { t } = useLanguage();
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
 
   const plannedEvents = getPlannedEvents()
@@ -87,7 +89,10 @@ export default function MyNightScreen() {
     const draftValue = draftNotes[item.event.id] ?? item.planNote;
 
     return (
-      <SurfaceCard key={item.event.id} style={[styles.eventCard, compact && styles.eventCardCompact]}>
+      <SurfaceCard
+        key={item.event.id}
+        style={[styles.eventCard, compact && styles.eventCardCompact]}
+        variant={compact ? 'subtle' : 'default'}>
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() =>
@@ -113,8 +118,8 @@ export default function MyNightScreen() {
           </View>
 
           <View style={styles.cardStats}>
-            <StatChip label="place" value={item.event.place} icon="pin-outline" />
-            <StatChip label="price" value={item.event.price} icon="pricetag-outline" />
+            <StatChip label={t('plannerCardPlace')} value={item.event.place} icon="pin-outline" />
+            <StatChip label={t('plannerCardPrice')} value={item.event.price} icon="pricetag-outline" />
           </View>
 
           <View style={styles.planRow}>
@@ -139,9 +144,9 @@ export default function MyNightScreen() {
 
           <View style={styles.noteCard}>
             <View style={styles.noteHeader}>
-              <Text style={styles.noteLabel}>Night note</Text>
+              <Text style={styles.noteLabel}>{t('plannerNoteLabel')}</Text>
               <TouchableOpacity onPress={() => setEventPlanNote(item.event.id, draftValue)}>
-                <Text style={styles.noteAction}>Save</Text>
+                <Text style={styles.noteAction}>{t('plannerNoteAction')}</Text>
               </TouchableOpacity>
             </View>
             <TextInput
@@ -152,7 +157,7 @@ export default function MyNightScreen() {
                   [item.event.id]: value,
                 }))
               }
-              placeholder="Meet near the entrance, leave after midnight, invite the crew..."
+              placeholder={t('plannerNotePlh')}
               placeholderTextColor="#978a80"
               style={styles.noteInput}
               multiline
@@ -167,31 +172,32 @@ export default function MyNightScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="PLANNER"
-          title="My Night"
-          subtitle="Keep your saved events, plans and little reminders in one place."
+          eyebrow={t('plannerEyebrow')}
+          title={t('plannerTitle')}
+          subtitle={t('plannerSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
 
         <LinearGradient colors={['#231b17', '#3b261b', '#6b411f']} style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>Tonight planner</Text>
-          <Text style={styles.heroTitle}>Build a realistic night instead of just saving random events.</Text>
+          <Text style={styles.heroEyebrow}>{t('plannerHeroEyebrow')}</Text>
+          <Text style={styles.heroTitle}>{t('plannerHeroTitle')}</Text>
           <Text style={styles.heroText}>
-            Mark what you are actually going to, keep backup options nearby, and leave yourself quick notes before you head out.
+            {t('plannerHeroText')}
           </Text>
 
           <View style={styles.heroStats}>
-            <StatChip label="going" value={goingEvents.length.toString()} tone="dark" />
-            <StatChip label="maybe" value={maybeEvents.length.toString()} tone="dark" />
-            <StatChip label="saved" value={plannedEvents.length.toString()} tone="dark" />
+            <StatChip label={t('plannerStatsGoing')} value={goingEvents.length.toString()} tone="dark" />
+            <StatChip label={t('plannerStatsMaybe')} value={maybeEvents.length.toString()} tone="dark" />
+            <StatChip label={t('plannerStatsSaved')} value={plannedEvents.length.toString()} tone="dark" />
           </View>
         </LinearGradient>
 
         {goingEvents.length ? (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Locked in</Text>
-              <Text style={styles.sectionMeta}>Your actual plan</Text>
+              <Text style={styles.sectionTitle}>{t('plannerSectLockedIn')}</Text>
+              <Text style={styles.sectionMeta}>{t('plannerSectLockedInMeta')}</Text>
             </View>
             {goingEvents.map((item) => renderEventCard(item))}
           </>
@@ -200,8 +206,8 @@ export default function MyNightScreen() {
         {maybeEvents.length ? (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Maybe later</Text>
-              <Text style={styles.sectionMeta}>Backup energy</Text>
+              <Text style={styles.sectionTitle}>{t('plannerSectMaybe')}</Text>
+              <Text style={styles.sectionMeta}>{t('plannerSectMaybeMeta')}</Text>
             </View>
             {maybeEvents.map((item) => renderEventCard(item, true))}
           </>
@@ -210,8 +216,8 @@ export default function MyNightScreen() {
         {savedEvents.length ? (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Saved ideas</Text>
-              <Text style={styles.sectionMeta}>Still undecided</Text>
+              <Text style={styles.sectionTitle}>{t('plannerSectSaved')}</Text>
+              <Text style={styles.sectionMeta}>{t('plannerSectSavedMeta')}</Text>
             </View>
             {savedEvents.map((item) => renderEventCard(item, true))}
           </>
@@ -220,12 +226,12 @@ export default function MyNightScreen() {
         {!plannedEvents.length ? (
           <EmptyState
             icon="calendar-outline"
-            title="Your planner is still empty"
-            message="Save an event or mark one as going to start building your night."
+            title={t('plannerEmptyTitle')}
+            message={t('plannerEmptyMsg')}
           />
         ) : null}
 
-        <AppButton label="Browse events" onPress={() => router.push('/(tabs)/events')} />
+        <AppButton label={t('plannerBtnBrowse')} onPress={() => router.push('/(tabs)/events')} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -233,14 +239,14 @@ export default function MyNightScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   heroCard: { borderRadius: 28, padding: 18, gap: 14 },
   heroEyebrow: { color: '#f3caa5', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   heroTitle: { color: '#fff7ef', fontSize: 26, fontWeight: '800', lineHeight: 31 },
   heroText: { color: '#dccabd', lineHeight: 21 },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  sectionTitle: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
+  sectionTitle: { ...Typography.sectionTitle, color: '#1f1a17' },
   sectionMeta: { color: '#857a72', fontWeight: '700' },
   eventCard: { padding: 14, gap: 14 },
   eventCardCompact: { backgroundColor: '#fff8f2' },
@@ -250,7 +256,7 @@ const styles = StyleSheet.create({
   eventCopy: { flex: 1 },
   eventTitle: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
   eventMeta: { color: '#80756d', marginTop: 4, lineHeight: 19 },
-  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  statusBadge: { borderRadius: Radius.round, paddingHorizontal: 10, paddingVertical: 7 },
   statusText: { fontWeight: '800', fontSize: 12 },
   cardStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   planRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -260,7 +266,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: Radius.round,
     backgroundColor: '#fff1e0',
   },
   planChipActive: {
@@ -269,7 +275,7 @@ const styles = StyleSheet.create({
   planChipText: { color: Colors.light.tint, fontWeight: '800', fontSize: 12.5 },
   planChipTextActive: { color: '#fff7ef' },
   noteCard: {
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     backgroundColor: '#f8efe6',
     padding: 12,
     gap: 8,

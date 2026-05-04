@@ -8,6 +8,7 @@ import React, { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLanguage } from '@/context/LanguageContext';
 
 import { Colors } from '@/constants/theme';
 
@@ -17,6 +18,7 @@ export default function CommentsScreen() {
   const { getEventById } = useEvents();
   const { getEventSocial, addEventComment } = useSocial();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [text, setText] = useState('');
   const event = getEventById(eventId);
   const social = getEventSocial(eventId);
@@ -32,7 +34,7 @@ export default function CommentsScreen() {
     if (result.ok) {
       setText('');
     } else if (result.error) {
-      showToast({ title: 'Comment failed', message: result.error, tone: 'error' });
+      showToast({ title: t('commentsFailed'), message: result.error, tone: 'error' });
     }
   };
 
@@ -40,10 +42,11 @@ export default function CommentsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.headerWrap}>
         <ScreenHeader
-          eyebrow="ENGAGEMENT"
-          title="Comments"
-          subtitle={event?.title ?? 'Event discussion'}
+          eyebrow={t('commentsEyebrow')}
+          title={t('commentsTitle')}
+          subtitle={event?.title ?? t('commentsSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
       </View>
 
@@ -73,15 +76,15 @@ export default function CommentsScreen() {
           ) : (
             <EmptyState
               icon="chatbubble-ellipses-outline"
-              title="No comments yet"
-              message="Start the conversation around this event."
+              title={t('commentsEmptyTitle')}
+              message={t('commentsEmptyMsg')}
             />
           )}
         </ScrollView>
 
         <View style={styles.inputRow}>
           <TextInput
-            placeholder="Add a comment..."
+            placeholder={t('commentsPlh')}
             style={styles.input}
             placeholderTextColor="#8c827a"
             value={text}

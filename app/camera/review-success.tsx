@@ -2,6 +2,7 @@ import { usePosts } from '@/context/PostContext';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { CaptureReviewScreen } from '@/components/capture-review-screen';
 import { Colors } from '@/constants/theme';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ export default function ReviewSuccessScreen() {
   const { addActivity } = useSocial();
   const { showToast } = useToast();
   const { user } = useUser();
+  const { t } = useLanguage();
 
   const handlePost = (eventId: string, eventTitle: string) => {
     if (photoUri) {
@@ -40,14 +42,14 @@ export default function ReviewSuccessScreen() {
       });
       addActivity({
         user: user.username,
-        text: `posted a crown-eligible capture from ${eventTitle}`,
+        text: `${t('activityPostedCrown')} ${eventTitle}`,
         icon: 'ribbon',
         color: Colors.light.tint,
       });
       showToast({
         tone: 'success',
-        title: 'Capture posted',
-        message: `Your crown-eligible moment from ${eventTitle} is now live.`,
+        title: t('toastCrownTitle'),
+        message: `${t('toastCrownMsg')} ${eventTitle} ${t('toastCrownMsgEnd')}`,
       });
       router.replace('/(tabs)');
     }

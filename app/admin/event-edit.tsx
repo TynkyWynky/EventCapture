@@ -3,25 +3,29 @@ import { AppImage } from '@/components/ui/app-image';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors, Layout, Radius, Typography } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
-import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function CreateEventScreen() {
+export default function EditEventScreen() {
   const router = useRouter();
-  const { createEvent } = useEvents();
+  const params = useLocalSearchParams();
+  const eventId = typeof params.eventId === 'string' ? params.eventId : '';
+  
+  const { getEventById, updateEvent } = useEvents();
   const { addActivity } = useSocial();
   const { showToast } = useToast();
   const { user } = useUser();
-  const { t } = useLanguage();
+
+  const event = getEventById(eventId);
+
   const [coverUrl, setCoverUrl] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -29,6 +33,27 @@ export default function CreateEventScreen() {
   const [dateTime, setDateTime] = useState('');
   const [vibe, setVibe] = useState('');
   const [price, setPrice] = useState('');
+
+  useEffect(() => {
+    // If we're not an admin, we shouldn't really be here, but let's just populate the form
+    if (event) {
+      setCoverUrl(event.heroImage || '');
+      setTitle(event.title || '');
+      setDescription(event.description || '');
+      setAddress(event.address || '');
+      setDateTime(event.fullDate || '');
+      setVibe(event.vibe || '');
+      setPrice(event.price || '');
+    }
+  }, [event]);
+
+  if (!event) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScreenHeader eyebrow="ADMIN" title="Event Not Found" onBack={() => router.back()} mode="compact" />
+      </SafeAreaView>
+    );
+  }
 
   const input = (
     label: string,
@@ -52,24 +77,27 @@ export default function CreateEventScreen() {
     </View>
   );
 
-  const handleCreate = () => {
+  const handleUpdate = () => {
     const locationParts = address
       .split(',')
       .map((part) => part.trim())
       .filter(Boolean);
     const fallbackPlace = address.trim() || 'Brussels';
     const place = locationParts[locationParts.length - 1] ?? fallbackPlace;
+    
+    // We try to extract simple date/time if it's separated by double spaces like in create.tsx
     const [datePart, timePart] = dateTime.includes('  ')
       ? dateTime.split('  ')
-      : [dateTime, 'Time to be confirmed'];
-    const createdEvent = createEvent({
+      : [dateTime, event.time]; // fallback to old time if no double spaces used
+
+    updateEvent(eventId, {
       title,
       description,
       address,
       place,
       date: datePart || 'TBD',
       fullDate: dateTime || 'Date to be confirmed',
-      time: timePart || 'Time to be confirmed',
+      time: timePart || event.time,
       vibe,
       price,
       priceLabel: price ? `${price} entry` : 'Free entry',
@@ -78,20 +106,18 @@ export default function CreateEventScreen() {
 
     addActivity({
       user: user.username,
-      text: `created ${createdEvent.title}`,
-      icon: 'calendar-outline',
+      text: `updated event ${title}`,
+      icon: 'create-outline',
       color: Colors.light.accent,
     });
+    
     showToast({
       tone: 'success',
-      title: 'Event published',
-      message: `${createdEvent.title} is now live in discovery.`,
+      title: 'Event updated',
+      message: `${title} has been updated successfully.`,
     });
 
-    router.replace({
-      pathname: '/event/detail',
-      params: { eventId: createdEvent.id },
-    });
+    router.back();
   };
 
   const isPublishDisabled = !title.trim() || !address.trim() || !dateTime.trim();
@@ -100,27 +126,27 @@ export default function CreateEventScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow={t('createEyebrow')}
-          title={t('createTitle')}
-          subtitle={t('createSubtitle')}
+          eyebrow="ADMIN"
+          title="Edit Event"
+          subtitle="Update event details on the fly."
           onBack={() => router.back()}
+          rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>Live</Text></View>}
           mode="compact"
-          rightAction={<View style={styles.draftChip}><Text style={styles.draftText}>{t('createDraft')}</Text></View>}
         />
 
-        <SurfaceCard style={styles.heroCard} variant="feature">
-          <Text style={styles.heroTitle}>{t('createHeroTitle')}</Text>
+        <SurfaceCard style={styles.heroCard}>
+          <Text style={styles.heroTitle}>Modify {event.title}</Text>
           <Text style={styles.heroText}>
-            {t('createHeroText')}
+            Keep your attendees informed with the latest updates.
           </Text>
 
           <View style={styles.heroStats}>
-            <StatChip label={t('createStatHost')} value={user.username} />
-            <StatChip label={t('createStatCity')} value={user.city} />
+            <StatChip label="host" value={event.hostName} />
+            <StatChip label="city" value={event.place} />
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.uploadBox} variant="subtle">
+        <SurfaceCard style={styles.uploadBox}>
           {coverUrl ? (
             <AppImage source={{ uri: coverUrl }} style={styles.previewImage} contentFit="cover" />
           ) : (
@@ -128,12 +154,12 @@ export default function CreateEventScreen() {
               <Ionicons name="image-outline" size={28} color={Colors.light.tint} />
             </View>
           )}
-          <Text style={styles.uploadTitle}>{t('createCoverTitle')}</Text>
+          <Text style={styles.uploadTitle}>Event cover image</Text>
           <Text style={styles.uploadText}>
-            {t('createCoverText')}
+            Update the visual identity of the event.
           </Text>
           <TextInput
-            placeholder={t('createCoverPlh')}
+            placeholder="https://images.unsplash.com/..."
             placeholderTextColor="#91867f"
             style={styles.coverInput}
             value={coverUrl}
@@ -143,12 +169,12 @@ export default function CreateEventScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>{t('createSectBasics')}</Text>
+          <Text style={styles.sectionTitle}>Basics</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>{t('createNameLabel')}</Text>
+            <Text style={styles.fieldLabel}>Event name</Text>
             <TextInput
-              placeholder={t('createNamePlh')}
+              placeholder="Add event name"
               placeholderTextColor="#91867f"
               style={styles.textField}
               value={title}
@@ -157,9 +183,9 @@ export default function CreateEventScreen() {
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>{t('createDescLabel')}</Text>
+            <Text style={styles.fieldLabel}>Description</Text>
             <TextInput
-              placeholder={t('createDescPlh')}
+              placeholder="Describe the atmosphere..."
               placeholderTextColor="#91867f"
               style={[styles.textField, styles.textArea]}
               multiline
@@ -170,20 +196,20 @@ export default function CreateEventScreen() {
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard} variant="subtle">
-          <Text style={styles.sectionTitle}>{t('createSectDetails')}</Text>
+        <SurfaceCard style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Details</Text>
 
-          {input(t('createLocLabel'), t('createLocPlh'), <Ionicons name="location-outline" size={18} color="#81776f" />, address, setAddress)}
-          {input(t('createDateLabel'), t('createDatePlh'), <Ionicons name="calendar-outline" size={18} color="#81776f" />, dateTime, setDateTime)}
-          {input(t('createMusicLabel'), t('createMusicPlh'), <Ionicons name="musical-notes-outline" size={18} color="#81776f" />, vibe, setVibe)}
-          {input(t('createPriceLabel'), t('createPricePlh'), <MaterialCommunityIcons name="currency-eur" size={18} color="#81776f" />, price, setPrice)}
+          {input('Location', 'Add address', <Ionicons name="location-outline" size={18} color="#81776f" />, address, setAddress)}
+          {input('Date & time', '18 Jul 2026  20:30 - 01:00', <Ionicons name="calendar-outline" size={18} color="#81776f" />, dateTime, setDateTime)}
+          {input('Music or vibe', 'Add genre or atmosphere', <Ionicons name="musical-notes-outline" size={18} color="#81776f" />, vibe, setVibe)}
+          {input('Price', 'Add price', <MaterialCommunityIcons name="currency-eur" size={18} color="#81776f" />, price, setPrice)}
         </SurfaceCard>
 
         <View style={styles.actionRow}>
-          <AppButton label={t('createBtnCancel')} variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
+          <AppButton label="Cancel" variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
           <AppButton
-            label={t('createBtnPublish')}
-            onPress={handleCreate}
+            label="Save Changes"
+            onPress={handleUpdate}
             disabled={isPublishDisabled}
             style={styles.createBtn}
           />
@@ -195,27 +221,31 @@ export default function CreateEventScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  container: { padding: 16, paddingBottom: 152, gap: 16 },
   draftChip: {
     minWidth: 64,
     height: 40,
     paddingHorizontal: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    backgroundColor: '#dcfce7',
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: '#bbf7d0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  draftText: { color: '#6f655e', fontWeight: '700' },
-  heroCard: { gap: 12 },
+  draftText: { color: '#166534', fontWeight: '700' },
+  heroCard: {
+    backgroundColor: '#231b17',
+    gap: 12,
+  },
   heroTitle: {
-    ...Typography.titleSm,
-    color: Colors.light.title,
+    color: '#fff7ef',
+    fontSize: 22,
+    fontWeight: '800',
   },
   heroText: {
-    ...Typography.bodySm,
-    color: Colors.light.subtitle,
+    color: '#d7c7bb',
+    lineHeight: 21,
   },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   uploadBox: {
@@ -227,7 +257,7 @@ const styles = StyleSheet.create({
   uploadIconWrap: {
     width: 62,
     height: 62,
-    borderRadius: Radius.lg,
+    borderRadius: 20,
     backgroundColor: '#fff2e5',
     alignItems: 'center',
     justifyContent: 'center',
@@ -236,7 +266,7 @@ const styles = StyleSheet.create({
   previewImage: {
     width: '100%',
     height: 180,
-    borderRadius: Radius.lg,
+    borderRadius: 18,
     marginBottom: 12,
   },
   uploadTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 18 },
@@ -256,8 +286,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   sectionTitle: {
-    ...Typography.sectionTitle,
     color: '#1f1a17',
+    fontWeight: '800',
+    fontSize: 20,
     marginBottom: 14,
   },
   fieldGroup: {
@@ -271,7 +302,7 @@ const styles = StyleSheet.create({
   },
   textField: {
     backgroundColor: '#fff',
-    borderRadius: Radius.lg,
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,
@@ -283,7 +314,7 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     backgroundColor: '#fff',
-    borderRadius: Radius.lg,
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,

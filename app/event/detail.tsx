@@ -6,10 +6,11 @@ import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLanguage } from '@/context/LanguageContext';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ export default function EventDetailScreen() {
   const event = getEventById(eventId);
   const social = getEventSocial(eventId);
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
 
   if (!event) {
     return (
@@ -29,10 +31,10 @@ export default function EventDetailScreen() {
         <View style={styles.missingWrap}>
           <EmptyState
             icon="calendar-clear-outline"
-            title="Event not found"
-            message="This event could not be loaded. Head back and pick another one."
+            title={t('detailEmptyTitle')}
+            message={t('detailEmptyMsg')}
           />
-          <AppButton label="Go back" onPress={() => router.back()} />
+          <AppButton label={t('detailBtnBack')} onPress={() => router.back()} />
         </View>
       </SafeAreaView>
     );
@@ -74,9 +76,9 @@ export default function EventDetailScreen() {
               <Text style={styles.subtitle}>{event.description}</Text>
 
               <View style={styles.metaRow}>
-                <StatChip label="date" value={event.date} icon="calendar-outline" tone="dark" />
-                <StatChip label="time" value={event.time} icon="time-outline" tone="dark" />
-                <StatChip label="crowd" value={event.attendees} icon="people-outline" tone="dark" />
+                <StatChip label={t('detailStatDate')} value={event.date} icon="calendar-outline" tone="dark" />
+                <StatChip label={t('detailStatTime')} value={event.time} icon="time-outline" tone="dark" />
+                <StatChip label={t('detailStatCrowd')} value={event.attendees} icon="people-outline" tone="dark" />
               </View>
             </View>
           </LinearGradient>
@@ -84,13 +86,13 @@ export default function EventDetailScreen() {
 
         <View style={styles.body}>
           <View style={styles.statRow}>
-            <StatChip label="pre-sale" value={event.price} tone="accent" />
-            <StatChip label="location" value={event.place} tone="light" />
-            <StatChip label="experience" value={event.experience} tone="light" />
+            <StatChip label={t('detailStatPreSale')} value={event.price} tone="accent" />
+            <StatChip label={t('detailStatLoc')} value={event.place} tone="light" />
+            <StatChip label={t('detailStatExp')} value={event.experience} tone="light" />
           </View>
 
           <SurfaceCard style={styles.card}>
-            <Text style={styles.sectionTitle}>About this event</Text>
+            <Text style={styles.sectionTitle}>{t('detailSectAbout')}</Text>
             <Text style={styles.description}>{event.description}</Text>
 
             <View style={styles.socialRow}>
@@ -102,7 +104,7 @@ export default function EventDetailScreen() {
                   size={18}
                   color={Colors.light.tint}
                 />
-                <Text style={styles.socialButtonText}>{social?.likes.length ?? 0} likes</Text>
+                <Text style={styles.socialButtonText}>{social?.likes.length ?? 0} {t('detailSocialLikes')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -114,7 +116,7 @@ export default function EventDetailScreen() {
                   })
                 }>
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.light.tint} />
-                <Text style={styles.socialButtonText}>{social?.comments.length ?? 0} comments</Text>
+                <Text style={styles.socialButtonText}>{social?.comments.length ?? 0} {t('detailSocialComments')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -125,7 +127,7 @@ export default function EventDetailScreen() {
                   size={18}
                   color={Colors.light.tint}
                 />
-                <Text style={styles.socialButtonText}>{social?.saved ? 'Saved' : 'Save'}</Text>
+                <Text style={styles.socialButtonText}>{social?.saved ? t('detailSocialSaved') : t('detailSocialSave')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -138,16 +140,16 @@ export default function EventDetailScreen() {
             </View>
           </SurfaceCard>
 
-          <SurfaceCard style={styles.card}>
+          <SurfaceCard style={styles.card} variant="subtle">
             <View style={styles.plannerHeader}>
               <View>
-                <Text style={styles.sectionTitle}>My night</Text>
+                <Text style={styles.sectionTitle}>{t('detailSectMyNight')}</Text>
                 <Text style={styles.plannerText}>
-                  Turn this into a real plan instead of just saving it.
+                  {t('detailPlannerText')}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => router.push('/event/my')}>
-                <Text style={styles.plannerLink}>Open planner</Text>
+                <Text style={styles.plannerLink}>{t('detailPlannerLink')}</Text>
               </TouchableOpacity>
             </View>
 
@@ -161,7 +163,7 @@ export default function EventDetailScreen() {
                   color={social?.planStatus === 'going' ? '#fff7ef' : Colors.light.tint}
                 />
                 <Text style={[styles.planActionText, social?.planStatus === 'going' && styles.planActionTextActive]}>
-                  Going
+                  {t('detailPlanGoing')}
                 </Text>
               </TouchableOpacity>
 
@@ -174,23 +176,23 @@ export default function EventDetailScreen() {
                   color={social?.planStatus === 'maybe' ? '#fff7ef' : Colors.light.tint}
                 />
                 <Text style={[styles.planActionText, social?.planStatus === 'maybe' && styles.planActionTextActive]}>
-                  Maybe
+                  {t('detailPlanMaybe')}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {social?.planNote ? <Text style={styles.plannerNote}>Note: {social.planNote}</Text> : null}
+            {social?.planNote ? <Text style={styles.plannerNote}>{t('detailPlanNote')} {social.planNote}</Text> : null}
           </SurfaceCard>
 
           <SurfaceCard style={styles.card}>
-            <Text style={styles.sectionTitle}>Event details</Text>
+            <Text style={styles.sectionTitle}>{t('detailSectDetails')}</Text>
 
             <View style={styles.detailRow}>
               <View style={styles.detailIconWrap}>
                 <Ionicons name="pin-outline" size={18} color={Colors.light.tint} />
               </View>
               <View style={styles.detailCopy}>
-                <Text style={styles.detailLabel}>Location</Text>
+                <Text style={styles.detailLabel}>{t('detailLblLoc')}</Text>
                 <Text style={styles.detailValue}>{event.address}</Text>
                 <Text style={styles.detailHint}>{event.place}</Text>
               </View>
@@ -201,7 +203,7 @@ export default function EventDetailScreen() {
                 <Ionicons name="calendar-outline" size={18} color={Colors.light.tint} />
               </View>
               <View style={styles.detailCopy}>
-                <Text style={styles.detailLabel}>Date and time</Text>
+                <Text style={styles.detailLabel}>{t('detailLblDate')}</Text>
                 <Text style={styles.detailValue}>{event.fullDate}</Text>
                 <Text style={styles.detailHint}>{event.time}</Text>
               </View>
@@ -212,7 +214,7 @@ export default function EventDetailScreen() {
                 <Ionicons name="musical-notes-outline" size={18} color={Colors.light.tint} />
               </View>
               <View style={styles.detailCopy}>
-                <Text style={styles.detailLabel}>Music and vibe</Text>
+                <Text style={styles.detailLabel}>{t('detailLblMusic')}</Text>
                 <Text style={styles.detailValue}>{event.vibe}</Text>
                 <Text style={styles.detailHint}>{event.experience}</Text>
               </View>
@@ -223,7 +225,7 @@ export default function EventDetailScreen() {
                 <MaterialCommunityIcons name="currency-eur" size={18} color={Colors.light.tint} />
               </View>
               <View style={styles.detailCopy}>
-                <Text style={styles.detailLabel}>Pricing</Text>
+                <Text style={styles.detailLabel}>{t('detailLblPrice')}</Text>
                 <Text style={styles.detailValue}>{event.priceLabel}</Text>
                 <TouchableOpacity
                   onPress={() =>
@@ -232,20 +234,20 @@ export default function EventDetailScreen() {
                       params: { eventId: event.id },
                     })
                   }>
-                  <Text style={styles.detailHint}>{social?.likes.length ?? 0} people liked this</Text>
+                  <Text style={styles.detailHint}>{social?.likes.length ?? 0} {t('detailPeopleLiked')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </SurfaceCard>
 
-          <SurfaceCard style={styles.hostCard}>
+          <SurfaceCard style={styles.hostCard} variant="feature">
             <View style={styles.hostRow}>
               <AppImage source={{ uri: event.hostAvatar }} style={styles.hostAvatar} contentFit="cover" />
               <View style={styles.hostCopy}>
-                <Text style={styles.hostLabel}>Hosted by</Text>
+                <Text style={styles.hostLabel}>{t('detailHostLabel')}</Text>
                 <Text style={styles.hostName}>{event.hostName}</Text>
               </View>
-              <AppButton label="Follow" variant="secondary" style={styles.followBtn} />
+              <AppButton label={t('detailFollowBtn')} variant="secondary" style={styles.followBtn} />
             </View>
           </SurfaceCard>
         </View>
@@ -255,10 +257,10 @@ export default function EventDetailScreen() {
         <View style={styles.bottomCard}>
           <View>
             <Text style={styles.bottomPrice}>{event.price}</Text>
-            <Text style={styles.bottomPriceMeta}>per ticket</Text>
+            <Text style={styles.bottomPriceMeta}>{t('detailPerTicket')}</Text>
           </View>
 
-          <AppButton label="Get ticket" style={styles.buyButton} />
+          <AppButton label={t('detailGetTicket')} style={styles.buyButton} />
         </View>
       </View>
     </SafeAreaView>
@@ -266,19 +268,19 @@ export default function EventDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
+  safe: { flex: 1, backgroundColor: TabThemes.events.background },
   missingWrap: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xxl,
     justifyContent: 'center',
-    gap: 16,
+    gap: Spacing.lg,
   },
   heroWrap: { height: 430, marginBottom: -26 },
   hero: { width: '100%', height: '100%' },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: Spacing.xl,
     paddingBottom: 42,
   },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -295,7 +297,7 @@ const styles = StyleSheet.create({
   title: { color: '#fff7ef', fontSize: 34, fontWeight: '800', lineHeight: 38, maxWidth: 300 },
   subtitle: { color: '#eadccf', fontSize: 15, lineHeight: 22, maxWidth: 320 },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  body: { paddingHorizontal: 16, gap: 16 },
+  body: { paddingHorizontal: Layout.screenPadding, gap: Layout.sectionGap },
   statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   card: { gap: 12 },
   sectionTitle: { color: '#1f1a17', fontSize: 22, fontWeight: '800' },
@@ -306,13 +308,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#fff3e6',
-    borderRadius: 999,
+    borderRadius: Radius.round,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   socialButtonText: { color: '#1f1a17', fontWeight: '700', fontSize: 12.5 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
-  tag: { backgroundColor: '#f2e4d5', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  tag: { backgroundColor: '#f2e4d5', borderRadius: Radius.round, paddingHorizontal: 12, paddingVertical: 8 },
   tagText: { color: '#4b4038', fontWeight: '700', fontSize: 12.5 },
   plannerHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' },
   plannerText: { color: '#6f655e', lineHeight: 20, marginTop: 6, maxWidth: 250 },
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     backgroundColor: '#fff1e0',
-    borderRadius: 999,
+    borderRadius: Radius.round,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -337,7 +339,7 @@ const styles = StyleSheet.create({
   detailIconWrap: {
     width: 40,
     height: 40,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     backgroundColor: '#f6efe6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -358,8 +360,8 @@ const styles = StyleSheet.create({
   bottomWrap: { position: 'absolute', left: 16, right: 16 },
   bottomCard: {
     backgroundColor: 'rgba(255,250,245,0.98)',
-    borderRadius: 24,
-    padding: 14,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

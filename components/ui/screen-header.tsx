@@ -1,4 +1,4 @@
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -9,6 +9,10 @@ interface ScreenHeaderProps {
   subtitle?: string;
   onBack?: () => void;
   rightAction?: React.ReactNode;
+  leading?: React.ReactNode;
+  mode?: 'hero' | 'compact';
+  surface?: boolean;
+  tone?: 'default' | 'inverse';
 }
 
 export function ScreenHeader({
@@ -17,64 +21,136 @@ export function ScreenHeader({
   subtitle,
   onBack,
   rightAction,
+  leading,
+  mode = 'hero',
+  surface = true,
+  tone = 'default',
 }: ScreenHeaderProps) {
+  const inverse = tone === 'inverse';
+  const leftNode = onBack ? (
+    <TouchableOpacity
+      style={[
+        styles.iconButton,
+        !surface && styles.iconButtonFlat,
+        inverse && styles.iconButtonInverse,
+      ]}
+      onPress={onBack}>
+      <Ionicons name="chevron-back" size={20} color={inverse ? '#fff7ef' : '#1f1a17'} />
+    </TouchableOpacity>
+  ) : leading ? (
+    <View style={styles.leadingWrap}>{leading}</View>
+  ) : null;
+
   return (
-    <View style={styles.header}>
-      {onBack ? (
-        <TouchableOpacity style={styles.iconButton} onPress={onBack}>
-          <Ionicons name="chevron-back" size={20} color="#1f1a17" />
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.iconSpacer} />
-      )}
+    <View
+      style={[
+        surface && styles.shell,
+        surface && mode === 'compact' && styles.shellCompact,
+      ]}>
+      <View style={[styles.header, mode === 'compact' && styles.headerCompact]}>
+        {leftNode ? <View style={styles.leftSlot}>{leftNode}</View> : null}
 
-      <View style={styles.copy}>
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        <View style={styles.copy}>
+          <Text style={[styles.eyebrow, inverse && styles.eyebrowInverse]}>{eyebrow}</Text>
+          <Text
+            style={[
+              styles.title,
+              mode === 'compact' && styles.titleCompact,
+              inverse && styles.titleInverse,
+            ]}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={[styles.subtitle, inverse && styles.subtitleInverse]}>{subtitle}</Text>
+          ) : null}
+        </View>
+
+        {rightAction ? <View style={styles.rightSlot}>{rightAction}</View> : null}
       </View>
-
-      {rightAction ? rightAction : <View style={styles.iconSpacer} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  shell: {
+    backgroundColor: Colors.light.card,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    padding: Spacing.lg,
+    ...Shadows.soft,
+  },
+  shellCompact: {
+    paddingVertical: Spacing.md,
+  },
   header: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  headerCompact: {
     alignItems: 'center',
-    gap: 12,
+  },
+  leftSlot: {
+    minWidth: 44,
+    alignItems: 'flex-start',
   },
   copy: {
     flex: 1,
   },
+  rightSlot: {
+    marginLeft: Spacing.sm,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: Radius.round,
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconSpacer: {
-    width: 40,
-    height: 40,
+  iconButtonFlat: {
+    backgroundColor: Colors.light.card,
+    ...Shadows.soft,
+  },
+  iconButtonInverse: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  leadingWrap: {
+    minWidth: 44,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   eyebrow: {
-    color: '#857a72',
-    fontWeight: '800',
-    fontSize: 11,
-    letterSpacing: 1.2,
+    ...Typography.eyebrow,
+    color: Colors.light.subtitle,
+  },
+  eyebrowInverse: {
+    color: '#e7c7aa',
   },
   title: {
-    color: '#1f1a17',
-    fontSize: 26,
-    fontWeight: '800',
+    ...Typography.titleLg,
+    color: Colors.light.title,
+    marginTop: 3,
+  },
+  titleCompact: {
+    ...Typography.titleSm,
+    marginTop: 2,
+  },
+  titleInverse: {
+    color: '#fff7ef',
   },
   subtitle: {
-    color: '#81776f',
-    marginTop: 2,
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
+    marginTop: 6,
+  },
+  subtitleInverse: {
+    color: '#e9dacd',
   },
 });

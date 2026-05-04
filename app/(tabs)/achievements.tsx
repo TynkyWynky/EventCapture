@@ -6,9 +6,10 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { CROWN_MILESTONES, CROWN_REWARDS, CROWN_TARGET, getCrownLevelProgress } from '@/constants/crowns';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -20,6 +21,7 @@ export default function AchievementsScreen() {
   const router = useRouter();
   const { events } = useEvents();
   const { crowns, posts } = usePosts();
+  const { t } = useLanguage();
 
   const rewardProgress = Math.min((crowns / CROWN_TARGET) * 100, 100);
   const remainingCrowns = Math.max(CROWN_TARGET - crowns, 0);
@@ -61,10 +63,16 @@ export default function AchievementsScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="CROWN VAULT"
-          title="Your crowns"
-          subtitle="A polished view of every win, milestone, and next unlock."
+          eyebrow={t('achvEyebrow')}
+          title={t('achvTitle')}
+          subtitle={t('achvSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
+          leading={
+            <View style={styles.headerBadge}>
+              <Ionicons name="medal-outline" size={20} color={Colors.light.tint} />
+            </View>
+          }
           rightAction={
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
@@ -80,12 +88,12 @@ export default function AchievementsScreen() {
               <Ionicons name="diamond-outline" size={24} color={Colors.light.tint} />
             </View>
             <View style={styles.heroCopy}>
-              <Text style={styles.heroEyebrow}>Current streak</Text>
-              <Text style={styles.heroTitle}>{crowns} crowns collected</Text>
+              <Text style={styles.heroEyebrow}>{t('achvCurrentStreak')}</Text>
+              <Text style={styles.heroTitle}>{crowns} {t('achvCrownsCollected')}</Text>
               <Text style={styles.heroSubtitle}>
                 {remainingCrowns === 0
-                  ? 'You completed the full crown run. Time to keep the legend alive.'
-                  : `${remainingCrowns} more to reach legend status and complete the full vault.`}
+                  ? t('achvStreakSubMax')
+                  : `${remainingCrowns} ${t('achvStreakSubMore')}`}
               </Text>
             </View>
           </View>
@@ -93,23 +101,23 @@ export default function AchievementsScreen() {
           <CrownProgressBar progress={rewardProgress} tone="dark" height={12} />
 
           <View style={styles.heroStats}>
-            <StatChip label="crowns" value={crowns.toString()} tone="dark" />
-            <StatChip label="wins" value={beerFinishedPosts.length.toString()} tone="dark" />
-            <StatChip label="left" value={remainingCrowns.toString()} tone="dark" />
+            <StatChip label={t('achvStatsCrowns')} value={crowns.toString()} tone="dark" />
+            <StatChip label={t('achvStatsWins')} value={beerFinishedPosts.length.toString()} tone="dark" />
+            <StatChip label={t('achvStatsLeft')} value={remainingCrowns.toString()} tone="dark" />
           </View>
 
           <View style={styles.levelStrip}>
             <View style={styles.levelStripHeader}>
               <View>
-                <Text style={styles.levelStripEyebrow}>Current level</Text>
+                <Text style={styles.levelStripEyebrow}>{t('achvCurrentLevel')}</Text>
                 <Text style={styles.levelStripTitle}>
-                  Level {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
+                  {t('levelLabel')} {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
                 </Text>
               </View>
               <Text style={styles.levelStripMeta}>
                 {crownLevel.nextLevel
-                  ? `${crownLevel.crownsToNextLevel} crown${crownLevel.crownsToNextLevel === 1 ? '' : 's'} to Level ${crownLevel.nextLevel.level}`
-                  : 'Legend complete'}
+                  ? `${crownLevel.crownsToNextLevel} ${t('crownsToNextLevel')} ${crownLevel.nextLevel.level}`
+                  : t('achvLegendComplete')}
               </Text>
             </View>
 
@@ -117,10 +125,10 @@ export default function AchievementsScreen() {
           </View>
         </LinearGradient>
 
-        <SurfaceCard style={styles.nextCard}>
+        <SurfaceCard style={styles.nextCard} variant="feature">
           <View style={styles.sectionRow}>
             <View>
-              <Text style={styles.sectionTitle}>Next unlock</Text>
+              <Text style={styles.sectionTitle}>{t('achvNextUnlock')}</Text>
               <Text style={styles.sectionMeta}>
                 Crown {Math.min(crowns + 1, CROWN_TARGET)} · {CROWN_MILESTONES[nextMilestoneIndex]}
               </Text>
@@ -132,25 +140,25 @@ export default function AchievementsScreen() {
 
           <Text style={styles.nextCopy}>
             {remainingCrowns === 0
-              ? 'Everything is unlocked. Keep posting finished drinks to grow the collection anyway.'
-              : `Your next premium unlock is lined up with ${nextEvent?.title ?? 'the next event moment'}. One more finished capture gets you closer.`}
+              ? t('achvNextCopyMax')
+              : `${t('achvNextCopyMore')} ${nextEvent?.title ?? t('achvYourNextEvent')}${t('achvNextCopyMore2')}`}
           </Text>
 
           <View style={styles.inlineMetaRow}>
             <View style={styles.inlineMetaChip}>
               <Ionicons name="calendar-outline" size={14} color={Colors.light.tint} />
-              <Text style={styles.inlineMetaText}>{nextEvent?.fullDate ?? 'Any upcoming night'}</Text>
+              <Text style={styles.inlineMetaText}>{nextEvent?.fullDate ?? t('achvAnyUpcomingNight')}</Text>
             </View>
             <View style={styles.inlineMetaChip}>
               <Ionicons name="location-outline" size={14} color={Colors.light.tint} />
-              <Text style={styles.inlineMetaText}>{nextEvent?.place ?? 'Your next event'}</Text>
+              <Text style={styles.inlineMetaText}>{nextEvent?.place ?? t('achvYourNextEvent')}</Text>
             </View>
           </View>
         </SurfaceCard>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Crown journey</Text>
-          <Text style={styles.sectionMeta}>{crowns}/{CROWN_TARGET} unlocked</Text>
+          <Text style={styles.sectionTitle}>{t('achvCrownJourney')}</Text>
+          <Text style={styles.sectionMeta}>{crowns}/{CROWN_TARGET} {t('achvUnlockedStat')}</Text>
         </View>
 
         <View style={styles.milestoneGrid}>
@@ -182,7 +190,7 @@ export default function AchievementsScreen() {
                 <Text style={styles.milestoneLabel}>{milestone.label}</Text>
                 <Text style={styles.milestoneReward}>{milestone.reward.perk}</Text>
                 <Text style={[styles.milestoneState, unlocked && styles.milestoneStateUnlocked, isNext && styles.milestoneStateNext]}>
-                  {unlocked ? 'Unlocked' : isNext ? 'Up next' : 'Locked'}
+                  {unlocked ? t('achvStatusUnlocked') : isNext ? t('achvStatusNext') : t('achvStatusLocked')}
                 </Text>
               </SurfaceCard>
             );
@@ -190,8 +198,8 @@ export default function AchievementsScreen() {
         </View>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Vault rewards</Text>
-          <Text style={styles.sectionMeta}>What each crown unlocks</Text>
+          <Text style={styles.sectionTitle}>{t('achvVaultRewards')}</Text>
+          <Text style={styles.sectionMeta}>{t('achvVaultRewardsSub')}</Text>
         </View>
 
         <SurfaceCard style={styles.rewardVaultCard}>
@@ -229,7 +237,7 @@ export default function AchievementsScreen() {
                 </View>
 
                 <Text style={[styles.rewardStatus, unlocked && styles.milestoneStateUnlocked, isNext && styles.milestoneStateNext]}>
-                  {unlocked ? 'Live' : isNext ? 'Next' : 'Soon'}
+                  {unlocked ? t('achvStatusLive') : isNext ? t('achvStatusNext') : t('achvStatusSoon')}
                 </Text>
               </View>
             );
@@ -237,13 +245,13 @@ export default function AchievementsScreen() {
         </SurfaceCard>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Recent winning moments</Text>
-          <Text style={styles.sectionMeta}>Finished drink captures</Text>
+          <Text style={styles.sectionTitle}>{t('achvRecentWins')}</Text>
+          <Text style={styles.sectionMeta}>{t('achvRecentWinsSub')}</Text>
         </View>
 
         {recentWins.length > 0 ? (
           recentWins.map((win) => (
-            <SurfaceCard key={win.id} style={styles.winCard}>
+            <SurfaceCard key={win.id} style={styles.winCard} variant="subtle">
               <View style={styles.winBadge}>
                 <Ionicons name={win.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.light.tint} />
               </View>
@@ -262,20 +270,30 @@ export default function AchievementsScreen() {
           />
         )}
 
-        <AppButton label="Capture another moment" onPress={() => router.push('/camera')} />
+        <AppButton label={t('achvCaptureAnother')} onPress={() => router.push('/camera')} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
+  safe: { flex: 1, backgroundColor: TabThemes.achievements.background },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   heroCard: {
-    borderRadius: 30,
-    padding: 18,
-    gap: 16,
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
     overflow: 'hidden',
+  },
+  headerBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.lg,
+    backgroundColor: '#fff4e8',
+    borderWidth: 1,
+    borderColor: '#f1d7b9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroGlow: {
     position: 'absolute',
@@ -313,7 +331,7 @@ const styles = StyleSheet.create({
   levelStrip: {
     gap: 10,
     backgroundColor: 'rgba(255,247,239,0.08)',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     padding: 12,
   },
   levelStripHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-end' },
@@ -338,7 +356,7 @@ const styles = StyleSheet.create({
   nextBadge: {
     width: 44,
     height: 44,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     backgroundColor: '#fff1e0',
     alignItems: 'center',
     justifyContent: 'center',

@@ -22,6 +22,8 @@ interface EventContextType {
   events: EventRecord[];
   featuredEventId: string;
   createEvent: (input: CreateEventInput) => EventRecord;
+  updateEvent: (eventId: string, updates: Partial<EventRecord>) => EventRecord | undefined;
+  deleteEvent: (eventId: string) => void;
   getEventById: (eventId?: string | string[]) => EventRecord | undefined;
 }
 
@@ -223,6 +225,22 @@ export function EventProvider({ children }: { children: ReactNode }) {
             // Local persistence remains the fallback when the backend is unavailable.
           });
         return newEvent;
+      },
+      updateEvent: (eventId, updates) => {
+        let updatedEvent: EventRecord | undefined;
+        setEvents((prev) =>
+          prev.map((event) => {
+            if (event.id === eventId) {
+              updatedEvent = { ...event, ...updates };
+              return updatedEvent;
+            }
+            return event;
+          })
+        );
+        return updatedEvent;
+      },
+      deleteEvent: (eventId) => {
+        setEvents((prev) => prev.filter((event) => event.id !== eventId));
       },
       getEventById: (eventId) => {
         if (!eventId || Array.isArray(eventId)) {

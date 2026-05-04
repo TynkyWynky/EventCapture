@@ -2,41 +2,43 @@ import { AppButton } from '@/components/ui/app-button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { Colors } from '@/constants/theme';
+import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useFilters } from '@/context/FilterContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const genres = ['Live music', 'Electronic', 'Food', 'Outdoor', 'Open air', 'Late night'];
-const dateOptions = [
-  { label: 'Today', value: 'today' as const },
-  { label: 'Tomorrow', value: 'tomorrow' as const },
-  { label: 'This week', value: 'this_week' as const },
-];
-const pricePresets = [
-  { label: 'Free', min: 0, max: 0 },
-  { label: 'Under 15', min: 0, max: 15 },
-  { label: 'Under 25', min: 0, max: 25 },
-  { label: 'Any', min: 0, max: 120 },
-];
-const sortOptions = [
-  { label: 'Most popular', value: 'popular' as const },
-  { label: 'Soonest', value: 'soonest' as const },
-  { label: 'Lowest price', value: 'lowest_price' as const },
-];
-const discoveryPresets = [
-  { id: 'all', label: 'Reset all' },
-  { id: 'tonight', label: 'Tonight' },
-  { id: 'popular', label: 'Popular' },
-  { id: 'cheapest', label: 'Cheapest' },
-  { id: 'open_air', label: 'Open air' },
-] as const;
-
 export default function FiltersScreen() {
   const router = useRouter();
+  const { t } = useLanguage();
+
+  const genres = [t('filterGenreLive'), t('filterGenreElec'), t('filterGenreFood'), t('filterGenreOutdoor'), t('filterGenreOpen'), t('filterGenreLate')];
+  const dateOptions = [
+    { label: t('filterDateToday'), value: 'today' as const },
+    { label: t('filterDateTomorrow'), value: 'tomorrow' as const },
+    { label: t('filterDateWeek'), value: 'this_week' as const },
+  ];
+  const pricePresets = [
+    { label: t('filterPriceFree'), min: 0, max: 0 },
+    { label: t('filterPriceUnder15'), min: 0, max: 15 },
+    { label: t('filterPriceUnder25'), min: 0, max: 25 },
+    { label: t('filterPriceAny'), min: 0, max: 120 },
+  ];
+  const sortOptions = [
+    { label: t('filterSortPopular'), value: 'popular' as const },
+    { label: t('filterSortSoonest'), value: 'soonest' as const },
+    { label: t('filterSortLowest'), value: 'lowest_price' as const },
+  ];
+  const discoveryPresets = [
+    { id: 'all', label: t('filterPresetAll') },
+    { id: 'tonight', label: t('filterPresetTonight') },
+    { id: 'popular', label: t('filterPresetPopular') },
+    { id: 'cheapest', label: t('filterPresetCheapest') },
+    { id: 'open_air', label: t('filterPresetOpenAir') },
+  ] as const;
   const {
     filters,
     activeFilterCount,
@@ -58,26 +60,27 @@ export default function FiltersScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="DISCOVER"
-          title="Filters"
-          subtitle="Shape the feed around the nights you actually want."
+          eyebrow={t('filtersEyebrow')}
+          title={t('filtersTitle')}
+          subtitle={t('filtersSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
           rightAction={<IconActionButton icon="refresh-outline" onPress={resetFilters} />}
         />
 
-        <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Refine the night</Text>
+        <SurfaceCard style={styles.heroCard} variant="feature">
+          <Text style={styles.heroTitle}>{t('filtersHeroTitle')}</Text>
           <Text style={styles.heroText}>
-            Your choices now affect the home feed and event discovery in real time.
+            {t('filtersHeroText')}
           </Text>
           <View style={styles.heroMeta}>
-            <Text style={styles.heroMetaText}>{filteredEvents.length} events match</Text>
-            <Text style={styles.heroMetaText}>{activeFilterCount} active filters</Text>
+            <Text style={styles.heroMetaText}>{filteredEvents.length} {t('filtersMatch')}</Text>
+            <Text style={styles.heroMetaText}>{activeFilterCount} {t('filtersActive')}</Text>
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Quick presets</Text>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
+          <Text style={styles.sectionTitle}>{t('filtersSectPresets')}</Text>
           <View style={styles.chipRow}>
             {discoveryPresets.map((preset) => {
               const active = activePresetId === preset.id;
@@ -107,21 +110,21 @@ export default function FiltersScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Search</Text>
+          <Text style={styles.sectionTitle}>{t('filtersSectSearch')}</Text>
           <View style={styles.locationInput}>
             <Ionicons name="search-outline" size={18} color={Colors.light.tint} />
             <TextInput
               value={filters.searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Artists, places, hosts, moods"
+              placeholder={t('filtersSearchPlh')}
               placeholderTextColor="#8a7f77"
               style={styles.locationTextInput}
             />
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Genres and vibes</Text>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
+          <Text style={styles.sectionTitle}>{t('filtersSectGenres')}</Text>
           <View style={styles.chipRow}>
             {genres.map((genre) => {
               const active = filters.selectedGenres.includes(genre);
@@ -138,7 +141,7 @@ export default function FiltersScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Time and date</Text>
+          <Text style={styles.sectionTitle}>{t('filtersSectTime')}</Text>
           <View style={styles.row}>
             {dateOptions.map((option) => {
               const active = filters.dateFilter === option.value;
@@ -156,14 +159,14 @@ export default function FiltersScreen() {
           <TouchableOpacity style={styles.optionCard} onPress={() => setDateFilter('all')}>
             <MaterialCommunityIcons name="calendar-blank-outline" size={18} color={Colors.light.tint} />
             <Text style={styles.optionText}>
-              {filters.dateFilter === 'all' ? 'No date limit' : `Selected: ${filters.dateFilter.replace('_', ' ')}`}
+              {filters.dateFilter === 'all' ? t('filtersNoDate') : `${t('filtersSelected')} ${filters.dateFilter.replace('_', ' ')}`}
             </Text>
             <Ionicons name="close-circle-outline" size={16} color={Colors.light.tint} />
           </TouchableOpacity>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Sort results</Text>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
+          <Text style={styles.sectionTitle}>{t('filtersSectSort')}</Text>
           <View style={styles.chipRow}>
             {sortOptions.map((option) => {
               const active = filters.sortBy === option.value;
@@ -181,22 +184,22 @@ export default function FiltersScreen() {
         </SurfaceCard>
 
         <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Location</Text>
+          <Text style={styles.sectionTitle}>{t('filtersSectLoc')}</Text>
           <View style={styles.locationInput}>
             <Ionicons name="location-outline" size={18} color={Colors.light.tint} />
             <TextInput
               value={filters.location}
               onChangeText={setLocation}
-              placeholder="Brussels, Belgium"
+              placeholder={t('filtersLocPlh')}
               placeholderTextColor="#8a7f77"
               style={styles.locationTextInput}
             />
           </View>
         </SurfaceCard>
 
-        <SurfaceCard style={styles.sectionCard}>
+        <SurfaceCard style={styles.sectionCard} variant="subtle">
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Price range</Text>
+            <Text style={styles.sectionTitle}>{t('filtersSectPrice')}</Text>
             <Text style={styles.priceHint}>
               {filters.minPrice} EUR - {filters.maxPrice} EUR
             </Text>
@@ -218,8 +221,8 @@ export default function FiltersScreen() {
         </SurfaceCard>
 
         <View style={styles.actions}>
-          <AppButton label="Reset" variant="secondary" style={styles.resetBtn} onPress={resetFilters} />
-          <AppButton label={`Show ${filteredEvents.length} events`} style={styles.applyBtn} onPress={() => router.back()} />
+          <AppButton label={t('filtersBtnReset')} variant="secondary" style={styles.resetBtn} onPress={resetFilters} />
+          <AppButton label={`${t('filtersBtnShow')} ${filteredEvents.length} ${t('filtersBtnEvents')}`} style={styles.applyBtn} onPress={() => router.back()} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -228,12 +231,12 @@ export default function FiltersScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152, gap: 16 },
-  heroCard: { backgroundColor: '#231b17', gap: 8 },
-  heroTitle: { color: '#fff7ef', fontSize: 22, fontWeight: '800' },
-  heroText: { color: '#d7c7bb', lineHeight: 21 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
+  heroCard: { gap: 8 },
+  heroTitle: { ...Typography.titleSm, color: Colors.light.title },
+  heroText: { ...Typography.bodySm, color: Colors.light.subtitle },
   heroMeta: { flexDirection: 'row', gap: 18, marginTop: 4 },
-  heroMetaText: { color: '#f6d6bb', fontWeight: '700' },
+  heroMetaText: { color: Colors.light.tint, fontWeight: '700' },
   sectionCard: { gap: 12 },
   sectionHeader: {
     flexDirection: 'row',
@@ -241,9 +244,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionTitle: {
-    color: '#1f1a17',
-    fontWeight: '800',
-    fontSize: 19,
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
   },
   chipRow: {
     flexDirection: 'row',
@@ -258,7 +260,7 @@ const styles = StyleSheet.create({
   genreChip: {
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: Radius.round,
     backgroundColor: '#f3e7da',
   },
   genreChipActive: {
@@ -269,7 +271,7 @@ const styles = StyleSheet.create({
   favoriteButton: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.round,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff1e0',
@@ -281,7 +283,7 @@ const styles = StyleSheet.create({
   pill: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 16,
+    borderRadius: Radius.md,
     backgroundColor: '#f3e7da',
     alignItems: 'center',
   },
@@ -290,7 +292,7 @@ const styles = StyleSheet.create({
   pillTextActive: { color: Colors.light.tint },
   optionCard: {
     backgroundColor: '#f8f1ea',
-    borderRadius: 16,
+    borderRadius: Radius.md,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',

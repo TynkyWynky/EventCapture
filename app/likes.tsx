@@ -7,6 +7,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLanguage } from '@/context/LanguageContext';
 
 import { Colors } from '@/constants/theme';
 
@@ -15,6 +16,7 @@ export default function LikesScreen() {
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
   const { getEventById } = useEvents();
   const { getEventSocial } = useSocial();
+  const { t } = useLanguage();
   const event = getEventById(eventId);
   const users = getEventSocial(eventId)?.likes ?? [];
 
@@ -22,10 +24,11 @@ export default function LikesScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.headerWrap}>
         <ScreenHeader
-          eyebrow="ENGAGEMENT"
-          title="Likes"
-          subtitle={event?.title ?? 'Event reactions'}
+          eyebrow={t('likesEyebrow')}
+          title={t('likesTitle')}
+          subtitle={event?.title ?? t('likesSubtitle')}
           onBack={() => router.back()}
+          mode="compact"
         />
       </View>
 
@@ -38,7 +41,7 @@ export default function LikesScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{entry.name}</Text>
-                <Text style={styles.meta}>Liked this event</Text>
+                <Text style={styles.meta}>{t('likesUserLiked')}</Text>
               </View>
               <View style={styles.heartBadge}>
                 <Ionicons name="heart" size={16} color="#e45b5b" />
@@ -48,8 +51,8 @@ export default function LikesScreen() {
         ) : (
           <EmptyState
             icon="heart-outline"
-            title="No likes yet"
-            message="When people react to this event, they will show up here."
+            title={t('likesEmptyTitle')}
+            message={t('likesEmptyMsg')}
           />
         )}
       </ScrollView>

@@ -4,17 +4,21 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppImage } from '@/components/ui/app-image';
-import { Colors } from '@/constants/theme';
-import { usePosts, Post } from '@/context/PostContext';
+import { ScreenHeader } from '@/components/ui/screen-header';
+import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
+import { usePosts } from '@/context/PostContext';
+import type { Post } from '@/constants/posts';
 import { useUser } from '@/context/UserContext';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function SocialFeedScreen() {
   const router = useRouter();
   const { posts, togglePostLike } = usePosts();
   const { user } = useUser();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(() => {
@@ -56,7 +60,7 @@ export default function SocialFeedScreen() {
             <View style={styles.crownBadge}>
               <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.crownGradient}>
                 <Ionicons name="sparkles" size={14} color="#fff" />
-                <Text style={styles.crownText}>1 Crown</Text>
+                <Text style={styles.crownText}>{t('socialCrownBadge')}</Text>
               </LinearGradient>
             </View>
           ) : null}
@@ -90,7 +94,7 @@ export default function SocialFeedScreen() {
         {/* Likes */}
         {item.likes.length > 0 ? (
           <Text style={styles.likesText}>
-            {item.likes.length} like{item.likes.length !== 1 ? 's' : ''}
+            {item.likes.length}{item.likes.length !== 1 ? t('socialLikesPlural') : t('socialLikesSingular')}
           </Text>
         ) : null}
 
@@ -98,7 +102,7 @@ export default function SocialFeedScreen() {
         <View style={styles.captionRow}>
           <Text style={styles.captionText}>
             <Text style={styles.captionUsername}>{item.user?.username || 'user'} </Text>
-            {item.eventTitle ? `Captured a memory at ${item.eventTitle}` : 'Captured a great moment'}
+            {item.eventTitle ? `${t('socialCaptionWithEvent')} ${item.eventTitle}` : t('socialCaptionWithoutEvent')}
           </Text>
         </View>
 
@@ -106,12 +110,12 @@ export default function SocialFeedScreen() {
         {item.comments && item.comments.length > 0 ? (
           <TouchableOpacity onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}>
             <Text style={styles.viewCommentsText}>
-              View all {item.comments.length} comment{item.comments.length !== 1 ? 's' : ''}
+              {t('socialViewAll')} {item.comments.length} {item.comments.length !== 1 ? t('socialCommentsPlural') : t('socialCommentsSingular')}
             </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}>
-            <Text style={styles.viewCommentsText}>Add a comment...</Text>
+            <Text style={styles.viewCommentsText}>{t('socialAddComment')}</Text>
           </TouchableOpacity>
         )}
 
@@ -123,13 +127,23 @@ export default function SocialFeedScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerLogo}>EventCapture</Text>
-        <View style={styles.headerActions}>
-          <IconActionButton icon="notifications-outline" tone="light" onPress={() => router.push('/notifications')} />
-          <IconActionButton icon="menu" tone="light" onPress={() => router.push('/menu')} />
-        </View>
+      <View style={styles.headerWrap}>
+        <ScreenHeader
+          eyebrow="EventCapture"
+          title={t('socialTab')}
+          leading={
+            <View style={styles.headerBadge}>
+              <Ionicons name="images-outline" size={20} color={TabThemes.socialfeed.accent} />
+            </View>
+          }
+          mode="compact"
+          rightAction={
+            <View style={styles.headerActions}>
+              <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
+              <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
+            </View>
+          }
+        />
       </View>
 
       <FlatList
@@ -148,45 +162,50 @@ export default function SocialFeedScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fcfcfc' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-    backgroundColor: '#fff',
+  safe: { flex: 1, backgroundColor: TabThemes.socialfeed.background },
+  headerWrap: {
+    paddingHorizontal: Layout.screenPadding,
+    marginTop: 8,
   },
-  headerLogo: {
-    fontFamily: 'System', // Adjust to a nice font if loaded
-    fontWeight: '900',
-    fontSize: 24,
-    color: Colors.light.tint,
-    letterSpacing: -0.5,
+  headerBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.lg,
+    backgroundColor: '#fff3ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#f4d9d1',
   },
   headerActions: {
     flexDirection: 'row',
     gap: 8,
   },
   listContent: {
-    paddingTop: 8,
+    paddingTop: 14,
   },
   separator: {
-    height: 1,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    marginVertical: 16,
+    height: 18,
   },
   postContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
+    marginHorizontal: Layout.screenPadding,
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f0e3dc',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   userRow: {
     flexDirection: 'row',
@@ -218,14 +237,14 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 12,
-    color: '#81776f',
+    color: '#8e6d63',
     marginTop: 1,
   },
   mediaContainer: {
     position: 'relative',
     width: '100%',
-    aspectRatio: 4 / 5, // Modern instagram portrait ratio
-    backgroundColor: '#f5f5f5',
+    aspectRatio: 4 / 5,
+    backgroundColor: '#f3efeb',
   },
   media: {
     width: '100%',
@@ -257,8 +276,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   actionLeft: {
     flexDirection: 'row',
@@ -272,32 +291,33 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   likesText: {
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg,
     fontWeight: '700',
     fontSize: 14,
     color: '#1f1a17',
     marginBottom: 6,
   },
   captionRow: {
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg,
     marginBottom: 6,
   },
   captionText: {
     fontSize: 14,
     color: '#1f1a17',
-    lineHeight: 20,
+    lineHeight: 21,
   },
   captionUsername: {
     fontWeight: '700',
   },
   viewCommentsText: {
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg,
     fontSize: 14,
     color: '#81776f',
     marginBottom: 6,
   },
   dateText: {
-    paddingHorizontal: 14,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.lg,
     fontSize: 11,
     color: '#a39b95',
     textTransform: 'uppercase',

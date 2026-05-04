@@ -1,7 +1,7 @@
 import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Typography } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,7 +103,7 @@ export default function ResetScreen() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {success ? <Text style={styles.successText}>{success}</Text> : null}
 
-              <AppButton label="Reset password" onPress={handleReset} />
+              <AppButton label="Reset password" onPress={handleReset} size="lg" />
               <AppButton label="Back to login" variant="secondary" onPress={() => router.back()} />
             </SurfaceCard>
           </ScrollView>
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 24 },
   card: {
-    borderRadius: 30,
+    borderRadius: Radius.xxl,
     paddingHorizontal: 22,
     paddingVertical: 30,
     gap: 14,
@@ -135,14 +135,14 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   copy: { gap: 6 },
-  title: { color: '#1f1a17', fontWeight: '800', fontSize: 30, textAlign: 'center' },
-  subtitle: { color: '#7d726a', textAlign: 'center', lineHeight: 22 },
+  title: { ...Typography.titleLg, color: Colors.light.title, textAlign: 'center' },
+  subtitle: { ...Typography.body, color: Colors.light.subtitle, textAlign: 'center' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,

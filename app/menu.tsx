@@ -1,5 +1,8 @@
 import { useUser } from '@/context/UserContext';
+import { AppImage } from '@/components/ui/app-image';
 import { AppButton } from '@/components/ui/app-button';
+import { IconActionButton } from '@/components/ui/icon-action-button';
+import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -7,42 +10,43 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 
-const menuItems = [
+const getMenuItems = (t: any) => [
   {
-    label: 'My Night',
-    subtitle: 'See saved events, your plan and quick notes for tonight',
+    label: t('menuMyNightLabel'),
+    subtitle: t('menuMyNightHint'),
     icon: 'calendar-outline',
     route: '/event/my',
   },
   {
-    label: 'Edit profile',
-    subtitle: 'Update your bio, interests and public details',
+    label: t('menuEditProfileLabel'),
+    subtitle: t('menuEditProfileHint'),
     icon: 'create-outline',
     route: '/profile/edit',
   },
   {
-    label: 'Settings',
-    subtitle: 'Notifications, language and account preferences',
+    label: t('menuSettingsLabel'),
+    subtitle: t('menuSettingsHint'),
     icon: 'settings-outline',
     route: '/settings',
   },
   {
-    label: 'Help & FAQ',
-    subtitle: 'Quick answers for common questions',
+    label: t('menuFaqLabel'),
+    subtitle: t('menuFaqHint'),
     icon: 'help-circle-outline',
     route: '/faq',
   },
   {
-    label: 'Contact',
-    subtitle: 'Reach out for support or feedback',
+    label: t('menuContactLabel'),
+    subtitle: t('menuContactHint'),
     icon: 'mail-outline',
     route: '/contact',
   },
   {
-    label: 'Terms & privacy',
-    subtitle: 'Read the legal and community guidelines',
+    label: t('menuTermsLabel'),
+    subtitle: t('menuTermsHint'),
     icon: 'document-text-outline',
     route: '/terms',
   },
@@ -51,49 +55,69 @@ const menuItems = [
 export default function MenuScreen() {
   const router = useRouter();
   const { user, signOut } = useUser();
+  const { t } = useLanguage();
+  const menuItems = getMenuItems(t);
 
   return (
     <SafeAreaView style={styles.safe}>
       <Pressable style={styles.backdrop} onPress={() => router.back()} />
 
       <View style={styles.sheet}>
+        <View style={styles.edgeGlow} />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-          <View style={styles.handle} />
+          <ScreenHeader
+            eyebrow={t('menuEyebrow')}
+            title={t('menuTitle')}
+            subtitle={t('menuSubtitle')}
+            leading={
+              user.avatarUri ? (
+                <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarFallbackText}>{user.username.charAt(0).toUpperCase()}</Text>
+                </View>
+              )
+            }
+            rightAction={<IconActionButton icon="close" tone="subtle" onPress={() => router.back()} />}
+            mode="compact"
+            surface={false}
+          />
 
-          <View style={styles.header}>
-            <View style={styles.headerCopy}>
-              <Text style={styles.eyebrow}>MORE</Text>
-              <Text style={styles.title}>Extra options</Text>
-              <Text style={styles.subtitle}>Keep your primary navigation clean and manage the rest from here.</Text>
+          <SurfaceCard style={styles.accountCard} variant="feature">
+            <View style={styles.accountTop}>
+              <View style={styles.accountCopy}>
+                <Text style={styles.accountEyebrow}>
+                  {user.email === 'admin' ? 'Admin access' : user.city}
+                </Text>
+                <Text style={styles.accountName}>{user.fullName || user.username}</Text>
+                <Text style={styles.accountMeta}>@{user.username}</Text>
+              </View>
+
+              <View style={styles.accountBadge}>
+                <Ionicons
+                  name={user.email === 'admin' ? 'shield-checkmark-outline' : 'sparkles-outline'}
+                  size={18}
+                  color={Colors.light.tint}
+                />
+              </View>
             </View>
 
-            <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-              <Ionicons name="close" size={20} color="#1f1a17" />
-            </TouchableOpacity>
-          </View>
-
-          <SurfaceCard style={styles.heroCard}>
-            <View style={styles.heroIcon}>
-              <Ionicons name="sparkles-outline" size={18} color={Colors.light.tint} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>Everything outside the core flow</Text>
-              <Text style={styles.heroText}>Settings, support and account extras live here so the main tabs stay focused.</Text>
-            </View>
+            <Text style={styles.accountText}>{t('menuHeroText')}</Text>
           </SurfaceCard>
 
-          <View style={styles.section}>
+          <View style={styles.menuList}>
             {user.email === 'admin' && (
               <TouchableOpacity
                 style={styles.menuItem}
+                activeOpacity={0.9}
                 onPress={() => router.push('/admin' as any)}>
                 <View style={[styles.menuIconWrap, { backgroundColor: '#fcd34d' }]}>
                   <Ionicons name="shield-checkmark-outline" size={20} color="#78350f" />
                 </View>
 
                 <View style={styles.menuTextWrap}>
-                  <Text style={styles.menuLabel}>Admin Dashboard</Text>
-                  <Text style={styles.menuHint}>Manage users and platform content</Text>
+                  <Text style={styles.menuLabel}>{t('adminDashTitle')}</Text>
+                  <Text style={styles.menuHint}>{t('adminDashHint')}</Text>
                 </View>
 
                 <Ionicons name="chevron-forward" size={18} color="#8b8078" />
@@ -104,6 +128,7 @@ export default function MenuScreen() {
               <TouchableOpacity
                 key={item.label}
                 style={styles.menuItem}
+                activeOpacity={0.9}
                 onPress={() => router.push(item.route as any)}>
                 <View style={styles.menuIconWrap}>
                   <Ionicons name={item.icon as any} size={20} color="#1f1a17" />
@@ -114,13 +139,15 @@ export default function MenuScreen() {
                   <Text style={styles.menuHint}>{item.subtitle}</Text>
                 </View>
 
-                <Ionicons name="chevron-forward" size={18} color="#8b8078" />
+                <View style={styles.chevronWrap}>
+                  <Ionicons name="chevron-forward" size={16} color="#8b8078" />
+                </View>
               </TouchableOpacity>
             ))}
           </View>
 
           <AppButton
-            label="Sign out"
+            label={t('signOutBtn')}
             variant="secondary"
             style={styles.signOutButton}
             onPress={() => {
@@ -138,105 +165,112 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: 'rgba(12, 8, 5, 0.24)',
+    backgroundColor: Colors.light.scrim,
     justifyContent: 'flex-end',
   },
   backdrop: {
     flex: 1,
   },
   sheet: {
-    width: '84%',
+    width: '86%',
     height: '100%',
-    backgroundColor: Colors.light.background,
-    borderTopLeftRadius: 30,
-    borderBottomLeftRadius: 30,
+    backgroundColor: Colors.light.canvas,
+    borderTopLeftRadius: 32,
+    borderBottomLeftRadius: 32,
+    borderLeftWidth: 1,
+    borderColor: Colors.light.border,
     shadowColor: '#000',
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    shadowOffset: { width: -8, height: 0 },
-    elevation: 16,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: -10, height: 0 },
+    elevation: 20,
+    overflow: 'hidden',
+  },
+  edgeGlow: {
+    position: 'absolute',
+    top: 72,
+    left: -28,
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    backgroundColor: 'rgba(244, 123, 32, 0.08)',
   },
   container: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 36,
-    gap: 18,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: 40,
+    gap: 16,
   },
-  handle: {
-    alignSelf: 'center',
-    width: 46,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#d9cabc',
-    marginBottom: 4,
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#fff7ef',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  eyebrow: {
-    color: '#857a72',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  title: {
-    color: '#1f1a17',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  subtitle: {
-    color: '#7d736b',
-    lineHeight: 20,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  avatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroCard: {
+  avatarFallbackText: {
+    color: Colors.light.title,
+    fontWeight: '800',
+    fontSize: 18,
+  },
+  accountCard: {
+    gap: 12,
+  },
+  accountTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: 12,
-    backgroundColor: '#231b17',
   },
-  heroIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff7ef',
+  accountCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  accountEyebrow: {
+    ...Typography.eyebrow,
+    color: Colors.light.tint,
+  },
+  accountName: {
+    ...Typography.titleSm,
+    color: Colors.light.title,
+  },
+  accountMeta: {
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
+  },
+  accountBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: Radius.lg,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitle: {
-    color: '#fff7ef',
-    fontSize: 17,
-    fontWeight: '800',
+  accountText: {
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
   },
-  heroText: {
-    color: '#d8c7ba',
-    marginTop: 6,
-    lineHeight: 19,
-  },
-  section: {
-    gap: 12,
+  menuList: {
+    gap: 10,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: Colors.light.card,
-    borderRadius: 22,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.light.border,
     padding: 14,
@@ -249,8 +283,8 @@ const styles = StyleSheet.create({
   menuIconWrap: {
     width: 42,
     height: 42,
-    borderRadius: 16,
-    backgroundColor: '#f3e7da',
+    borderRadius: Radius.md,
+    backgroundColor: Colors.light.cardFeature,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -258,20 +292,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuLabel: {
-    color: '#1f1a17',
-    fontSize: 15,
+    ...Typography.body,
+    color: Colors.light.title,
     fontWeight: '800',
   },
   menuHint: {
-    color: '#81776f',
-    fontSize: 12.5,
-    lineHeight: 18,
+    ...Typography.caption,
+    color: Colors.light.subtitle,
     marginTop: 4,
   },
+  chevronWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.round,
+    backgroundColor: Colors.light.cardSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   signOutButton: {
-    marginTop: 4,
-    backgroundColor: '#fff1ee',
+    marginTop: 6,
+    backgroundColor: '#fff6f3',
     borderWidth: 1,
-    borderColor: '#f4c9c0',
+    borderColor: '#f1d6cf',
   },
 });

@@ -9,45 +9,48 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
-import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
+import { Colors, Layout, Radius, Spacing, Typography } from '@/constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const { notifications, markAllRead } = useSocial();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const items = notifications.map((item, index) => ({
     ...item,
-    section: index < 3 ? 'New' : 'Earlier',
+    section: index < 3 ? t('notifSectionNew') : t('notifSectionEarlier'),
   }));
-  const sections = ['New', 'Earlier'];
+  const sections = [t('notifSectionNew'), t('notifSectionEarlier')];
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
-          eyebrow="ACTIVITY"
-          title="Notifications"
+          eyebrow={t('notifEyebrow')}
+          title={t('notifTitle')}
           onBack={() => router.back()}
+          mode="compact"
           rightAction={
             <TouchableOpacity style={styles.iconButton} onPress={() => {
               markAllRead();
-              showToast({ tone: 'success', title: 'All cleared', message: 'Notifications have been cleared.' });
+              showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
             }}>
               <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>
           }
         />
 
-        <SurfaceCard style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Stay in the loop</Text>
-          <Text style={styles.heroText}>Track likes, comments and event activity without losing the thread of your night.</Text>
+        <SurfaceCard style={styles.heroCard} variant="feature">
+          <Text style={styles.heroTitle}>{t('notifHeroTitle')}</Text>
+          <Text style={styles.heroText}>{t('notifHeroText')}</Text>
         </SurfaceCard>
 
         {!items.length ? (
           <EmptyState
             icon="notifications-outline"
-            title="No activity yet"
-            message="Likes, saves, and comments will appear here as soon as they happen."
+            title={t('notifEmptyTitle')}
+            message={t('notifEmptyMsg')}
           />
         ) : null}
 
@@ -88,7 +91,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: 16, paddingBottom: 152 },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad },
   iconButton: {
     width: 40,
     height: 40,
@@ -100,33 +103,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   heroCard: {
-    backgroundColor: '#231b17',
     marginBottom: 20,
+    gap: 6,
   },
   heroTitle: {
-    color: '#fff7ef',
-    fontSize: 22,
-    fontWeight: '800',
+    ...Typography.titleSm,
+    color: Colors.light.title,
+    marginBottom: 20,
   },
   heroText: {
-    color: '#d7c7bb',
-    lineHeight: 21,
-    marginTop: 8,
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
   },
   sectionBlock: {
     marginBottom: 18,
   },
   sectionTitle: {
-    color: '#857a72',
-    fontWeight: '800',
-    fontSize: 12,
-    letterSpacing: 0.8,
+    ...Typography.eyebrow,
+    color: Colors.light.subtitle,
     marginBottom: 10,
   },
   card: {
     backgroundColor: Colors.light.card,
-    borderRadius: 20,
-    padding: 14,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -144,27 +144,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 16,
-  },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   copy: {
     flex: 1,
   },
-  text: {
-    color: '#3a322d',
-    lineHeight: 20,
-  },
+  text: { ...Typography.bodySm, color: '#3a322d' },
   user: {
     fontWeight: '800',
     color: '#1f1a17',
   },
-  time: {
-    color: '#8c827a',
-    fontSize: 12.5,
-    marginTop: 4,
-  },
+  time: { ...Typography.caption, color: '#8c827a', marginTop: 4 },
   iconBadge: {
     width: 34,
     height: 34,

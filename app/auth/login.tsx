@@ -1,7 +1,7 @@
 import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Typography } from '@/constants/theme';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,11 +50,11 @@ export default function LoginScreen() {
 
               <View style={styles.accountRow}>
                 <TouchableOpacity
-                  style={[styles.demoCard, email === user.email && styles.demoCardActive]}
+                  style={[styles.demoCard, email === 'demo@eventcapture.app' && styles.demoCardActive]}
                   activeOpacity={0.85}
-                  onPress={() => { setEmail(user.email); setPassword('eventcapture123'); setError(''); }}>
+                  onPress={() => { setEmail('demo@eventcapture.app'); setPassword('eventcapture123'); setError(''); }}>
                   <Text style={styles.demoLabel}>Demo account</Text>
-                  <Text style={styles.demoValue}>{user.email}</Text>
+                  <Text style={styles.demoValue}>demo@eventcapture.app</Text>
                   <Text style={styles.demoHint}>Tap to fill</Text>
                 </TouchableOpacity>
 
@@ -102,7 +102,7 @@ export default function LoginScreen() {
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-              <AppButton label="Sign in" onPress={handleSignIn} />
+              <AppButton label="Sign in" onPress={handleSignIn} size="lg" />
               <AppButton label="Create account" variant="secondary" onPress={() => router.push('/profile/create')} />
             </SurfaceCard>
           </ScrollView>
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 24 },
   panel: {
-    borderRadius: 30,
+    borderRadius: Radius.xxl,
     paddingHorizontal: 22,
     paddingVertical: 30,
     gap: 14,
@@ -134,8 +134,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   copy: { gap: 6 },
-  title: { color: '#1f1a17', fontWeight: '800', fontSize: 30, textAlign: 'center' },
-  subtitle: { color: '#7d726a', textAlign: 'center', lineHeight: 22 },
+  title: { ...Typography.titleLg, color: Colors.light.title, textAlign: 'center' },
+  subtitle: { ...Typography.body, color: Colors.light.subtitle, textAlign: 'center' },
   accountRow: {
     flexDirection: 'row',
     gap: 10,
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   demoCard: {
     flex: 1,
     backgroundColor: '#fff2e6',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     padding: 14,
     gap: 4,
     borderWidth: 2,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 15,
     borderWidth: 1,
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, color: '#1f1a17', fontWeight: '600' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  metaText: { color: '#8d827a', fontSize: 12.5, flex: 1 },
-  metaLink: { color: Colors.light.tint, fontWeight: '700', fontSize: 12.5 },
+  metaText: { ...Typography.caption, color: '#8d827a', flex: 1 },
+  metaLink: { ...Typography.caption, color: Colors.light.tint, fontWeight: '700' },
   errorText: { color: '#c64d3a', fontWeight: '700', textAlign: 'center' },
 });
