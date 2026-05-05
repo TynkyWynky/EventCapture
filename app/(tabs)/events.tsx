@@ -6,6 +6,7 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { EventRecord } from '@/constants/events';
 import { Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
@@ -13,12 +14,13 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function EventsScreen() {
   const router = useRouter();
   const { t } = useLanguage();
+  const visibleEvents = activeFilterCount ? filteredEvents : events;
   const { events, isOffline, isUsingCachedData, error } = useEvents();
   const {
     filteredEvents,
@@ -39,6 +41,30 @@ export default function EventsScreen() {
     { id: 'open_air', label: t('filterPresetOpenAir') },
   ] as const;
 
+  const renderEventCard = ({
+    item,
+    index,
+  }: {
+    item: EventRecord;
+    index: number;
+  }) => (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      onPress={() =>
+        router.push({
+          pathname: '/event/detail',
+          params: { eventId: item.id },
+        })
+      }>
+      <SurfaceCard
+        style={[styles.eventCard, index % 2 === 0 && styles.eventCardWarm]}
+        variant={index === 0 ? 'feature' : 'default'}>
+        <AppImage source={{ uri: item.heroImage }} style={styles.eventImage} contentFit="cover" />
+
+        <View style={styles.eventBody}>
+          <View style={styles.eventHeader}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.date}</Text>
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
@@ -61,9 +87,60 @@ export default function EventsScreen() {
               />
               <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
             </View>
-          }
-        />
+            <Text style={styles.price}>{item.price}</Text>
+          </View>
 
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <Text style={styles.cardMeta}>{item.description}</Text>
+
+          <View style={styles.metaRow}>
+            <StatChip label={t('plannerCardPlace')} value={item.place} icon="pin-outline" />
+            <StatChip label={t('detailStatTime')} value={item.time} icon="time-outline" />
+          </View>
+
+          <View style={styles.bottomRow}>
+            <View style={styles.attendeesRow}>
+              <Ionicons name="people-outline" size={14} color="#81776f" />
+              <Text style={styles.attendees}>{item.attendees}</Text>
+            </View>
+            <View style={styles.arrowWrap}>
+              <Ionicons name="arrow-forward" size={16} color="#fff" />
+            </View>
+          </View>
+        </View>
+      </SurfaceCard>
+    </TouchableOpacity>
+  );
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <FlatList
+        data={visibleEvents}
+        keyExtractor={(item) => item.id}
+        renderItem={renderEventCard}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.container}
+        ListHeaderComponent={
+          <>
+            <ScreenHeader
+              eyebrow={t('discoverEyebrow')}
+              title={`${user.city}${t('discoverTitle')}`}
+              subtitle={t('featuredNightsSub')}
+              leading={
+                <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
+              }
+              mode="compact"
+              rightAction={
+                <View style={styles.actions}>
+                  <IconActionButton
+                    icon="notifications-outline"
+                    onPress={() => router.push('/notifications')}
+                  />
+                  <IconActionButton icon="add" onPress={() => router.push('/event/create')} />
+                  <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
+                </View>
+              }
+            />
         <SurfaceCard style={styles.utilityCard}>
           <View style={styles.utilityTop}>
             <View style={styles.utilityCopy}>
@@ -135,14 +212,28 @@ export default function EventsScreen() {
           })}
         </ScrollView>
 
-        {isOffline || isUsingCachedData ? (
-          <FeedbackBanner
-            tone={isOffline ? 'error' : 'info'}
-            title={isOffline ? 'Live event updates are unavailable' : 'Showing cached events'}
-            message={error ?? 'Reconnect to refresh the latest event list.'}
-          />
-        ) : null}
+            <LinearGradient
+              colors={[TabThemes.events.panel, '#17514c', TabThemes.events.accentDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCard}>
+              <View style={styles.heroGlow} />
+              <Text style={styles.heroTitle}>{t('exploreHeroTitle')}</Text>
+              <Text style={styles.heroText}>{t('exploreHeroText')}</Text>
 
+              <View style={styles.heroStats}>
+                <StatChip label={t('livePicksStat')} value={visibleEvents.length.toString()} tone="dark" />
+                <StatChip label={t('cityStat')} value={user.city} tone="dark" />
+                <StatChip label={t('sortStat')} value={filters.sortBy.replace('_', ' ')} tone="dark" />
+              </View>
+            </LinearGradient>
+
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>{t('featuredNightsTitle')}</Text>
+                <Text style={styles.sectionSubtitle}>{t('featuredNightsSub')}</Text>
+              </View>
+            </View>
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionTitle}>{t('eventsBrowseAllTitle')}</Text>
@@ -173,9 +264,51 @@ export default function EventsScreen() {
                     <Text style={styles.price}>{event.price}</Text>
                   </View>
 
-                  <Text style={styles.cardTitle}>{event.title}</Text>
-                  <Text style={styles.cardMeta}>{event.description}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.presetRow}>
+              {favoritePresetId ? (
+                <TouchableOpacity
+                  style={[styles.presetChip, styles.favoritePresetChip]}
+                  onPress={() => applyPreset(favoritePresetId)}>
+                  <Ionicons name="star" size={14} color={TabThemes.events.accent} />
+                  <Text style={styles.favoritePresetText}>{t('savedPreset')}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {discoveryPresets.map((preset) => {
+                const active = activePresetId === preset.id;
 
+                return (
+                  <TouchableOpacity
+                    key={preset.id}
+                    style={[styles.presetChip, active && styles.presetChipActive]}
+                    onPress={() => applyPreset(preset.id)}>
+                    <Text style={[styles.presetChipText, active && styles.presetChipTextActive]}>
+                      {preset.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {isOffline || isUsingCachedData ? (
+              <FeedbackBanner
+                tone={isOffline ? 'error' : 'info'}
+                title={isOffline ? 'Live event updates are unavailable' : 'Showing cached events'}
+                message={error ?? 'Reconnect to refresh the latest event list.'}
+              />
+            ) : null}
+          </>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="calendar-clear-outline"
+            title={t('noFiltersMatchTitle')}
+            message={t('noFiltersMatchSub')}
+          />
+        }
+      />
                   <View style={styles.metaRow}>
                     <StatChip label={t('plannerCardPlace')} value={event.place} icon="pin-outline" />
                     <StatChip label={t('detailStatTime')} value={event.time} icon="time-outline" />
@@ -198,6 +331,18 @@ export default function EventsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: TabThemes.events.background },
+  container: {
+    padding: Layout.screenPadding,
+    paddingBottom: Layout.bottomPad,
+    gap: Layout.sectionGap,
+  },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  actions: { flexDirection: 'row', gap: 10 },
+  heroCard: {
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    gap: 14,
+    overflow: 'hidden',
   container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
   headerBadge: {
     width: 46,
@@ -272,6 +417,8 @@ const styles = StyleSheet.create({
   presetChipText: { color: '#6e635c', fontWeight: '700' },
   presetChipTextActive: { color: TabThemes.events.accent },
   favoritePresetText: { color: TabThemes.events.accent, fontWeight: '800' },
+  eventCard: { padding: Spacing.md, gap: Spacing.md, marginBottom: Layout.sectionGap },
+  eventCardWarm: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#d7ece8' },
   sectionHeader: { gap: 4 },
   sectionTitle: { color: TabThemes.events.panel, fontWeight: '800', fontSize: 22 },
   sectionSubtitle: { color: '#5d7774', fontSize: 13 },

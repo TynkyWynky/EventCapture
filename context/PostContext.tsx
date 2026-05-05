@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
 
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
+import { isRemovedSeedEventId } from '@/constants/events';
 import { Post, PostUser } from '@/constants/posts';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
@@ -50,6 +51,18 @@ function isValidPost(value: unknown): value is Post {
   );
 }
 
+function sanitizePost(post: Post): Post {
+  if (!isRemovedSeedEventId(post.eventId)) {
+    return post;
+  }
+
+  return {
+    ...post,
+    eventId: undefined,
+    eventTitle: undefined,
+  };
+}
+
 function parseStoredState(rawValue: string | null): Post[] {
   if (!rawValue) {
     return [];
@@ -57,7 +70,9 @@ function parseStoredState(rawValue: string | null): Post[] {
 
   try {
     const parsedValue = JSON.parse(rawValue) as unknown;
-    return Array.isArray(parsedValue) ? parsedValue.filter(isValidPost) : [];
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter(isValidPost).map(sanitizePost)
+      : [];
   } catch {
     return [];
   }
@@ -69,12 +84,17 @@ function mergePostCollections(...collections: Post[][]): Post[] {
 
   for (const collection of collections) {
     for (const post of collection) {
-      if (!isValidPost(post) || seenIds.has(post.id)) {
+      if (!isValidPost(post)) {
         continue;
       }
 
-      seenIds.add(post.id);
-      merged.push(post);
+      const sanitizedPost = sanitizePost(post);
+      if (seenIds.has(sanitizedPost.id)) {
+        continue;
+      }
+
+      seenIds.add(sanitizedPost.id);
+      merged.push(sanitizedPost);
     }
   }
 
@@ -129,7 +149,7 @@ export function PostProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       const remotePosts = await fetchRemotePosts();
-      setPosts(remotePosts as Post[]);
+      setPosts(remotePosts.map((post) => sanitizePost(post as Post)));
       setIsUsingCachedData(false);
       setIsOffline(false);
       setError(null);
