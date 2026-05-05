@@ -10,7 +10,6 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
 $venvDir = Join-Path $backendDir ".venv"
 $backendPython = Join-Path $venvDir "Scripts\python.exe"
-$backendPip = Join-Path $venvDir "Scripts\pip.exe"
 $requirementsPath = Join-Path $backendDir "requirements.txt"
 $modelPath = Join-Path $backendDir "yolov8n.pt"
 $nodeModulesDir = Join-Path $repoRoot "node_modules"
@@ -68,6 +67,20 @@ function Assert-PathExists {
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "$Label missing: $Path"
     }
+}
+
+function Ensure-BackendPip {
+    & $backendPython -m pip --version 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        return
+    }
+
+    Write-Host "Bootstrapping pip inside backend virtual environment..." -ForegroundColor DarkYellow
+    & $backendPython -m ensurepip --upgrade | Out-Null
+    Assert-LastExitCode "Backend pip bootstrap"
+
+    & $backendPython -m pip --version 2>$null | Out-Null
+    Assert-LastExitCode "Backend pip verification"
 }
 
 function Test-FrontendDependenciesReady {
@@ -144,7 +157,8 @@ Assert-PathExists $modelPath "YOLO model"
 
 if (-not $SkipBackendInstall) {
     Invoke-Step "Installing backend dependencies..." {
-        & $backendPip install -r $requirementsPath
+        Ensure-BackendPip
+        & $backendPython -m pip install --disable-pip-version-check -r $requirementsPath
         Assert-LastExitCode "Backend dependency installation"
     }
 }

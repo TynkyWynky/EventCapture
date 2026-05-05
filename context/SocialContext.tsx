@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
+import { isRemovedSeedEventId } from '@/constants/events';
 import { useEvents } from '@/context/EventContext';
 import { useUser } from '@/context/UserContext';
 import {
@@ -81,6 +82,12 @@ function timeAgo(timestamp: string) {
   return 'Yesterday';
 }
 
+function sanitizeSocialStateMap(value: SocialStateMap): SocialStateMap {
+  return Object.fromEntries(
+    Object.entries(value).filter(([eventId]) => !isRemovedSeedEventId(eventId))
+  );
+}
+
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
 export function SocialProvider({ children }: { children: ReactNode }) {
@@ -108,8 +115,9 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           socialState?: SocialStateMap;
         };
 
-        setSocialState(parsed.socialState ?? {});
-        setIsUsingCachedData(Object.keys(parsed.socialState ?? {}).length > 0);
+        const sanitizedState = sanitizeSocialStateMap(parsed.socialState ?? {});
+        setSocialState(sanitizedState);
+        setIsUsingCachedData(Object.keys(sanitizedState).length > 0);
       } catch {
         await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
       } finally {
@@ -148,8 +156,12 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       fetchNotifications(),
     ]);
 
-    const nextState: SocialStateMap = { ...remoteSocial };
+    const nextState: SocialStateMap = sanitizeSocialStateMap({ ...remoteSocial });
     for (const plan of remotePlans) {
+      if (isRemovedSeedEventId(plan.event_id)) {
+        continue;
+      }
+
       nextState[plan.event_id] = {
         ...(nextState[plan.event_id] ?? emptySocialState),
         saved: plan.saved,
