@@ -18,7 +18,7 @@ export default function CreateProfileScreen() {
   const [fullName, setFullName] = useState(user.fullName === 'Event Friend' ? '' : user.fullName);
   const [city, setCity] = useState(user.city);
   const [email, setEmail] = useState(user.email);
-  const [password, setPassword] = useState('eventcapture123');
+  const [password, setPassword] = useState('');
   const [bio, setBio] = useState('');
   const isCompleteDisabled = !username.trim() || !fullName.trim() || !email.trim() || !password.trim();
 
@@ -154,8 +154,8 @@ export default function CreateProfileScreen() {
               <TouchableOpacity
                 style={[styles.primary, isCompleteDisabled && styles.primaryDisabled]}
                 disabled={isCompleteDisabled}
-                onPress={() => {
-                  createProfile({
+                onPress={async () => {
+                  const result = await createProfile({
                     username,
                     fullName,
                     city,
@@ -164,7 +164,12 @@ export default function CreateProfileScreen() {
                     email,
                     password,
                   });
-                  router.replace('/(tabs)');
+                  if (result.ok) {
+                    router.replace('/(tabs)');
+                    return;
+                  }
+
+                  Alert.alert('Unable to create account', result.error ?? 'Please try again.');
                 }}>
                 <Text style={styles.primaryText}>Complete profile</Text>
               </TouchableOpacity>

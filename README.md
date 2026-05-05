@@ -12,11 +12,10 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 ## Current product shape
 
 - The mobile app is the main product surface
-- Event and post data now sync to the FastAPI backend when it is reachable, while AsyncStorage stays in place as the app's offline fallback cache
+- Auth, profiles, events, posts, likes, comments, event planning state, and persisted captures are backend-driven
+- AsyncStorage remains only as local session persistence and offline cache, not as the primary production datastore
 - Drink captures are stored by the backend in SQLite plus media files so posted photos survive app restarts and can be reused later
-- User auth, filters, and social planning are still prototype-local
-- Authentication is local demo auth, not a production identity system
-- Crown rewards are awarded from the detector result when a beer-like drink or active drinking moment is found
+- Crown rewards are still awarded on the app side from detector-backed results
 - The backend also saves the latest analyzed and annotated frames into `backend/debug/`
 
 ## Main app flows
@@ -40,7 +39,24 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 
 - Node.js with npm available on your machine
 - Python 3.10+ for the backend
-- A working backend virtual environment at `backend/.venv`
+- PowerShell on Windows
+
+### Environment
+
+Copy `.env.example` values into your shell or your preferred environment file setup.
+
+Important frontend variable:
+
+- `EXPO_PUBLIC_BACKEND_API_URL`
+
+Important backend variables:
+
+- `EVENTCAPTURE_SECRET_KEY`
+- `EVENTCAPTURE_DATABASE_PATH`
+- `EVENTCAPTURE_ALLOWED_ORIGINS`
+- `EVENTCAPTURE_ENV`
+- `EVENTCAPTURE_DEBUG`
+- `EVENTCAPTURE_PORT`
 
 ### Install app dependencies
 
@@ -69,12 +85,6 @@ On Windows PowerShell:
 .\.venv\Scripts\pip install -r requirements.txt
 ```
 
-### Run the Expo app only
-
-```bash
-npm start
-```
-
 ### Run environment checks only
 
 ```bash
@@ -84,58 +94,103 @@ npm run check
 This validates:
 
 - Node.js and npm availability
-- the backend virtualenv Python executable for your current platform
-- `backend/yolov8n.pt`
-- frontend `node_modules`
-- backend imports
+- backend Python and package imports
+- frontend Expo CLI availability
+- detector model presence
 - Expo startup wiring
+- backend health readiness path
 
-### Run backend and Expo separately
+### Start backend and Expo together
 
-```bash
-npm run check
-npm run start:services
-```
-
-`npm run start:services` skips the checks and starts the backend plus Expo using your current shell on macOS/Linux, or separate PowerShell windows on Windows.
-
-### Run checks and start everything in one command
-
-```bash
+```powershell
 npm run start:all
 ```
 
-## Manual backend start
+This command:
 
-If you want to run the detector without the helper script:
+- prepares missing local setup
+- starts the backend first
+- waits for `GET /health` to succeed
+- then starts Expo in a second PowerShell window
+- fails clearly if either side cannot start
 
-```bash
-cd backend
-./.venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
-```
-
-On Windows PowerShell:
+### Start with the direct launcher
 
 ```powershell
-cd backend
-.\.venv\Scripts\python -m uvicorn app:app --host 0.0.0.0 --port 8000
+.\launch-dev.cmd
+```
+
+### Backend only
+
+```powershell
+npm run backend:start
+```
+
+### Seed development data
+
+```powershell
+npm run backend:seed
+```
+
+This creates explicit sample users/events/posts for local development:
+
+- `admin@eventcapture.app` / `AdminPass123!`
+- `organizer@eventcapture.app` / `Organizer123!`
+- `guest@eventcapture.app` / `GuestPass123!`
+
+### Windows one-click launcher
+
+If you want a script that prepares the environment and launches both backend and Expo for you on Windows:
+
+```powershell
+.\launch-dev.cmd
+```
+
+Or run the PowerShell version directly:
+
+```powershell
+.\scripts\launch-dev.ps1
+```
+
+This launcher will:
+
+- create `backend/.venv` if it does not exist yet
+- install backend requirements
+- install frontend dependencies if `node_modules` is missing
+- verify the backend imports and Expo startup
+- wait for backend health before opening Expo
+- open backend and Expo in separate PowerShell windows
+
+For a dry run without launching services:
+
+```powershell
+npm run dev:check
+```
+
+## Backend health and networking
+
+Health endpoint:
+
+```text
+GET /health
 ```
 
 The backend serves:
 
 - the detector API on port `8000`
-- the events, posts, and persisted captures API on port `8000`
+- the auth, users, events, posts, social state, and persisted captures API on port `8000`
 - stored media files from `/media/...`
 - the browser tester at `http://localhost:8000/`
 
 ## Mobile app to backend connection
 
-The app resolves the detector base URL in this order:
+The app resolves the backend base URL in this order:
 
 1. `EXPO_PUBLIC_BACKEND_API_URL`
 2. `EXPO_PUBLIC_DETECTION_API_URL`
 3. Expo-provided local hosts when available, preferring LAN IPs over loopback hosts
-4. `http://127.0.0.1:8000` and `http://localhost:8000` as local fallbacks
+4. `http://10.0.2.2:8000` for Android emulator
+5. `http://127.0.0.1:8000` and `http://localhost:8000` as local fallbacks
 
 On network failures the mobile app now retries across those candidates automatically and surfaces the URLs it tried.
 
@@ -147,6 +202,13 @@ Example:
 $env:EXPO_PUBLIC_BACKEND_API_URL="http://192.168.1.20:8000"
 npm start
 ```
+
+Networking guidance:
+
+- Expo web: use `http://localhost:8000`
+- Android emulator: use `http://10.0.2.2:8000`
+- iOS simulator: use `http://127.0.0.1:8000` or `http://localhost:8000`
+- Physical phone: use your computer's LAN IP, for example `http://192.168.1.20:8000`
 
 ## Build a downloadable Android APK
 
@@ -218,13 +280,6 @@ npm run build:apk
 - If the APK installs but drink detection fails, confirm the backend is still running and reachable from the same network as your device.
 - If you only want the detailed APK build notes, see `APK_BUILD.md`.
 
-## Demo credentials
-
-- Demo user: `demo@eventcapture.app` / `eventcapture123`
-- Admin user: `admin` / `admin`
-
-These credentials are local-only and backed by AsyncStorage.
-
 ## Detector behavior
 
 The backend currently combines several signals:
@@ -251,16 +306,33 @@ When the app uses the persisted capture endpoint, the backend also:
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/health` | GET | Basic backend and model availability |
+| `/health` | GET | Backend readiness, environment, version, and database availability |
+| `/api/health` | GET | Compatibility health endpoint |
 | `/api/status` | GET | Runtime status, model info, supported drink classes |
 | `/api/debug` | GET | Debug snapshot metadata and saved artifact paths |
+| `/api/auth/register` | POST | Register a new account and return a session token |
+| `/api/auth/login` | POST | Log in and return a session token |
+| `/api/auth/logout` | POST | Revoke the current session token |
+| `/api/auth/me` | GET | Load the currently signed-in user |
+| `/api/auth/profile` | PUT | Update the current user's profile |
+| `/api/auth/change-password` | POST | Change the current user's password |
+| `/api/users` | GET | List users for admins |
+| `/api/users/{userId}` | DELETE | Remove a user as admin |
 | `/api/detect` | POST | Analyze a single uploaded image |
 | `/api/captures/analyze` | POST | Analyze an image, persist original + annotated media, and store the detection result |
 | `/api/captures` | GET | List recent persisted capture summaries |
 | `/api/events` | GET/POST | Read and create shared events in SQLite |
+| `/api/events/{eventId}` | DELETE | Delete an event as owner/admin |
+| `/api/events/social` | GET | Load backend-driven event likes/comments/plans for the current user |
+| `/api/events/{eventId}/likes/toggle` | POST | Toggle the current user's event like |
+| `/api/events/{eventId}/save-toggle` | POST | Toggle the current user's saved event state |
+| `/api/events/{eventId}/plan` | POST | Set the current user's plan state |
+| `/api/events/{eventId}/plan-note` | POST | Save the current user's plan note |
+| `/api/events/{eventId}/comments` | POST | Add an event comment as the current user |
+| `/api/events/plans` | GET | Load the current user's saved/planned events |
 | `/api/posts` | GET/POST | Read and create feed posts in SQLite |
-| `/api/posts/{postId}/likes/toggle` | POST | Toggle a username on a post's like list |
-| `/api/posts/{postId}/comments` | POST | Add a post comment |
+| `/api/posts/{postId}/likes/toggle` | POST | Toggle the current user's like on a post |
+| `/api/posts/{postId}/comments` | POST | Add a post comment as the current user |
 | `/api/posts/{postId}` | DELETE | Delete a post |
 | `/ws/detect` | WebSocket | Real-time frame-by-frame detector stream |
 | `/` | GET | Browser demo UI from `frontend/` |
@@ -297,11 +369,36 @@ backend/models/drink_detector.pt
 
 That model is loaded automatically when present.
 
+## Troubleshooting
+
+### npm certificate errors
+
+If `npm install` fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`, your machine or network is intercepting TLS traffic. Safe first steps:
+
+```powershell
+npm config get registry
+npm config get strict-ssl
+npm config delete cafile
+npm config set strict-ssl true
+npm cache clean --force
+```
+
+If your company or school uses SSL inspection, configure npm to trust that root CA instead of disabling SSL checks globally.
+
+### pip certificate errors
+
+If `pip install -r backend/requirements.txt` fails with certificate validation errors, the machine likely needs the same root CA fix at the Python level.
+
+### Expo device networking
+
+- Web cannot reach `localhost` from a phone
+- Android emulator should use `10.0.2.2`
+- Physical devices need the computer's LAN IP
+- If detection works in the browser but not on-device, the backend URL is usually the cause
+
 ## Notes and limitations
 
-- Authentication is still demo-local and not backed by a production identity system
-- Social planning, event reactions, and filters are still local-first prototype state
-- Events and posts now have backend sync, but the app still keeps AsyncStorage as a resilience fallback
-- The browser demo is still present and useful for detector debugging, but the main experience is the Expo app
+- The browser detector demo is still present and useful for detector debugging, but the main experience is the Expo app
+- Notifications are still a lightweight local activity layer rather than a full backend notification system
 - The helper scripts are PowerShell-first and currently tailored to this Windows setup
 - Runtime-generated backend data now lives in `backend/eventcapture.db`, `backend/storage/`, and `backend/debug/` and is ignored by git

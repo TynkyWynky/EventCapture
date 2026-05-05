@@ -1,10 +1,15 @@
-"""API response models for the detection backend."""
+"""API schemas for the EventCapture backend."""
+
+from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
     ok: bool
+    status: str
+    environment: str
+    version: str
     model_exists: bool
     custom_model_exists: bool
     database_exists: bool
@@ -89,8 +94,58 @@ class AppUserResponse(BaseModel):
     avatar_uri: str
 
 
+class UserProfileResponse(AppUserResponse):
+    full_name: str
+    bio: str
+    city: str
+    email: str
+    role: str
+    created_at: str
+    updated_at: str
+
+
+class AuthTokenResponse(BaseModel):
+    token: str
+    expires_at: str
+    user: UserProfileResponse
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=32)
+    full_name: str = Field(min_length=1, max_length=120)
+    email: str
+    password: str = Field(min_length=8, max_length=128)
+    city: str = Field(min_length=1, max_length=80)
+    bio: str = Field(default="", max_length=500)
+    avatar_uri: str = Field(default="", max_length=2048)
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UpdateProfileRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=32)
+    full_name: str = Field(min_length=1, max_length=120)
+    city: str = Field(min_length=1, max_length=80)
+    bio: str = Field(default="", max_length=500)
+    avatar_uri: str = Field(default="", max_length=2048)
+    email: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class EventPayload(BaseModel):
-    id: str
+    id: str | None = None
     title: str
     short_title: str | None = None
     date: str
@@ -110,6 +165,50 @@ class EventPayload(BaseModel):
     badge: str
     description: str
     tags: list[str] = Field(default_factory=list)
+    created_by_user_id: str | None = None
+
+
+class EventCommentResponse(BaseModel):
+    id: str
+    user: AppUserResponse
+    text: str
+    time: str
+
+
+class EventSocialStateResponse(BaseModel):
+    liked: bool = False
+    saved: bool = False
+    likes: list[AppUserResponse] = Field(default_factory=list)
+    comments: list[EventCommentResponse] = Field(default_factory=list)
+    plan_status: str | None = None
+    plan_note: str = ""
+
+
+class EventSocialMapResponse(BaseModel):
+    items: dict[str, EventSocialStateResponse] = Field(default_factory=dict)
+
+
+class EventPlanListItemResponse(BaseModel):
+    event_id: str
+    saved: bool
+    plan_status: str | None = None
+    plan_note: str = ""
+
+
+class EventPlanListResponse(BaseModel):
+    items: list[EventPlanListItemResponse] = Field(default_factory=list)
+
+
+class AddEventCommentRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=800)
+
+
+class EventPlanRequest(BaseModel):
+    status: str | None = None
+
+
+class EventPlanNoteRequest(BaseModel):
+    note: str = Field(default="", max_length=500)
 
 
 class PostCommentResponse(BaseModel):
@@ -120,8 +219,8 @@ class PostCommentResponse(BaseModel):
 
 
 class PostPayload(BaseModel):
-    id: str
-    user: AppUserResponse
+    id: str | None = None
+    user: AppUserResponse | None = None
     image_uri: str
     date: str
     is_beer_finished: bool
@@ -133,12 +232,7 @@ class PostPayload(BaseModel):
 
 
 class AddPostCommentRequest(BaseModel):
-    user: AppUserResponse
-    text: str
-
-
-class TogglePostLikeRequest(BaseModel):
-    username: str
+    text: str = Field(min_length=1, max_length=800)
 
 
 class CaptureRecordResponse(BaseModel):
@@ -168,3 +262,7 @@ class CaptureListItemResponse(CaptureRecordResponse):
 
 class AnalyzeCaptureResponse(DetectImageResponse):
     capture: CaptureRecordResponse
+
+
+class MessageResponse(BaseModel):
+    message: str

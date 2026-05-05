@@ -77,7 +77,7 @@ export default function EditEventScreen() {
     </View>
   );
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     const locationParts = address
       .split(',')
       .map((part) => part.trim())
@@ -90,19 +90,38 @@ export default function EditEventScreen() {
       ? dateTime.split('  ')
       : [dateTime, event.time]; // fallback to old time if no double spaces used
 
-    updateEvent(eventId, {
-      title,
-      description,
-      address,
-      place,
-      date: datePart || 'TBD',
-      fullDate: dateTime || 'Date to be confirmed',
-      time: timePart || event.time,
-      vibe,
-      price,
-      priceLabel: price ? `${price} entry` : 'Free entry',
-      heroImage: coverUrl,
-    });
+    let updatedEvent;
+    try {
+      updatedEvent = await updateEvent(eventId, {
+        title,
+        description,
+        address,
+        place,
+        date: datePart || 'TBD',
+        fullDate: dateTime || 'Date to be confirmed',
+        time: timePart || event.time,
+        vibe,
+        price,
+        priceLabel: price ? `${price} entry` : 'Free entry',
+        heroImage: coverUrl,
+      });
+    } catch (error) {
+      showToast({
+        tone: 'error',
+        title: 'Update failed',
+        message: error instanceof Error ? error.message : 'The event could not be updated.',
+      });
+      return;
+    }
+
+    if (!updatedEvent) {
+      showToast({
+        tone: 'error',
+        title: 'Update failed',
+        message: 'The event could not be updated.',
+      });
+      return;
+    }
 
     addActivity({
       user: user.username,
@@ -209,7 +228,7 @@ export default function EditEventScreen() {
           <AppButton label="Cancel" variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
           <AppButton
             label="Save Changes"
-            onPress={handleUpdate}
+            onPress={() => void handleUpdate()}
             disabled={isPublishDisabled}
             style={styles.createBtn}
           />

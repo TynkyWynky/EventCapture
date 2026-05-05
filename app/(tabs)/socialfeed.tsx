@@ -69,7 +69,7 @@ export default function SocialFeedScreen() {
         {/* Actions */}
         <View style={styles.actionRow}>
           <View style={styles.actionLeft}>
-            <TouchableOpacity onPress={() => togglePostLike(item.id, user.username)} style={styles.actionButton}>
+            <TouchableOpacity onPress={() => togglePostLike(item.id)} style={styles.actionButton}>
               <Ionicons 
                 name={isLiked ? "heart" : "heart-outline"} 
                 size={26} 

@@ -17,6 +17,12 @@ const getMenuItems = (
   t: ReturnType<typeof useLanguage>['t']
 ): { label: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap; route: Href }[] => [
   {
+    label: t('menuProfileLabel'),
+    subtitle: t('menuProfileHint'),
+    icon: 'person-circle-outline',
+    route: '/profile',
+  },
+  {
     label: t('menuMyNightLabel'),
     subtitle: t('menuMyNightHint'),
     icon: 'calendar-outline',
@@ -89,7 +95,7 @@ export default function MenuScreen() {
             <View style={styles.accountTop}>
               <View style={styles.accountCopy}>
                 <Text style={styles.accountEyebrow}>
-                  {user.email === 'admin' ? 'Admin access' : user.city}
+                  {user.role === 'admin' ? 'Admin access' : user.city}
                 </Text>
                 <Text style={styles.accountName}>{user.fullName || user.username}</Text>
                 <Text style={styles.accountMeta}>@{user.username}</Text>
@@ -97,7 +103,7 @@ export default function MenuScreen() {
 
               <View style={styles.accountBadge}>
                 <Ionicons
-                  name={user.email === 'admin' ? 'shield-checkmark-outline' : 'sparkles-outline'}
+                  name={user.role === 'admin' ? 'shield-checkmark-outline' : 'sparkles-outline'}
                   size={18}
                   color={Colors.light.tint}
                 />
@@ -108,7 +114,7 @@ export default function MenuScreen() {
           </SurfaceCard>
 
           <View style={styles.menuList}>
-            {user.email === 'admin' && (
+            {user.role === 'admin' && (
               <TouchableOpacity
                 style={styles.menuItem}
                 activeOpacity={0.9}
@@ -153,8 +159,9 @@ export default function MenuScreen() {
             variant="secondary"
             style={styles.signOutButton}
             onPress={() => {
-              signOut();
-              router.replace('/auth/login');
+              void signOut().then(() => {
+                router.replace('/auth/login');
+              });
             }}
           />
         </ScrollView>

@@ -59,7 +59,6 @@ export interface DrinkAnalysisResult extends DrinkAnalysisApiResponse {
 }
 
 export interface DrinkAnalysisRequestOptions {
-  username?: string | null;
   eventId?: string | null;
   eventTitle?: string | null;
 }
@@ -69,10 +68,6 @@ async function buildDetectionFormData(
   options: DrinkAnalysisRequestOptions
 ): Promise<FormData> {
   const formData = new FormData();
-
-  if (options.username?.trim()) {
-    formData.append('username', options.username.trim());
-  }
 
   if (options.eventId?.trim()) {
     formData.append('event_id', options.eventId.trim());

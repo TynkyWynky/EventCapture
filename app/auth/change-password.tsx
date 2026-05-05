@@ -19,14 +19,14 @@ export default function ChangePasswordScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (newPassword !== confirmPassword) {
       setSuccess('');
       setError('New password and confirmation do not match.');
       return;
     }
 
-    const result = changePassword(currentPassword, newPassword);
+    const result = await changePassword(currentPassword, newPassword);
 
     if (!result.ok) {
       setSuccess('');
@@ -109,7 +109,7 @@ export default function ChangePasswordScreen() {
             {success ? <Text style={styles.successText}>{success}</Text> : null}
           </SurfaceCard>
 
-          <AppButton label="Save new password" onPress={handleSave} />
+          <AppButton label="Save new password" onPress={() => void handleSave()} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

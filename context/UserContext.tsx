@@ -1,144 +1,154 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
+import {
+  changeAccountPassword,
+  deleteAccount as deleteAccountApi,
+  fetchCurrentUser,
+  loginAccount,
+  logoutAccount,
+  registerAccount,
+  resetAccountPassword,
+  updateAccountProfile,
+} from '@/services/authApi';
+import { clearCachedBackendApiBaseUrl, configureBackendApiAuth } from '@/services/backendApi';
+
 export interface UserProfile {
+  id: string;
   username: string;
   fullName: string;
   bio: string;
   city: string;
   email: string;
   avatarUri: string;
+  role: string;
 }
 
-interface AccountCredentials {
-  email: string;
-  password: string;
+interface AuthActionResult {
+  ok: boolean;
+  error?: string;
 }
 
 interface UserContextType {
   user: UserProfile;
   isAuthenticated: boolean;
   isReady: boolean;
-  signIn: (email: string, password: string) => { ok: boolean; error?: string };
-  createProfile: (profile: Omit<UserProfile, 'email'> & { email?: string; password: string }) => void;
-  updateProfile: (profile: Partial<UserProfile>) => void;
-  resetPassword: (email: string, newPassword: string) => { ok: boolean; error?: string };
-  changePassword: (currentPassword: string, newPassword: string) => { ok: boolean; error?: string };
-  signOut: () => void;
+  isBusy: boolean;
+  isAdmin: boolean;
+  signIn: (email: string, password: string) => Promise<AuthActionResult>;
+  createProfile: (profile: Omit<UserProfile, 'id' | 'role' | 'email'> & { email?: string; password: string }) => Promise<AuthActionResult>;
+  updateProfile: (profile: Partial<UserProfile>) => Promise<AuthActionResult>;
+  resetPassword: (email: string, newPassword: string) => Promise<AuthActionResult>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthActionResult>;
+  deleteAccount: () => Promise<AuthActionResult>;
+  signOut: () => Promise<void>;
 }
 
-interface StoredUserState {
-  user: UserProfile;
-  credentials: AccountCredentials;
-  isAuthenticated: boolean;
+interface StoredSessionState {
+  token: string;
 }
 
-const STORAGE_KEY = 'eventcapture.user';
+const STORAGE_KEY = 'eventcapture.session';
 const DEFAULT_AVATAR = 'https://i.pravatar.cc/160?img=64';
 
-const DEFAULT_USER: UserProfile = {
-  username: 'eventfriend',
-  fullName: 'Event Friend',
-  bio: 'Capturing nights, collecting crowns and keeping the best event memories close.',
+const EMPTY_USER: UserProfile = {
+  id: '',
+  username: '',
+  fullName: '',
+  bio: '',
   city: 'Brussels',
-  email: 'demo@eventcapture.app',
+  email: '',
   avatarUri: DEFAULT_AVATAR,
-};
-
-const DEFAULT_CREDENTIALS: AccountCredentials = {
-  email: DEFAULT_USER.email,
-  password: 'eventcapture123',
-};
-
-const ADMIN_CREDENTIALS: AccountCredentials = {
-  email: 'admin',
-  password: 'admin',
-};
-
-const ADMIN_USER: UserProfile = {
-  username: 'admin',
-  fullName: 'Admin User',
-  bio: 'Platform administrator.',
-  city: 'Brussels',
-  email: 'admin',
-  avatarUri: 'https://i.pravatar.cc/160?img=68',
+  role: 'user',
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-function isValidUserProfile(value: unknown): value is UserProfile {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const user = value as UserProfile;
-
-  return (
-    typeof user.username === 'string' &&
-    typeof user.fullName === 'string' &&
-    typeof user.bio === 'string' &&
-    typeof user.city === 'string' &&
-    typeof user.email === 'string' &&
-    typeof user.avatarUri === 'string'
-  );
+function mapApiUserToProfile(user: {
+  id: string;
+  username: string;
+  full_name: string;
+  bio: string;
+  city: string;
+  email: string;
+  avatar_uri: string;
+  role: string;
+}): UserProfile {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.full_name,
+    bio: user.bio,
+    city: user.city,
+    email: user.email,
+    avatarUri: user.avatar_uri || DEFAULT_AVATAR,
+    role: user.role,
+  };
 }
 
-function parseStoredUserState(rawValue: string | null): StoredUserState | null {
+function parseStoredSession(rawValue: string | null): StoredSessionState | null {
   if (!rawValue) {
     return null;
   }
 
-  const parsedValue = JSON.parse(rawValue) as Partial<StoredUserState>;
-
-  if (!isValidUserProfile(parsedValue.user)) {
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<StoredSessionState>;
+    if (typeof parsed.token !== 'string' || !parsed.token.trim()) {
+      return null;
+    }
+    return { token: parsed.token };
+  } catch {
     return null;
   }
-
-  if (
-    !parsedValue.credentials ||
-    typeof parsedValue.credentials.email !== 'string' ||
-    typeof parsedValue.credentials.password !== 'string'
-  ) {
-    return null;
-  }
-
-  return {
-    user: parsedValue.user,
-    credentials: parsedValue.credentials,
-    isAuthenticated: Boolean(parsedValue.isAuthenticated),
-  };
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
-  const [credentials, setCredentials] = useState<AccountCredentials>(DEFAULT_CREDENTIALS);
+  const [user, setUser] = useState<UserProfile>(EMPTY_USER);
+  const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [hasHydrated, setHasHydrated] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+
+  useEffect(() => {
+    configureBackendApiAuth(() => token);
+  }, [token]);
 
   useEffect(() => {
     let isMounted = true;
 
     const hydrate = async () => {
       try {
-        const storedUser = await AsyncStorage.getItem(STORAGE_KEY);
-        const parsedState = parseStoredUserState(storedUser);
+        const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
+        const session = parseStoredSession(storedValue);
 
-        if (!parsedState || !isMounted) {
+        if (!session?.token) {
           return;
         }
 
-        setUser(parsedState.user);
-        setCredentials(parsedState.credentials);
-        setIsAuthenticated(parsedState.isAuthenticated);
-      } catch {
-        try {
-          await AsyncStorage.removeItem(STORAGE_KEY);
-        } catch {
-          // Ignore cleanup failures and keep default user state in memory.
+        if (!isMounted) {
+          return;
         }
+
+        setToken(session.token);
+        configureBackendApiAuth(() => session.token);
+        const currentUser = await fetchCurrentUser();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUser(mapApiUserToProfile(currentUser));
+        setIsAuthenticated(true);
+      } catch {
+        if (isMounted) {
+          setToken(null);
+          setUser(EMPTY_USER);
+          setIsAuthenticated(false);
+        }
+        await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
       } finally {
         if (isMounted) {
-          setHasHydrated(true);
+          setIsReady(true);
         }
       }
     };
@@ -151,21 +161,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!hasHydrated) {
+    if (!isReady) {
       return;
     }
 
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ user, credentials, isAuthenticated })).catch(() => {
-      // Keep the app usable even if persistence is unavailable.
-    });
-  }, [credentials, hasHydrated, isAuthenticated, user]);
+    if (!token) {
+      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+      return;
+    }
+
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ token })).catch(() => {});
+  }, [isReady, token]);
 
   const value = useMemo<UserContextType>(
     () => ({
       user,
       isAuthenticated,
-      isReady: hasHydrated,
-      signIn: (email, password) => {
+      isReady,
+      isBusy,
+      isAdmin: user.role === 'admin',
+      signIn: async (email, password) => {
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedPassword = password.trim();
 
@@ -173,139 +188,145 @@ export function UserProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: 'Enter both email and password.' };
         }
 
-        // Check admin credentials
-        if (
-          normalizedEmail === ADMIN_CREDENTIALS.email.toLowerCase() &&
-          normalizedPassword === ADMIN_CREDENTIALS.password
-        ) {
-          setUser(ADMIN_USER);
-          setCredentials(ADMIN_CREDENTIALS);
+        setIsBusy(true);
+        try {
+          const response = await loginAccount(normalizedEmail, normalizedPassword);
+          setToken(response.token);
+          setUser(mapApiUserToProfile(response.user));
           setIsAuthenticated(true);
           return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Sign in failed.',
+          };
+        } finally {
+          setIsBusy(false);
+        }
+      },
+      createProfile: async (profile) => {
+        const email = profile.email?.trim() ?? '';
+        const password = profile.password.trim();
+        if (!email || !password || !profile.username.trim() || !profile.fullName.trim()) {
+          return { ok: false, error: 'Complete all required fields.' };
         }
 
-        // Check if it matches the currently stored credentials
-        if (
-          normalizedEmail === credentials.email.toLowerCase() &&
-          normalizedPassword === credentials.password
-        ) {
-          // It might be admin or a custom registered user
-          if (normalizedEmail === ADMIN_CREDENTIALS.email.toLowerCase()) {
-            setUser(ADMIN_USER);
-          } else {
-            // Restore from stored user if available, but keep the current email
-            setUser((prev) => ({
-              ...prev,
-              email: credentials.email,
-            }));
-          }
+        setIsBusy(true);
+        try {
+          const response = await registerAccount({
+            username: profile.username.trim(),
+            full_name: profile.fullName.trim(),
+            email,
+            password,
+            city: profile.city.trim() || 'Brussels',
+            bio: profile.bio.trim(),
+            avatar_uri: profile.avatarUri.trim() || DEFAULT_AVATAR,
+          });
+          setToken(response.token);
+          setUser(mapApiUserToProfile(response.user));
           setIsAuthenticated(true);
           return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unable to create account.',
+          };
+        } finally {
+          setIsBusy(false);
+        }
+      },
+      updateProfile: async (profile) => {
+        if (!isAuthenticated) {
+          return { ok: false, error: 'Sign in to update your profile.' };
         }
 
-        // Fallback: Check hardcoded demo credentials
-        if (
-          normalizedEmail === DEFAULT_CREDENTIALS.email.toLowerCase() &&
-          normalizedPassword === DEFAULT_CREDENTIALS.password
-        ) {
-          setUser(DEFAULT_USER);
-          setCredentials(DEFAULT_CREDENTIALS);
-          setIsAuthenticated(true);
+        setIsBusy(true);
+        try {
+          const updated = await updateAccountProfile({
+            username: profile.username?.trim() || user.username,
+            full_name: profile.fullName?.trim() || user.fullName,
+            city: profile.city?.trim() || user.city,
+            bio: profile.bio?.trim() || user.bio,
+            avatar_uri: profile.avatarUri?.trim() || user.avatarUri,
+            email: profile.email?.trim() || user.email,
+          });
+          setUser(mapApiUserToProfile(updated));
           return { ok: true };
-        }
-
-        return { ok: false, error: 'Email or password is incorrect.' };
-      },
-      createProfile: (profile) => {
-        const nextEmail = profile.email?.trim() || DEFAULT_USER.email;
-        setUser({
-          username: profile.username.trim() || DEFAULT_USER.username,
-          fullName: profile.fullName.trim() || DEFAULT_USER.fullName,
-          bio: profile.bio.trim() || DEFAULT_USER.bio,
-          city: profile.city.trim() || DEFAULT_USER.city,
-          email: nextEmail,
-          avatarUri: profile.avatarUri.trim() || DEFAULT_AVATAR,
-        });
-        setCredentials({
-          email: nextEmail,
-          password: profile.password.trim() || DEFAULT_CREDENTIALS.password,
-        });
-        setIsAuthenticated(true);
-      },
-      updateProfile: (profile) => {
-        setUser((prev) => ({
-          ...prev,
-          ...profile,
-          username: profile.username?.trim() || prev.username,
-          fullName: profile.fullName?.trim() || prev.fullName,
-          bio: profile.bio?.trim() || prev.bio,
-          city: profile.city?.trim() || prev.city,
-          email: profile.email?.trim() || prev.email,
-          avatarUri: profile.avatarUri?.trim() || prev.avatarUri,
-        }));
-        if (profile.email?.trim()) {
-          const trimmedEmail = profile.email.trim();
-          setCredentials((prev) => ({
-            ...prev,
-            email: trimmedEmail,
-          }));
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unable to update profile.',
+          };
+        } finally {
+          setIsBusy(false);
         }
       },
-      resetPassword: (email, newPassword) => {
-        const normalizedEmail = email.trim().toLowerCase();
-        const trimmedPassword = newPassword.trim();
-
-        if (!normalizedEmail || !trimmedPassword) {
-          return { ok: false, error: 'Enter both email and new password.' };
+      resetPassword: async (email, newPassword) => {
+        setIsBusy(true);
+        try {
+          await resetAccountPassword(email.trim(), newPassword.trim());
+          return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unable to reset password.',
+          };
+        } finally {
+          setIsBusy(false);
         }
-
-        if (normalizedEmail !== credentials.email.toLowerCase()) {
-          return { ok: false, error: 'No account matches that email address.' };
-        }
-
-        if (trimmedPassword.length < 6) {
-          return { ok: false, error: 'Password must be at least 6 characters.' };
-        }
-
-        setCredentials((prev) => ({
-          ...prev,
-          password: trimmedPassword,
-        }));
-
-        return { ok: true };
       },
-      changePassword: (currentPassword, newPassword) => {
-        const trimmedCurrent = currentPassword.trim();
-        const trimmedNext = newPassword.trim();
-
-        if (!trimmedCurrent || !trimmedNext) {
+      changePassword: async (currentPassword, newPassword) => {
+        if (!currentPassword.trim() || !newPassword.trim()) {
           return { ok: false, error: 'Enter your current and new password.' };
         }
 
-        if (trimmedCurrent !== credentials.password) {
-          return { ok: false, error: 'Current password is incorrect.' };
+        setIsBusy(true);
+        try {
+          await changeAccountPassword(currentPassword.trim(), newPassword.trim());
+          return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unable to change password.',
+          };
+        } finally {
+          setIsBusy(false);
         }
-
-        if (trimmedNext.length < 6) {
-          return { ok: false, error: 'New password must be at least 6 characters.' };
-        }
-
-        if (trimmedCurrent === trimmedNext) {
-          return { ok: false, error: 'Choose a different new password.' };
-        }
-
-        setCredentials((prev) => ({
-          ...prev,
-          password: trimmedNext,
-        }));
-
-        return { ok: true };
       },
-      signOut: () => {
-        setIsAuthenticated(false);
+      deleteAccount: async () => {
+        setIsBusy(true);
+        try {
+          await deleteAccountApi();
+          setToken(null);
+          setUser(EMPTY_USER);
+          setIsAuthenticated(false);
+          clearCachedBackendApiBaseUrl();
+          await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+          return { ok: true };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unable to delete account.',
+          };
+        } finally {
+          setIsBusy(false);
+        }
+      },
+      signOut: async () => {
+        try {
+          await logoutAccount();
+        } catch {
+          // Still clear the local session if the backend cannot be reached.
+        } finally {
+          setToken(null);
+          setUser(EMPTY_USER);
+          setIsAuthenticated(false);
+          clearCachedBackendApiBaseUrl();
+          await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+        }
       },
     }),
-    [credentials, hasHydrated, isAuthenticated, user]
+    [isAuthenticated, isBusy, isReady, user]
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

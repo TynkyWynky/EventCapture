@@ -52,7 +52,7 @@ export default function CreateEventScreen() {
     </View>
   );
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const locationParts = address
       .split(',')
       .map((part) => part.trim())
@@ -62,7 +62,7 @@ export default function CreateEventScreen() {
     const [datePart, timePart] = dateTime.includes('  ')
       ? dateTime.split('  ')
       : [dateTime, 'Time to be confirmed'];
-    const createdEvent = createEvent({
+    const createdEvent = await createEvent({
       title,
       description,
       address,
@@ -183,7 +183,7 @@ export default function CreateEventScreen() {
           <AppButton label={t('createBtnCancel')} variant="secondary" onPress={() => router.back()} style={styles.cancelBtn} />
           <AppButton
             label={t('createBtnPublish')}
-            onPress={handleCreate}
+            onPress={() => void handleCreate()}
             disabled={isPublishDisabled}
             style={styles.createBtn}
           />

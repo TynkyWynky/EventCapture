@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user, updateProfile, signOut } = useUser();
+  const { user, updateProfile, deleteAccount } = useUser();
   const { showToast } = useToast();
   const [avatarUri, setAvatarUri] = useState(user.avatarUri);
   const [username, setUsername] = useState(user.username);
@@ -34,13 +34,23 @@ export default function EditProfileScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            signOut();
-            showToast({
-              tone: 'info',
-              title: 'Account deleted',
-              message: 'Your account has been removed. This is a demo action.',
+            void deleteAccount().then((result) => {
+              if (!result.ok) {
+                showToast({
+                  tone: 'error',
+                  title: 'Delete failed',
+                  message: result.error ?? 'Unable to delete your account.',
+                });
+                return;
+              }
+
+              showToast({
+                tone: 'info',
+                title: 'Account deleted',
+                message: 'Your account has been removed.',
+              });
+              router.replace('/auth/login');
             });
-            router.replace('/auth/login');
           },
         },
       ]
@@ -174,8 +184,17 @@ export default function EditProfileScreen() {
           <View style={styles.actionRow}>
             <AppButton
               label="Save profile"
-              onPress={() => {
-                updateProfile({ avatarUri, username, fullName, city, bio, email });
+              onPress={async () => {
+                const result = await updateProfile({ avatarUri, username, fullName, city, bio, email });
+                if (!result.ok) {
+                  showToast({
+                    tone: 'error',
+                    title: 'Update failed',
+                    message: result.error ?? 'Unable to save your profile right now.',
+                  });
+                  return;
+                }
+
                 showToast({
                   tone: 'success',
                   title: 'Profile updated',

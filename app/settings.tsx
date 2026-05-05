@@ -15,7 +15,7 @@ import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { signOut } = useUser();
+  const { signOut, deleteAccount } = useUser();
   const { showToast } = useToast();
   const { language, setLanguage, t } = useLanguage();
   const [push, setPush] = useState(true);
@@ -32,13 +32,23 @@ export default function SettingsScreen() {
           text: t('deleteBtn'),
           style: 'destructive',
           onPress: () => {
-            signOut();
-            showToast({
-              tone: 'info',
-              title: t('accDeletedTitle'),
-              message: t('accDeletedMsg'),
+            void deleteAccount().then((result) => {
+              if (!result.ok) {
+                showToast({
+                  tone: 'error',
+                  title: t('deleteAccAlertTitle'),
+                  message: result.error ?? 'Unable to delete your account right now.',
+                });
+                return;
+              }
+
+              showToast({
+                tone: 'info',
+                title: t('accDeletedTitle'),
+                message: 'Your account has been removed.',
+              });
+              router.replace('/auth/login');
             });
-            router.replace('/auth/login');
           },
         },
       ]
@@ -114,8 +124,9 @@ export default function SettingsScreen() {
             label={t('settingsSignOutBtn')}
             variant="secondary"
             onPress={() => {
-              signOut();
-              router.replace('/auth/login');
+              void signOut().then(() => {
+                router.replace('/auth/login');
+              });
             }}
           />
           <AppButton label={t('deleteAccBtn')} variant="danger" onPress={handleDeleteAccount} />

@@ -22,7 +22,9 @@ interface ExpoConstantsHostShape {
 const BACKEND_PORT = 8000;
 const BACKEND_PROBE_TIMEOUT_MS = 2500;
 const BACKEND_REQUEST_TIMEOUT_MS = 20000;
+
 let cachedBackendApiBaseUrl: string | null = null;
+let authTokenProvider: (() => string | null) | null = null;
 
 function trimTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
@@ -36,7 +38,6 @@ function extractHost(value?: string | null): string | null {
   const withoutProtocol = value.replace(/^[a-z]+:\/\//i, '');
   const [hostWithPort] = withoutProtocol.split('/');
   const [host] = hostWithPort.split(':');
-
   return host?.trim() || null;
 }
 
@@ -62,6 +63,10 @@ function isPrivateIpv4Host(host: string): boolean {
 }
 
 function getHostPriority(host: string): number {
+  if (host === '10.0.2.2') {
+    return 5;
+  }
+
   if (isPrivateIpv4Host(host)) {
     return 4;
   }
@@ -100,7 +105,7 @@ function getErrorMessage(payload: unknown): string | null {
     return null;
   }
 
-  const messageCandidates = [payload.error, payload.detail];
+  const messageCandidates = [payload.error, payload.detail, payload.message];
   for (const candidate of messageCandidates) {
     if (typeof candidate === 'string' && candidate.trim()) {
       return candidate;
@@ -143,6 +148,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
+export function configureBackendApiAuth(getToken: () => string | null) {
+  authTokenProvider = getToken;
+}
+
+export function clearCachedBackendApiBaseUrl() {
+  cachedBackendApiBaseUrl = null;
+}
+
 export function getBackendApiBaseUrlCandidates(): string[] {
   const configuredUrl =
     process.env.EXPO_PUBLIC_BACKEND_API_URL?.trim() ||
@@ -157,6 +170,7 @@ export function getBackendApiBaseUrlCandidates(): string[] {
     candidates.push(`http://${host}:${BACKEND_PORT}`);
   }
 
+  candidates.push(`http://10.0.2.2:${BACKEND_PORT}`);
   candidates.push(`http://127.0.0.1:${BACKEND_PORT}`);
   candidates.push(`http://localhost:${BACKEND_PORT}`);
 
@@ -178,18 +192,16 @@ export async function resolveBackendApiBaseUrl(): Promise<string> {
   for (const baseUrl of candidateBaseUrls) {
     try {
       const response = await fetchWithTimeout(
-        `${baseUrl}/api/health`,
+        `${baseUrl}/health`,
         {
           method: 'GET',
-          headers: {
-            Accept: 'application/json',
-          },
+          headers: { Accept: 'application/json' },
         },
         BACKEND_PROBE_TIMEOUT_MS
       );
 
       if (!response.ok) {
-        throw new Error(`Backend probe to ${baseUrl}/api/health returned ${response.status}.`);
+        throw new Error(`Backend probe to ${baseUrl}/health returned ${response.status}.`);
       }
 
       cachedBackendApiBaseUrl = baseUrl;
@@ -198,31 +210,40 @@ export async function resolveBackendApiBaseUrl(): Promise<string> {
       lastProbeError =
         error instanceof Error
           ? error
-          : new Error(`Unable to reach the backend at ${baseUrl}/api/health.`);
+          : new Error(`Unable to reach the backend at ${baseUrl}/health.`);
     }
   }
 
   const attemptedUrls = candidateBaseUrls.join(', ');
   throw new Error(
-    `${lastProbeError?.message ?? 'Unable to reach the backend.'} Tried ${attemptedUrls}. If you are testing on a physical phone, set EXPO_PUBLIC_BACKEND_API_URL to your computer's LAN address, for example http://192.168.1.20:${BACKEND_PORT}.`
+    `${lastProbeError?.message ?? 'Unable to reach the backend.'} Tried ${attemptedUrls}. For Expo web use localhost, for the Android emulator use http://10.0.2.2:${BACKEND_PORT}, and for a physical phone set EXPO_PUBLIC_BACKEND_API_URL to your computer's LAN IP.`
   );
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const baseUrl = await resolveBackendApiBaseUrl();
-  const nextHeaders: Record<string, string> = {
-    Accept: 'application/json',
-  };
-
-  if (init.headers && !Array.isArray(init.headers) && !(init.headers instanceof Headers)) {
-    Object.assign(nextHeaders, init.headers);
+async function buildHeaders(initHeaders?: HeadersInit, includeAuth = true): Promise<Headers> {
+  const headers = new Headers(initHeaders);
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
   }
 
+  if (includeAuth) {
+    const token = authTokenProvider?.();
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+  }
+
+  return headers;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}, includeAuth = true): Promise<T> {
+  const baseUrl = await resolveBackendApiBaseUrl();
+  const headers = await buildHeaders(init.headers, includeAuth);
   const response = await fetchWithTimeout(
     `${baseUrl}${path}`,
     {
       ...init,
-      headers: nextHeaders,
+      headers,
     },
     BACKEND_REQUEST_TIMEOUT_MS
   );
@@ -235,27 +256,40 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return payload as T;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  return apiRequest<T>(path, { method: 'GET' });
+export async function apiGet<T>(path: string, includeAuth = true): Promise<T> {
+  return apiRequest<T>(path, { method: 'GET' }, includeAuth);
 }
 
-export async function apiPostJson<T>(path: string, body: unknown, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
-  return apiRequest<T>(path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
+export async function apiPostJson<T>(
+  path: string,
+  body: unknown,
+  method: 'POST' | 'PUT' = 'POST',
+  includeAuth = true
+): Promise<T> {
+  return apiRequest<T>(
+    path,
+    {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    includeAuth
+  );
 }
 
-export async function apiPostFormData<T>(path: string, body: FormData): Promise<T> {
-  return apiRequest<T>(path, {
-    method: 'POST',
-    body,
-  });
+export async function apiPostFormData<T>(path: string, body: FormData, includeAuth = true): Promise<T> {
+  return apiRequest<T>(
+    path,
+    {
+      method: 'POST',
+      body,
+    },
+    includeAuth
+  );
 }
 
-export async function apiDelete(path: string): Promise<void> {
-  await apiRequest(path, { method: 'DELETE' });
+export async function apiDelete<T = void>(path: string, includeAuth = true): Promise<T> {
+  return apiRequest<T>(path, { method: 'DELETE' }, includeAuth);
 }

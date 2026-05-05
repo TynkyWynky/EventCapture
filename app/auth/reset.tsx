@@ -21,14 +21,14 @@ export default function ResetScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (newPassword !== confirmPassword) {
       setSuccess('');
       setError('New password and confirmation do not match.');
       return;
     }
 
-    const result = resetPassword(email, newPassword);
+    const result = await resetPassword(email, newPassword);
 
     if (!result.ok) {
       setSuccess('');
@@ -67,7 +67,7 @@ export default function ResetScreen() {
               <View style={styles.inputRow}>
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder="demo@eventcapture.app"
+                  placeholder="you@example.com"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={email}
@@ -103,7 +103,7 @@ export default function ResetScreen() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {success ? <Text style={styles.successText}>{success}</Text> : null}
 
-              <AppButton label="Reset password" onPress={handleReset} size="lg" />
+              <AppButton label="Reset password" onPress={() => void handleReset()} size="lg" />
               <AppButton label="Back to login" variant="secondary" onPress={() => router.back()} />
             </SurfaceCard>
           </ScrollView>
