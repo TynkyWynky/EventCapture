@@ -3,7 +3,6 @@ import { AppImage } from '@/components/ui/app-image';
 import { AppButton } from '@/components/ui/app-button';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
-import { SurfaceCard } from '@/components/ui/surface-card';
 import { Href, useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -29,10 +28,10 @@ const getMenuItems = (
     route: '/event/my',
   },
   {
-    label: t('menuEditProfileLabel'),
-    subtitle: t('menuEditProfileHint'),
-    icon: 'create-outline',
-    route: '/profile/edit',
+    label: t('menuNotificationsLabel'),
+    subtitle: t('menuNotificationsHint'),
+    icon: 'notifications-outline',
+    route: '/notifications',
   },
   {
     label: t('menuSettingsLabel'),
@@ -41,16 +40,22 @@ const getMenuItems = (
     route: '/settings',
   },
   {
-    label: t('menuFaqLabel'),
-    subtitle: t('menuFaqHint'),
-    icon: 'help-circle-outline',
-    route: '/faq',
+    label: t('menuEditProfileLabel'),
+    subtitle: t('menuEditProfileHint'),
+    icon: 'create-outline',
+    route: '/profile/edit',
   },
   {
     label: t('menuContactLabel'),
     subtitle: t('menuContactHint'),
     icon: 'mail-outline',
     route: '/contact',
+  },
+  {
+    label: t('menuFaqLabel'),
+    subtitle: t('menuFaqHint'),
+    icon: 'help-circle-outline',
+    route: '/faq',
   },
   {
     label: t('menuTermsLabel'),
@@ -71,12 +76,11 @@ export default function MenuScreen() {
       <Pressable style={styles.backdrop} onPress={() => router.back()} />
 
       <View style={styles.sheet}>
-        <View style={styles.edgeGlow} />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
           <ScreenHeader
             eyebrow={t('menuEyebrow')}
             title={t('menuTitle')}
-            subtitle={t('menuSubtitle')}
+            subtitle={t('menuUtilitiesSub')}
             leading={
               user.avatarUri ? (
                 <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
@@ -86,36 +90,36 @@ export default function MenuScreen() {
                 </View>
               )
             }
-            rightAction={<IconActionButton icon="close" tone="subtle" onPress={() => router.back()} />}
+            rightAction={<IconActionButton icon="close" tone="subtle" accessibilityLabel="Close menu" onPress={() => router.back()} />}
             mode="compact"
             surface={false}
           />
 
-          <SurfaceCard style={styles.accountCard} variant="feature">
-            <View style={styles.accountTop}>
-              <View style={styles.accountCopy}>
-                <Text style={styles.accountEyebrow}>
-                  {user.role === 'admin' ? 'Admin access' : user.city}
-                </Text>
-                <Text style={styles.accountName}>{user.fullName || user.username}</Text>
-                <Text style={styles.accountMeta}>@{user.username}</Text>
-              </View>
-
-              <View style={styles.accountBadge}>
-                <Ionicons
-                  name={user.role === 'admin' ? 'shield-checkmark-outline' : 'sparkles-outline'}
-                  size={18}
-                  color={Colors.light.tint}
-                />
-              </View>
+          <View style={styles.accountStrip}>
+            <View style={styles.accountCopy}>
+              <Text style={styles.accountEyebrow}>{user.role === 'admin' ? 'Admin access' : user.city}</Text>
+              <Text style={styles.accountName}>{user.fullName || user.username}</Text>
+              <Text style={styles.accountMeta}>@{user.username}</Text>
             </View>
 
-            <Text style={styles.accountText}>{t('menuHeroText')}</Text>
-          </SurfaceCard>
+            <View style={styles.accountBadge}>
+              <Ionicons
+                name={user.role === 'admin' ? 'shield-checkmark-outline' : 'sparkles-outline'}
+                size={18}
+                color={Colors.light.tint}
+              />
+            </View>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('menuUtilitiesTitle')}</Text>
+          </View>
 
           <View style={styles.menuList}>
-            {user.role === 'admin' && (
+            {user.role === 'admin' ? (
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t('adminDashTitle')}
                 style={styles.menuItem}
                 activeOpacity={0.9}
                 onPress={() => router.push('/admin')}>
@@ -130,11 +134,13 @@ export default function MenuScreen() {
 
                 <Ionicons name="chevron-forward" size={18} color="#8b8078" />
               </TouchableOpacity>
-            )}
+            ) : null}
 
             {menuItems.map((item) => (
               <TouchableOpacity
                 key={item.label}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
                 style={styles.menuItem}
                 activeOpacity={0.9}
                 onPress={() => router.push(item.route)}>
@@ -181,7 +187,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    width: '86%',
+    width: '84%',
     height: '100%',
     backgroundColor: Colors.light.canvas,
     borderTopLeftRadius: 32,
@@ -194,15 +200,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: -10, height: 0 },
     elevation: 20,
     overflow: 'hidden',
-  },
-  edgeGlow: {
-    position: 'absolute',
-    top: 72,
-    left: -28,
-    width: 118,
-    height: 118,
-    borderRadius: 59,
-    backgroundColor: 'rgba(244, 123, 32, 0.08)',
   },
   container: {
     paddingHorizontal: Spacing.xl,
@@ -232,19 +229,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 18,
   },
-  accountCard: {
-    gap: 12,
-  },
-  accountTop: {
+  accountStrip: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.xl,
+    padding: 14,
   },
-  accountCopy: {
-    flex: 1,
-    gap: 2,
-  },
+  accountCopy: { flex: 1, gap: 2 },
   accountEyebrow: {
     ...Typography.eyebrow,
     color: Colors.light.tint,
@@ -261,15 +257,16 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.light.card,
+    backgroundColor: Colors.light.cardFeature,
     borderWidth: 1,
     borderColor: Colors.light.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  accountText: {
-    ...Typography.bodySm,
-    color: Colors.light.subtitle,
+  sectionHeader: { paddingTop: 4 },
+  sectionTitle: {
+    ...Typography.sectionTitle,
+    color: Colors.light.title,
   },
   menuList: {
     gap: 10,

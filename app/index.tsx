@@ -1,4 +1,5 @@
 import { useUser } from '@/context/UserContext';
+import { useLanguage } from '@/context/LanguageContext';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,11 +8,19 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Radius } from '@/constants/theme';
+
+const loopStepKeys = [
+  ['loopFindTitle', 'loopFindBody'],
+  ['loopCaptureTitle', 'loopCaptureBody'],
+  ['loopEarnTitle', 'loopEarnBody'],
+  ['loopShareTitle', 'loopShareBody'],
+] as const;
 
 export default function SplashScreen() {
   const router = useRouter();
   const { isAuthenticated } = useUser();
+  const { t } = useLanguage();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -22,13 +31,11 @@ export default function SplashScreen() {
 
         <View style={styles.hero}>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>CAPTURE THE NIGHT</Text>
+            <Text style={styles.badgeText}>{t('landingBadge')}</Text>
           </View>
 
-          <Text style={styles.title}>EventCapture</Text>
-          <Text style={styles.subtitle}>
-            Discover standout events, save the best moments and keep your whole night in one place.
-          </Text>
+          <Text style={styles.title}>{t('landingTitle')}</Text>
+          <Text style={styles.subtitle}>{t('landingSubtitle')}</Text>
 
           <View style={styles.card}>
             <View style={styles.cardTop}>
@@ -41,27 +48,41 @@ export default function SplashScreen() {
                 />
               </View>
               <View style={styles.cardCopy}>
-                <Text style={styles.cardTitle}>Tonight in Brussels</Text>
-                <Text style={styles.cardText}>24 live events, 8 friends out, 1 place to keep track.</Text>
+                <Text style={styles.cardTitle}>{t('onboardingTitle')}</Text>
+                <Text style={styles.cardText}>{t('onboardingSubtitle')}</Text>
               </View>
             </View>
 
-            <View style={styles.metrics}>
-              <View style={styles.metric}>
-                <Text style={styles.metricValue}>24</Text>
-                <Text style={styles.metricLabel}>events nearby</Text>
-              </View>
-              <View style={styles.metric}>
-                <Text style={styles.metricValue}>08</Text>
-                <Text style={styles.metricLabel}>friends active</Text>
-              </View>
+            <View style={styles.loopList}>
+              {loopStepKeys.map(([titleKey, bodyKey], index) => (
+                <View key={titleKey} style={styles.loopRow}>
+                  <View style={styles.loopIndex}>
+                    <Text style={styles.loopIndexText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.loopCopy}>
+                    <Text style={styles.loopTitle}>{t(titleKey)}</Text>
+                    <Text style={styles.loopBody}>{t(bodyKey)}</Text>
+                  </View>
+                </View>
+              ))}
             </View>
 
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('landingPrimaryCta')}
               style={styles.button}
               activeOpacity={0.9}
-              onPress={() => router.push(isAuthenticated ? '/(tabs)' : '/auth/login')}>
-              <Text style={styles.buttonText}>Open EventCapture</Text>
+              onPress={() => router.push(isAuthenticated ? '/(tabs)' : '/onboarding')}>
+              <Text style={styles.buttonText}>{t('landingPrimaryCta')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('landingSecondaryCta')}
+              style={styles.secondaryButton}
+              activeOpacity={0.82}
+              onPress={() => router.push('/onboarding')}>
+              <Text style={styles.secondaryButtonText}>{t('landingSecondaryCta')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -99,9 +120,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  badgeText: { color: '#f7e4d6', fontWeight: '800', fontSize: 12, letterSpacing: 1.2 },
-  title: { color: '#fff8f2', fontSize: 40, fontWeight: '800', letterSpacing: -1 },
-  subtitle: { color: '#edd8ca', fontSize: 16, lineHeight: 24, maxWidth: 320 },
+  badgeText: { color: '#f7e4d6', fontWeight: '800', fontSize: 11, letterSpacing: 1.1 },
+  title: { color: '#fff8f2', fontSize: 38, fontWeight: '800', letterSpacing: -1 },
+  subtitle: { color: '#edd8ca', fontSize: 15, lineHeight: 23, maxWidth: 340 },
   card: {
     marginTop: 8,
     backgroundColor: '#fffaf5',
@@ -125,12 +146,30 @@ const styles = StyleSheet.create({
   },
   logo: { width: 52, height: 52, borderRadius: 14 },
   cardCopy: { flex: 1, gap: 4 },
-  cardTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 21 },
+  cardTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20, lineHeight: 24 },
   cardText: { color: '#766b64', lineHeight: 20 },
-  metrics: { flexDirection: 'row', gap: 12 },
-  metric: { flex: 1, backgroundColor: '#f6eee4', borderRadius: 20, padding: 16 },
-  metricValue: { color: '#1f1a17', fontWeight: '800', fontSize: 28 },
-  metricLabel: { color: '#766b64', marginTop: 4, fontSize: 12.5 },
+  loopList: { gap: 12 },
+  loopRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    backgroundColor: '#f6eee4',
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  loopIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loopIndexText: { color: Colors.light.tint, fontWeight: '800', fontSize: 12 },
+  loopCopy: { flex: 1, gap: 2 },
+  loopTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 14 },
+  loopBody: { color: '#766b64', fontSize: 12.5, lineHeight: 18 },
   button: {
     backgroundColor: Colors.light.tint,
     borderRadius: 18,
@@ -138,4 +177,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  secondaryButton: {
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ead7c2',
+  },
+  secondaryButtonText: { color: '#5b4f48', fontWeight: '700', fontSize: 14 },
 });

@@ -1,40 +1,51 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppImage } from '@/components/ui/app-image';
+import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { EmptyState } from '@/components/ui/empty-state';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { usePosts } from '@/context/PostContext';
+import { useEvents } from '@/context/EventContext';
 import type { Post } from '@/constants/posts';
 import { useUser } from '@/context/UserContext';
 import { IconActionButton } from '@/components/ui/icon-action-button';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLanguage } from '@/context/LanguageContext';
 
 export default function SocialFeedScreen() {
   const router = useRouter();
-  const { posts, togglePostLike, isOffline, isUsingCachedData, error } = usePosts();
+  const { posts, togglePostLike, refreshPosts, isOffline, isUsingCachedData, error } = usePosts();
+  const { events } = useEvents();
   const { user } = useUser();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
+  const eventMap = useMemo(() => new Map(events.map((event) => [event.id, event])), [events]);
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
-  }, []);
+    try {
+      await refreshPosts();
+    } catch {
+      // Keep the existing feed visible when refresh fails.
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshPosts]);
 
   const renderPost = ({ item }: { item: Post }) => {
     const isLiked = item.likes.includes(user.username);
+    const linkedEvent = item.eventId ? eventMap.get(item.eventId) : undefined;
+    const storyText = item.isBeerFinished ? t('socialStoryEligible') : t('socialStoryShared');
 
     return (
       <View style={styles.postContainer}>
-        {/* Header */}
         <View style={styles.postHeader}>
-          <TouchableOpacity style={styles.userRow}>
+          <View style={styles.userRow}>
             {item.user?.avatarUri ? (
               <AppImage source={{ uri: item.user.avatarUri }} style={styles.avatar} contentFit="cover" />
             ) : (
@@ -44,62 +55,87 @@ export default function SocialFeedScreen() {
             )}
             <View style={styles.userInfo}>
               <Text style={styles.username}>{item.user?.username || 'user'}</Text>
-              {item.eventTitle ? (
-                <Text style={styles.locationText}>{item.eventTitle}</Text>
-              ) : null}
+              <Text style={styles.storyLine}>
+                {storyText}
+                {item.eventTitle ? ` ${t('socialStoryAt')} ${item.eventTitle}` : ''}
+              </Text>
             </View>
-          </TouchableOpacity>
-          <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="ellipsis-horizontal" size={20} color="#81776f" />
-          </TouchableOpacity>
-        </View>
+          </View>
 
-        {/* Media */}
-        <View style={styles.mediaContainer}>
-          <AppImage source={{ uri: item.imageUri }} style={styles.media} contentFit="cover" />
           {item.isBeerFinished ? (
-            <View style={styles.crownBadge}>
-              <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.crownGradient}>
-                <Ionicons name="sparkles" size={14} color="#fff" />
-                <Text style={styles.crownText}>{t('socialCrownBadge')}</Text>
-              </LinearGradient>
+            <View style={styles.headerBadge}>
+              <Ionicons name="ribbon" size={12} color="#fff" />
+              <Text style={styles.headerBadgeText}>{t('socialCrownBadge')}</Text>
             </View>
           ) : null}
         </View>
 
-        {/* Actions */}
+        <View style={styles.mediaContainer}>
+          <AppImage source={{ uri: item.imageUri }} style={styles.media} contentFit="cover" />
+          {item.captureId ? (
+            <View style={styles.captureBadge}>
+              <Text style={styles.captureBadgeText}>{t('socialCaptureSavedLabel')}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.contextBlock}>
+          {item.eventTitle ? (
+            <View style={styles.contextRow}>
+              <Ionicons name="calendar-outline" size={15} color={Colors.light.tint} />
+              <Text style={styles.contextText}>{item.eventTitle}</Text>
+            </View>
+          ) : null}
+          {linkedEvent?.place ? (
+            <View style={styles.contextRow}>
+              <Ionicons name="pin-outline" size={15} color={Colors.light.tint} />
+              <Text style={styles.contextText}>{linkedEvent.place}</Text>
+            </View>
+          ) : null}
+          <View style={styles.contextRow}>
+            <Ionicons name="time-outline" size={15} color={Colors.light.tint} />
+            <Text style={styles.contextText}>{item.date}</Text>
+          </View>
+        </View>
+
         <View style={styles.actionRow}>
           <View style={styles.actionLeft}>
-            <TouchableOpacity onPress={() => togglePostLike(item.id)} style={styles.actionButton}>
-              <Ionicons 
-                name={isLiked ? "heart" : "heart-outline"} 
-                size={26} 
-                color={isLiked ? "#e11d48" : "#1f1a17"} 
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={isLiked ? 'Unlike post' : 'Like post'}
+              onPress={() => togglePostLike(item.id)}
+              style={styles.actionButton}>
+              <Ionicons
+                name={isLiked ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isLiked ? '#e11d48' : '#1f1a17'}
               />
             </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })} 
-              style={styles.actionButton}
-            >
-              <Ionicons name="chatbubble-outline" size={24} color="#1f1a17" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="paper-plane-outline" size={24} color="#1f1a17" />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('socialCommentCta')}
+              onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}
+              style={styles.actionButton}>
+              <Ionicons name="chatbubble-outline" size={22} color="#1f1a17" />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.actionRight}>
-            <Ionicons name="bookmark-outline" size={24} color="#1f1a17" />
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('socialCommentCta')}
+            style={styles.commentCta}
+            onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}>
+            <Text style={styles.commentCtaText}>{t('socialCommentCta')}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Likes */}
         {item.likes.length > 0 ? (
           <Text style={styles.likesText}>
-            {item.likes.length}{item.likes.length !== 1 ? t('socialLikesPlural') : t('socialLikesSingular')}
+            {item.likes.length}
+            {item.likes.length !== 1 ? t('socialLikesPlural') : t('socialLikesSingular')}
           </Text>
         ) : null}
 
-        {/* Caption */}
         <View style={styles.captionRow}>
           <Text style={styles.captionText}>
             <Text style={styles.captionUsername}>{item.user?.username || 'user'} </Text>
@@ -107,11 +143,14 @@ export default function SocialFeedScreen() {
           </Text>
         </View>
 
-        {/* Comments Preview */}
-        {item.comments && item.comments.length > 0 ? (
+        {item.comments.length > 0 ? (
           <TouchableOpacity onPress={() => router.push({ pathname: '/post-comments', params: { postId: item.id } })}>
             <Text style={styles.viewCommentsText}>
-              {t('socialViewAll')} {item.comments.length} {item.comments.length !== 1 ? t('socialCommentsPlural') : t('socialCommentsSingular')}
+              {t('socialViewAll')} {item.comments.length}{' '}
+              {item.comments.length !== 1 ? t('socialCommentsPlural') : t('socialCommentsSingular')}
+            </Text>
+            <Text style={styles.previewComment}>
+              <Text style={styles.previewCommentUser}>{item.comments[0]?.user.username}</Text> {item.comments[0]?.text}
             </Text>
           </TouchableOpacity>
         ) : (
@@ -119,9 +158,6 @@ export default function SocialFeedScreen() {
             <Text style={styles.viewCommentsText}>{t('socialAddComment')}</Text>
           </TouchableOpacity>
         )}
-
-        {/* Date */}
-        <Text style={styles.dateText}>{item.date}</Text>
       </View>
     );
   };
@@ -132,16 +168,21 @@ export default function SocialFeedScreen() {
         <ScreenHeader
           eyebrow="EventCapture"
           title={t('socialTab')}
+          subtitle={t('socialFeedSubtitle')}
           leading={
-            <View style={styles.headerBadge}>
+            <View style={styles.headerBadgeWrap}>
               <Ionicons name="images-outline" size={20} color={TabThemes.socialfeed.accent} />
             </View>
           }
           mode="compact"
           rightAction={
             <View style={styles.headerActions}>
-              <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
-              <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
+              <IconActionButton
+                icon="notifications-outline"
+                accessibilityLabel={t('notifTitle')}
+                onPress={() => router.push('/notifications')}
+              />
+              <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
             </View>
           }
         />
@@ -152,15 +193,27 @@ export default function SocialFeedScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderPost}
         ListHeaderComponent={
-          isOffline || isUsingCachedData ? (
-            <View style={styles.bannerWrap}>
-              <FeedbackBanner
-                tone={isOffline ? 'error' : 'info'}
-                title={isOffline ? 'Feed updates are unavailable' : 'Showing cached posts'}
-                message={error ?? 'Reconnect to refresh the latest social activity.'}
-              />
-            </View>
-          ) : null
+          <>
+            {isOffline || isUsingCachedData ? (
+              <View style={styles.bannerWrap}>
+                <FeedbackBanner
+                  tone={isOffline ? 'error' : 'info'}
+                  title={isOffline ? 'Feed updates are unavailable' : 'Showing cached posts'}
+                  message={error ?? 'Reconnect to refresh the latest social activity.'}
+                />
+              </View>
+            ) : null}
+
+            {!posts.length ? (
+              <View style={styles.emptyWrap}>
+                <EmptyState icon="images-outline" title={t('socialEmptyTitle')} message={t('socialEmptyMsg')} />
+                <View style={styles.emptyActions}>
+                  <AppButton label={t('socialActionCapture')} onPress={() => router.push('/camera')} />
+                  <AppButton label={t('socialActionEvents')} variant="secondary" onPress={() => router.push('/events')} />
+                </View>
+              </View>
+            ) : null}
+          </>
         }
         contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 120) }]}
         showsVerticalScrollIndicator={false}
@@ -179,7 +232,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Layout.screenPadding,
     marginTop: 8,
   },
-  headerBadge: {
+  headerBadgeWrap: {
     width: 46,
     height: 46,
     borderRadius: Radius.lg,
@@ -199,6 +252,14 @@ const styles = StyleSheet.create({
   bannerWrap: {
     paddingHorizontal: Layout.screenPadding,
     paddingBottom: 14,
+  },
+  emptyWrap: {
+    paddingHorizontal: Layout.screenPadding,
+    gap: 14,
+    paddingBottom: 14,
+  },
+  emptyActions: {
+    gap: 10,
   },
   separator: {
     height: 18,
@@ -221,41 +282,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    gap: 10,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.05)',
   },
   avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#f0f0f0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  userInfo: {
-    justifyContent: 'center',
+  userInfo: { flex: 1, gap: 2 },
+  username: { fontWeight: '800', fontSize: 14, color: '#1f1a17' },
+  storyLine: { fontSize: 12.5, color: '#8e6d63', lineHeight: 17 },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    backgroundColor: '#0f766e',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
-  username: {
-    fontWeight: '700',
-    fontSize: 14,
-    color: '#1f1a17',
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#8e6d63',
-    marginTop: 1,
-  },
+  headerBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11.5 },
   mediaContainer: {
     position: 'relative',
     width: '100%',
@@ -266,27 +330,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  crownBadge: {
+  captureBadge: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    top: 14,
+    left: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(31,26,23,0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
-  crownGradient: {
+  captureBadgeText: { color: '#fff7ef', fontWeight: '700', fontSize: 11.5 },
+  contextBlock: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    gap: 8,
+  },
+  contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    gap: 8,
   },
-  crownText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
+  contextText: {
+    color: '#5d5149',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
@@ -298,14 +365,16 @@ const styles = StyleSheet.create({
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
-  actionButton: {
-    padding: 2,
+  actionButton: { padding: 2 },
+  commentCta: {
+    borderRadius: 999,
+    backgroundColor: '#fff1e0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  actionRight: {
-    padding: 2,
-  },
+  commentCtaText: { color: Colors.light.tint, fontWeight: '800', fontSize: 12.5 },
   likesText: {
     paddingHorizontal: Spacing.lg,
     fontWeight: '700',
@@ -322,21 +391,19 @@ const styles = StyleSheet.create({
     color: '#1f1a17',
     lineHeight: 21,
   },
-  captionUsername: {
-    fontWeight: '700',
-  },
+  captionUsername: { fontWeight: '700' },
   viewCommentsText: {
     paddingHorizontal: Spacing.lg,
     fontSize: 14,
     color: '#81776f',
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  dateText: {
+  previewComment: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.lg,
-    fontSize: 11,
-    color: '#a39b95',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 13,
+    color: '#4d433d',
+    lineHeight: 19,
   },
+  previewCommentUser: { fontWeight: '800' },
 });

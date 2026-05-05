@@ -10,6 +10,7 @@ interface AppButtonProps {
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   size?: 'md' | 'lg';
+  accessibilityLabel?: string;
 }
 
 export function AppButton({
@@ -20,6 +21,7 @@ export function AppButton({
   style,
   textStyle,
   size = 'md',
+  accessibilityLabel,
 }: AppButtonProps) {
   const scale = React.useRef(new Animated.Value(1)).current;
 
@@ -37,6 +39,9 @@ export function AppButton({
       <Pressable
         onPress={onPress}
         disabled={disabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        accessibilityLabel={accessibilityLabel ?? label}
         onPressIn={() => animateTo(0.97)}
         onPressOut={() => animateTo(1)}
         style={[

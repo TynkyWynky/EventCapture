@@ -3,10 +3,10 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Animated, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, Layout, Radius, Shadows, Spacing, TabRouteName, TabThemes, Typography } from '@/constants/theme';
+import { Colors, Layout, Radius, Shadows, Spacing, TabRouteName, TabThemes } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
 
 function TabButton({
@@ -59,7 +59,6 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     const isFocused = state.index === index;
     const routeName = route.name as TabRouteName;
     const routeTheme = TabThemes[routeName] ?? TabThemes.index;
-    const label = typeof options.title === 'string' ? options.title : route.name;
     const isCameraButton = routeName === 'camera';
     const onPress = () => {
       const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
