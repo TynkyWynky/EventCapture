@@ -659,7 +659,15 @@ class DrinkDetector:
         except cv2.error:
             return None
 
-        vx, vy = float(line[0]), float(line[1])
+        flattened = np.asarray(line).reshape(-1)
+        if flattened.size < 2:
+            return None
+
+        try:
+            vx, vy = float(flattened[0]), float(flattened[1])
+        except (TypeError, ValueError):
+            return None
+
         return float(np.degrees(np.arctan2(vy, vx)))
 
     def _rotation_from_polygon(
