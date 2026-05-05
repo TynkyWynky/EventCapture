@@ -51,8 +51,11 @@ export const REMOVED_SEED_EVENT_TITLES = [
 
 const REMOVED_SEED_EVENT_ID_SET = new Set<string>(REMOVED_SEED_EVENT_IDS);
 const TRUTHY_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
-const DRINK_KEYWORDS = [
+const EXPLICIT_DRINK_KEYWORDS = [
+  'after party',
   'afterwork',
+  'apero',
+  'aperitif',
   'beer',
   'brew',
   'brewery',
@@ -66,52 +69,53 @@ const DRINK_KEYWORDS = [
   'tasting',
   'wine',
 ] as const;
-const NIGHTLIFE_KEYWORDS = [
+const STRONG_NIGHTLIFE_KEYWORDS = [
   'bar',
-  'cabaret',
-  'club',
-  'dance',
+  'boiler club',
+  'club night',
+  'clubbing',
+  'clubnight',
   'dj',
-  'electronic',
-  'festival',
-  'house',
-  'jazz',
   'karaoke',
+  'late jam',
   'late night',
-  'live music',
-  'music',
-  'night',
   'party',
+  'reggaeton',
   'rooftop',
-  'soir',
-  'soiree',
   'sunset',
   'techno',
   'terrace',
 ] as const;
-const PERFORMANCE_KEYWORDS = [
-  'concert',
-  'comedy',
-  'gig',
-  'live',
+const SUPPORTING_NIGHTLIFE_KEYWORDS = [
+  'dance',
+  'electro',
+  'electronic',
   'open air',
-  'show',
-  'theatre',
 ] as const;
 const LOW_DRINKABILITY_KEYWORDS = [
   'cinema',
   'conference',
   'convention',
   'course',
+  'courses and workshops',
   'exhibition',
   'family',
   'film',
+  'games and quiz',
   'guided tour',
+  'guided tours',
+  'historical film',
   'kids',
   'lecture',
   'library',
+  'litterature',
+  'literature',
+  'market',
+  'markets',
   'museum',
   'screening',
+  'sport',
+  'streaming',
   'training',
   'workshop',
 ] as const;
@@ -128,8 +132,20 @@ function parseBooleanEnv(value: string | undefined): boolean {
   return value ? TRUTHY_ENV_VALUES.has(normalizeText(value)) : false;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsKeyword(text: string, keyword: string): boolean {
+  const normalizedKeyword = normalizeText(keyword);
+  return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedKeyword)}([^a-z0-9]|$)`).test(text);
+}
+
 function countKeywordHits(text: string, keywords: readonly string[]): number {
-  return keywords.reduce((count, keyword) => (text.includes(keyword) ? count + 1 : count), 0);
+  return keywords.reduce(
+    (count, keyword) => (containsKeyword(text, keyword) ? count + 1 : count),
+    0
+  );
 }
 
 function parseStartHour(timeLabel: string): number | null {
@@ -159,9 +175,14 @@ function buildSearchableEventText(event: EventRecord): string {
   );
 }
 
-export const BRUSSELS_DRINKABLE_ONLY_ENABLED = parseBooleanEnv(
-  process.env.EXPO_PUBLIC_BRUSSELS_DRINKABLE_ONLY
-);
+export function isImportedBrusselsEventId(eventId?: string | null): boolean {
+  return typeof eventId === 'string' && eventId.startsWith('visit-brussels-');
+}
+
+export const BRUSSELS_DRINKABLE_ONLY_ENABLED =
+  process.env.EXPO_PUBLIC_BRUSSELS_DRINKABLE_ONLY === undefined
+    ? true
+    : parseBooleanEnv(process.env.EXPO_PUBLIC_BRUSSELS_DRINKABLE_ONLY);
 
 export function isRemovedSeedEventId(eventId?: string | null): boolean {
   return typeof eventId === 'string' && REMOVED_SEED_EVENT_ID_SET.has(eventId);
@@ -176,26 +197,50 @@ export function containsRemovedSeedEventTitle(value: string): boolean {
 
 export function getEventDrinkabilityScore(event: EventRecord): number {
   const text = buildSearchableEventText(event);
-  const drinkHits = countKeywordHits(text, DRINK_KEYWORDS);
-  const nightlifeHits = countKeywordHits(text, NIGHTLIFE_KEYWORDS);
-  const performanceHits = countKeywordHits(text, PERFORMANCE_KEYWORDS);
+  const explicitDrinkHits = countKeywordHits(text, EXPLICIT_DRINK_KEYWORDS);
+  const strongNightlifeHits = countKeywordHits(text, STRONG_NIGHTLIFE_KEYWORDS);
+  const supportingNightlifeHits = countKeywordHits(text, SUPPORTING_NIGHTLIFE_KEYWORDS);
   const lowDrinkabilityHits = countKeywordHits(text, LOW_DRINKABILITY_KEYWORDS);
   const startHour = parseStartHour(event.time);
-  const eveningBonus = startHour !== null && startHour >= 17 ? 1 : 0;
+  const eveningBonus = startHour !== null && startHour >= 18 ? 1 : 0;
   const crowdBonus = event.attendeeCount >= 25 ? 1 : 0;
 
   return (
-    drinkHits * 4 +
-    nightlifeHits * 3 +
-    performanceHits * 2 +
+    explicitDrinkHits * 6 +
+    strongNightlifeHits * 4 +
+    supportingNightlifeHits * 2 +
     eveningBonus +
     crowdBonus -
-    lowDrinkabilityHits * 4
+    lowDrinkabilityHits * 6
   );
 }
 
 export function isDrinkableEvent(event: EventRecord): boolean {
-  return getEventDrinkabilityScore(event) >= 2;
+  if (!isImportedBrusselsEventId(event.id)) {
+    return true;
+  }
+
+  const text = buildSearchableEventText(event);
+  const explicitDrinkHits = countKeywordHits(text, EXPLICIT_DRINK_KEYWORDS);
+  if (explicitDrinkHits > 0) {
+    return true;
+  }
+
+  const lowDrinkabilityHits = countKeywordHits(text, LOW_DRINKABILITY_KEYWORDS);
+  if (lowDrinkabilityHits > 0) {
+    return false;
+  }
+
+  const strongNightlifeHits = countKeywordHits(text, STRONG_NIGHTLIFE_KEYWORDS);
+  const supportingNightlifeHits = countKeywordHits(text, SUPPORTING_NIGHTLIFE_KEYWORDS);
+  const startHour = parseStartHour(event.time);
+  const isEveningEvent = startHour !== null && startHour >= 18;
+
+  return (
+    strongNightlifeHits >= 2 ||
+    (strongNightlifeHits >= 1 && supportingNightlifeHits >= 1 && isEveningEvent) ||
+    (strongNightlifeHits >= 1 && isEveningEvent && containsKeyword(text, 'night'))
+  );
 }
 
 export function filterEventRecordsForDiscovery(events: EventRecord[]): EventRecord[] {
@@ -203,7 +248,7 @@ export function filterEventRecordsForDiscovery(events: EventRecord[]): EventReco
     return events;
   }
 
-  return events.filter(isDrinkableEvent);
+  return events.filter((event) => !isImportedBrusselsEventId(event.id) || isDrinkableEvent(event));
 }
 
 export const EVENT_RECORDS: EventRecord[] = [...IMPORTED_BRUSSELS_EVENT_RECORDS];

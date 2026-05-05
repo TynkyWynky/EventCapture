@@ -194,20 +194,26 @@ Import a smaller batch into `backend/eventcapture.db`:
 npm run events:brussels:import
 ```
 
-Sync the full currently available Brussels feed into both the generated seed file and SQLite, pruning stale official-feed rows from SQLite on each sync:
+Sync the currently available Brussels nightlife-style feed into both the generated seed file and SQLite, pruning stale official-feed rows from SQLite on each sync:
 
 ```bash
 npm run events:brussels:sync
 ```
 
-To only show drink-friendly Brussels events in the Expo app, set the env toggle before starting Expo:
+If you want the broad all-categories official feed instead:
+
+```bash
+npm run events:brussels:sync:all
+```
+
+The Expo app keeps imported Brussels events drink-friendly by default. To override that and show the full imported feed, set the env toggle before starting Expo:
 
 ```powershell
-$env:EXPO_PUBLIC_BRUSSELS_DRINKABLE_ONLY="true"
+$env:EXPO_PUBLIC_BRUSSELS_DRINKABLE_ONLY="false"
 npm start
 ```
 
-Leave it unset, or set it to `false`, to show the full Brussels feed.
+Leave it unset, or set it to `true`, to keep only drink-friendly Brussels events.
 
 Useful options:
 

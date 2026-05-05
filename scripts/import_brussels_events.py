@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import sqlite3
 import sys
+import unicodedata
 import urllib.parse
 import urllib.request
 from datetime import date, datetime
@@ -17,14 +19,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from backend.database import init_database, upsert_event  # noqa: E402
+from backend.database import create_user, get_user_by_email, init_database, upsert_event  # noqa: E402
 from backend.config import DATABASE_PATH  # noqa: E402
 
 VISIT_BRUSSELS_FEED_URL = (
     "https://www.visit.brussels/content/visitbrussels/en/visitors/agenda/"
     "all-events-wizard/jcr:content/root/container/agendafinder.feed.json"
 )
-DEFAULT_ALLOWED_CATEGORIES = ("Concert", "Show", "Theatre", "Various")
 DEFAULT_SKIPPED_CATEGORIES = (
     "Animations",
     "Cinema",
@@ -33,6 +34,74 @@ DEFAULT_SKIPPED_CATEGORIES = (
     "Guided tours",
 )
 DEFAULT_PAGE_SIZE = 250
+EXPLICIT_DRINK_KEYWORDS = (
+    "after party",
+    "afterwork",
+    "apero",
+    "aperitif",
+    "beer",
+    "brew",
+    "brewery",
+    "cocktail",
+    "drink",
+    "drinks",
+    "happy hour",
+    "natural wine",
+    "pub",
+    "spritz",
+    "tasting",
+    "wine",
+)
+STRONG_NIGHTLIFE_KEYWORDS = (
+    "bar",
+    "boiler club",
+    "club night",
+    "clubbing",
+    "clubnight",
+    "dj",
+    "karaoke",
+    "late jam",
+    "late night",
+    "party",
+    "reggaeton",
+    "rooftop",
+    "sunset",
+    "techno",
+    "terrace",
+)
+SUPPORTING_NIGHTLIFE_KEYWORDS = (
+    "dance",
+    "electro",
+    "electronic",
+    "open air",
+)
+LOW_DRINKABILITY_KEYWORDS = (
+    "cinema",
+    "conference",
+    "convention",
+    "course",
+    "courses and workshops",
+    "exhibition",
+    "family",
+    "film",
+    "games and quiz",
+    "guided tour",
+    "guided tours",
+    "historical film",
+    "kids",
+    "lecture",
+    "library",
+    "litterature",
+    "literature",
+    "market",
+    "markets",
+    "museum",
+    "screening",
+    "sport",
+    "streaming",
+    "training",
+    "workshop",
+)
 CATEGORY_PRIORITY = {
     "Concert": 0,
     "Show": 1,
@@ -50,6 +119,7 @@ BADGE_BY_CATEGORY = {
     "Theatre": "THEATRE",
     "Various": "CITY PICK",
 }
+IMPORT_ACTOR_EMAIL = "visit-brussels-importer@eventcapture.app"
 
 
 def parse_args() -> argparse.Namespace:
@@ -123,6 +193,23 @@ def clean_text(value: Any) -> str:
     if not isinstance(value, str):
         return ""
     return html.unescape(" ".join(value.split())).strip()
+
+
+def normalize_text(value: str) -> str:
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFD", html.unescape(value).strip().lower())
+        if unicodedata.category(character) != "Mn"
+    )
+
+
+def contains_keyword(text: str, keyword: str) -> bool:
+    normalized_keyword = re.escape(normalize_text(keyword))
+    return re.search(rf"(^|[^a-z0-9]){normalized_keyword}([^a-z0-9]|$)", text) is not None
+
+
+def count_keyword_hits(text: str, keywords: tuple[str, ...]) -> int:
+    return sum(1 for keyword in keywords if contains_keyword(text, keyword))
 
 
 def build_feed_url(base_url: str, *, page: int, page_size: int) -> str:
@@ -462,6 +549,85 @@ def build_experience(category_name: str) -> str:
     return f"Official Brussels {category_label}"
 
 
+def build_signal_text(event: dict[str, Any], current_date: date) -> str:
+    translation = get_translation(event)
+    place_translation = get_place_translation(event)
+    category_name = get_category_name(event)
+    other_categories = get_other_categories(event)
+    title = clean_text(translation.get("name")) or "Brussels Event"
+    place_name = clean_text(place_translation.get("name"))
+    city_name = clean_text(place_translation.get("address_city"))
+    price, price_label = extract_price_labels(event)
+
+    return normalize_text(
+        " ".join(
+            [
+                title,
+                category_name,
+                " ".join(other_categories),
+                build_event_time(event, current_date),
+                build_place_label(place_translation),
+                build_address(place_translation),
+                place_name,
+                city_name,
+                build_vibe(category_name, other_categories),
+                build_experience(category_name),
+                build_host_name(event, place_translation),
+                build_badge(event, category_name),
+                price,
+                price_label,
+                " ".join(build_tags(category_name, other_categories, city_name)),
+            ]
+        )
+    )
+
+
+def parse_start_hour(time_label: str) -> int | None:
+    match = re.search(r"(\d{1,2}):(\d{2})", time_label)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def get_drinkability_score(event: dict[str, Any], current_date: date) -> int:
+    text = build_signal_text(event, current_date)
+    explicit_drink_hits = count_keyword_hits(text, EXPLICIT_DRINK_KEYWORDS)
+    strong_nightlife_hits = count_keyword_hits(text, STRONG_NIGHTLIFE_KEYWORDS)
+    supporting_nightlife_hits = count_keyword_hits(text, SUPPORTING_NIGHTLIFE_KEYWORDS)
+    low_drinkability_hits = count_keyword_hits(text, LOW_DRINKABILITY_KEYWORDS)
+    start_hour = parse_start_hour(build_event_time(event, current_date))
+    evening_bonus = 1 if start_hour is not None and start_hour >= 18 else 0
+
+    return (
+        explicit_drink_hits * 6
+        + strong_nightlife_hits * 4
+        + supporting_nightlife_hits * 2
+        + evening_bonus
+        - low_drinkability_hits * 6
+    )
+
+
+def is_drink_friendly_event(event: dict[str, Any], current_date: date) -> bool:
+    text = build_signal_text(event, current_date)
+    explicit_drink_hits = count_keyword_hits(text, EXPLICIT_DRINK_KEYWORDS)
+    if explicit_drink_hits > 0:
+        return True
+
+    if count_keyword_hits(text, LOW_DRINKABILITY_KEYWORDS) > 0:
+        return False
+
+    strong_nightlife_hits = count_keyword_hits(text, STRONG_NIGHTLIFE_KEYWORDS)
+    supporting_nightlife_hits = count_keyword_hits(text, SUPPORTING_NIGHTLIFE_KEYWORDS)
+    start_hour = parse_start_hour(build_event_time(event, current_date))
+    is_evening_event = start_hour is not None and start_hour >= 18
+
+    return (
+        strong_nightlife_hits >= 2
+        or (strong_nightlife_hits >= 1 and supporting_nightlife_hits >= 1 and is_evening_event)
+        or (strong_nightlife_hits >= 1 and is_evening_event and contains_keyword(text, "night"))
+    )
+
+
 def map_event_record(event: dict[str, Any], current_date: date) -> dict[str, Any]:
     translation = get_translation(event)
     place_translation = get_place_translation(event)
@@ -562,7 +728,7 @@ def is_candidate_event(
     if category_name in DEFAULT_SKIPPED_CATEGORIES:
         return False
 
-    return category_name in DEFAULT_ALLOWED_CATEGORIES
+    return is_drink_friendly_event(event, current_date)
 
 
 def ranking_key(event: dict[str, Any], current_date: date) -> tuple[Any, ...]:
@@ -572,9 +738,11 @@ def ranking_key(event: dict[str, Any], current_date: date) -> tuple[Any, ...]:
     title = clean_text(get_translation(event).get("name"))
     sold_out_rank = 1 if event.get("is_soldout") else 0
     ongoing_rank = 1 if start_date and start_date < current_date else 0
+    drinkability_rank = -get_drinkability_score(event, current_date)
 
     return (
         activity_date,
+        drinkability_rank,
         ongoing_rank,
         CATEGORY_PRIORITY.get(category_name, 99),
         sold_out_rank,
@@ -630,6 +798,23 @@ def write_seed_typescript(output_path: str, events: list[dict[str, Any]], genera
         f"export const IMPORTED_BRUSSELS_EVENT_RECORDS = {payload};\n"
     )
     destination.write_text(content, encoding="utf-8")
+
+
+def ensure_import_actor() -> dict[str, object]:
+    existing = get_user_by_email(IMPORT_ACTOR_EMAIL)
+    if existing is not None:
+        return existing
+
+    return create_user(
+        email=IMPORT_ACTOR_EMAIL,
+        username="visit.brussels",
+        password="VisitBrusselsImport123!",
+        full_name="Visit Brussels Importer",
+        city="Brussels",
+        bio="System actor for official Brussels nightlife imports.",
+        avatar_uri="https://i.pravatar.cc/160?u=visit-brussels-importer",
+        role="admin",
+    )
 
 
 def prune_backend_events(keep_ids: set[str]) -> int:
@@ -688,8 +873,9 @@ def main() -> int:
     pruned_count = 0
     if not args.no_db:
         init_database()
+        import_actor = ensure_import_actor()
         for event in mapped_events:
-            upsert_event(to_backend_event_payload(event))
+            upsert_event(to_backend_event_payload(event), import_actor)
         if args.prune_existing:
             pruned_count = prune_backend_events({event["id"] for event in mapped_events})
 
