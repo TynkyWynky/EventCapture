@@ -1,7 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-import { EVENT_RECORDS, EventRecord } from '@/constants/events';
+import {
+  areEventCollectionsEqual,
+  EVENT_RECORDS,
+  EventRecord,
+  filterEventRecordsForDiscovery,
+  isRemovedSeedEventId,
+} from '@/constants/events';
 import { fetchRemoteEvents, upsertRemoteEvent } from '@/services/appDataApi';
 
 interface CreateEventInput {
@@ -71,7 +77,9 @@ function parseStoredEvents(rawValue: string | null): EventRecord[] | null {
     return null;
   }
 
-  return parsedValue.filter(isValidEventRecord);
+  return parsedValue.filter(
+    (event): event is EventRecord => isValidEventRecord(event) && !isRemovedSeedEventId(event.id)
+  );
 }
 
 function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
@@ -93,8 +101,9 @@ function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
 }
 
 export function EventProvider({ children }: { children: ReactNode }) {
-  const [events, setEvents] = useState<EventRecord[]>(EVENT_RECORDS);
+  const [allEvents, setAllEvents] = useState<EventRecord[]>(EVENT_RECORDS);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const events = useMemo(() => filterEventRecordsForDiscovery(allEvents), [allEvents]);
 
   useEffect(() => {
     let isMounted = true;
@@ -108,7 +117,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setEvents(mergeEventCollections(parsedEvents, EVENT_RECORDS));
+        setAllEvents(mergeEventCollections(parsedEvents, EVENT_RECORDS));
       } catch {
         try {
           await AsyncStorage.removeItem(STORAGE_KEY);
@@ -134,10 +143,17 @@ export function EventProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(() => {
+    if (areEventCollectionsEqual(allEvents, EVENT_RECORDS)) {
+      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {
+        // Keep the app usable even if persistence cleanup is unavailable.
+      });
+      return;
+    }
+
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allEvents)).catch(() => {
       // Keep the app usable even if persistence is unavailable.
     });
-  }, [events, hasHydrated]);
+  }, [allEvents, hasHydrated]);
 
   useEffect(() => {
     if (!hasHydrated) {
@@ -152,7 +168,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setEvents((prev) => mergeEventCollections(remoteEvents, prev, EVENT_RECORDS));
+        setAllEvents((prev) => mergeEventCollections(remoteEvents, prev, EVENT_RECORDS));
       })
       .catch(() => {
         // Keep the app responsive even when the backend is offline.
@@ -192,7 +208,8 @@ export function EventProvider({ children }: { children: ReactNode }) {
           priceLabel: input.priceLabel.trim() || input.price.trim() || 'Free entry',
           vibe: input.vibe.trim() || 'Atmosphere to be announced',
           experience: 'Hosted event',
-          heroImage: input.heroImage.trim() || EVENT_RECORDS[0]?.heroImage || '',
+          heroImage:
+            input.heroImage.trim() || allEvents[0]?.heroImage || EVENT_RECORDS[0]?.heroImage || '',
           hostName: 'You',
           hostAvatar: 'https://i.pravatar.cc/120?img=52',
           badge: 'JUST ADDED',
@@ -210,10 +227,10 @@ export function EventProvider({ children }: { children: ReactNode }) {
           newEvent.tags = ['New event', 'Community', 'Live now'];
         }
 
-        setEvents((prev) => mergeEventCollections([newEvent], prev));
+        setAllEvents((prev) => mergeEventCollections([newEvent], prev));
         void upsertRemoteEvent(newEvent)
           .then((persistedEvent) => {
-            setEvents((prev) =>
+            setAllEvents((prev) =>
               mergeEventCollections(
                 [persistedEvent],
                 prev.filter((event) => event.id !== persistedEvent.id),
@@ -228,7 +245,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
       },
       updateEvent: (eventId, updates) => {
         let updatedEvent: EventRecord | undefined;
-        setEvents((prev) =>
+        setAllEvents((prev) =>
           prev.map((event) => {
             if (event.id === eventId) {
               updatedEvent = { ...event, ...updates };
@@ -240,17 +257,17 @@ export function EventProvider({ children }: { children: ReactNode }) {
         return updatedEvent;
       },
       deleteEvent: (eventId) => {
-        setEvents((prev) => prev.filter((event) => event.id !== eventId));
+        setAllEvents((prev) => prev.filter((event) => event.id !== eventId));
       },
       getEventById: (eventId) => {
         if (!eventId || Array.isArray(eventId)) {
           return undefined;
         }
 
-        return events.find((event) => event.id === eventId);
+        return allEvents.find((event) => event.id === eventId);
       },
     };
-  }, [events]);
+  }, [allEvents, events]);
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 }

@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-import { EVENT_RECORDS } from '@/constants/events';
+import {
+  containsRemovedSeedEventTitle,
+  EventRecord,
+  isRemovedSeedEventId,
+} from '@/constants/events';
+import { useEvents } from '@/context/EventContext';
 import { useUser } from '@/context/UserContext';
 
 export interface SocialUser {
@@ -85,10 +90,10 @@ function timeAgo(timestamp: number) {
   return 'Yesterday';
 }
 
-function createSeedState(): SocialStateMap {
+function buildSeedState(events: EventRecord[]): SocialStateMap {
   const initial: SocialStateMap = {};
 
-  EVENT_RECORDS.forEach((event, index) => {
+  events.slice(0, 6).forEach((event, index) => {
     initial[event.id] = {
       liked: index === 0 || index === 2,
       saved: index === 0 || index === 3,
@@ -126,14 +131,19 @@ function createSeedState(): SocialStateMap {
   return initial;
 }
 
-function createSeedNotifications(): ActivityItem[] {
+function buildSeedNotifications(events: EventRecord[]): ActivityItem[] {
   const now = Date.now();
+  const [firstEvent, secondEvent, thirdEvent] = events;
+
+  if (!firstEvent || !secondEvent || !thirdEvent) {
+    return [];
+  }
 
   return [
     {
       id: 'seed-activity-1',
       user: 'Lina',
-      text: 'liked Canal Lights Open Air',
+      text: `liked ${firstEvent.title}`,
       icon: 'heart',
       color: '#e45b5b',
       createdAt: now - 18 * 60 * 1000,
@@ -142,7 +152,7 @@ function createSeedNotifications(): ActivityItem[] {
     {
       id: 'seed-activity-2',
       user: 'Emma',
-      text: 'commented on Park Food & Beats',
+      text: `commented on ${secondEvent.title}`,
       icon: 'chatbubble-ellipses-outline',
       color: '#0f766e',
       createdAt: now - 46 * 60 * 1000,
@@ -151,13 +161,23 @@ function createSeedNotifications(): ActivityItem[] {
     {
       id: 'seed-activity-3',
       user: 'Milan',
-      text: 'saved Rooftop Session',
+      text: `saved ${thirdEvent.title}`,
       icon: 'bookmark-outline',
       color: '#f47b20',
       createdAt: now - 90 * 60 * 1000,
       time: '2h ago',
     },
   ];
+}
+
+function sanitizeSocialStateMap(value: SocialStateMap): SocialStateMap {
+  return Object.fromEntries(
+    Object.entries(value).filter(([eventId]) => !isRemovedSeedEventId(eventId))
+  );
+}
+
+function sanitizeNotifications(notifications: ActivityItem[]): ActivityItem[] {
+  return notifications.filter((item) => !containsRemovedSeedEventTitle(item.text));
 }
 
 function isValidSocialState(value: unknown): value is SocialStateMap {
@@ -171,9 +191,12 @@ function isValidSocialState(value: unknown): value is SocialStateMap {
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
 export function SocialProvider({ children }: { children: ReactNode }) {
+  const { events } = useEvents();
   const { user } = useUser();
-  const [socialState, setSocialState] = useState<SocialStateMap>(createSeedState);
-  const [notifications, setNotifications] = useState<ActivityItem[]>(createSeedNotifications);
+  const [socialState, setSocialState] = useState<SocialStateMap>(() => buildSeedState(events));
+  const [notifications, setNotifications] = useState<ActivityItem[]>(() =>
+    buildSeedNotifications(events)
+  );
   const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
@@ -193,8 +216,12 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         };
 
         if (isMounted && parsed.socialState && isValidSocialState(parsed.socialState)) {
-          setSocialState(parsed.socialState);
-          setNotifications(parsed.notifications ?? []);
+          setSocialState(sanitizeSocialStateMap(parsed.socialState));
+          setNotifications(
+            Array.isArray(parsed.notifications)
+              ? sanitizeNotifications(parsed.notifications)
+              : []
+          );
         }
       } catch {
         try {
@@ -419,7 +446,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         setNotifications([]);
       },
       getLikedEvents: () =>
-        EVENT_RECORDS.map((event) => ({
+        events.map((event) => ({
           eventId: event.id,
           eventTitle: event.title,
           likedBy: socialState[event.id]?.likes ?? [],
@@ -434,7 +461,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           }))
           .filter((entry) => entry.saved || entry.planStatus),
     };
-  }, [notifications, socialState, user.username]);
+  }, [events, notifications, socialState, user.username]);
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;
 }

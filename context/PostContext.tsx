@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
+import { isRemovedSeedEventId } from '@/constants/events';
 import {
   addRemotePostComment,
   deleteRemotePost,
@@ -50,6 +51,18 @@ function isValidPost(value: unknown): value is Post {
   );
 }
 
+function sanitizePost(post: Post): Post {
+  if (!isRemovedSeedEventId(post.eventId)) {
+    return post;
+  }
+
+  return {
+    ...post,
+    eventId: undefined,
+    eventTitle: undefined,
+  };
+}
+
 function parseStoredState(rawValue: string | null): StoredPostState | null {
   if (!rawValue) {
     return null;
@@ -57,7 +70,7 @@ function parseStoredState(rawValue: string | null): StoredPostState | null {
 
   const parsedValue = JSON.parse(rawValue) as Partial<StoredPostState>;
   const parsedPosts = Array.isArray(parsedValue.posts)
-    ? parsedValue.posts.filter(isValidPost)
+    ? parsedValue.posts.filter(isValidPost).map(sanitizePost)
     : [];
   const parsedCrowns =
     typeof parsedValue.crowns === 'number' && Number.isFinite(parsedValue.crowns)

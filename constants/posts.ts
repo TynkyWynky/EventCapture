@@ -1,3 +1,5 @@
+import { EVENT_RECORDS } from './events';
+
 export interface PostUser {
   id: string;
   username: string;
@@ -29,6 +31,10 @@ export const MOCK_USERS = [
   { id: 'u2', username: 'sarah_night', avatarUri: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=150&q=80' },
 ];
 
+function getSeedEvent(index: number) {
+  return EVENT_RECORDS[index];
+}
+
 export const POST_RECORDS: Post[] = [
   {
     id: 'seed-post-1',
@@ -36,8 +42,8 @@ export const POST_RECORDS: Post[] = [
     imageUri: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=900&q=80',
     date: '18/07/2026',
     isBeerFinished: true,
-    eventId: 'afterwork-tasting',
-    eventTitle: 'Afterwork Tasting',
+    eventId: getSeedEvent(0)?.id,
+    eventTitle: getSeedEvent(0)?.title,
     likes: ['sarah_night', 'demo'],
     comments: [
       { id: 'c1', user: MOCK_USERS[1], text: 'Great vibe out there!', time: '2 hours ago' }
@@ -49,8 +55,8 @@ export const POST_RECORDS: Post[] = [
     imageUri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=900&q=80',
     date: '07/09/2026',
     isBeerFinished: false,
-    eventId: 'canal-lights-open-air',
-    eventTitle: 'Canal Lights Open Air',
+    eventId: getSeedEvent(1)?.id,
+    eventTitle: getSeedEvent(1)?.title,
     likes: ['alex'],
     comments: []
   },
@@ -60,8 +66,8 @@ export const POST_RECORDS: Post[] = [
     imageUri: 'https://images.unsplash.com/photo-1436076863939-06870fe779c2?auto=format&fit=crop&w=900&q=80',
     date: '20/09/2026',
     isBeerFinished: true,
-    eventId: 'park-food-beats',
-    eventTitle: 'Park Food & Beats',
+    eventId: getSeedEvent(2)?.id,
+    eventTitle: getSeedEvent(2)?.title,
     likes: ['sarah_night'],
     comments: []
   },
@@ -71,8 +77,8 @@ export const POST_RECORDS: Post[] = [
     imageUri: 'https://images.unsplash.com/photo-1545128485-c400e7702796?auto=format&fit=crop&w=900&q=80',
     date: '25/09/2026',
     isBeerFinished: false,
-    eventId: 'gallery-neon-nights',
-    eventTitle: 'Gallery Neon Nights',
+    eventId: getSeedEvent(3)?.id,
+    eventTitle: getSeedEvent(3)?.title,
     likes: ['alex', 'Lina'],
     comments: []
   },
@@ -82,8 +88,8 @@ export const POST_RECORDS: Post[] = [
     imageUri: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=900&q=80',
     date: '20/09/2026',
     isBeerFinished: true,
-    eventId: 'park-food-beats',
-    eventTitle: 'Park Food & Beats',
+    eventId: getSeedEvent(4)?.id,
+    eventTitle: getSeedEvent(4)?.title,
     likes: ['demo', 'sarah_night', 'Milan'],
     comments: [
       { id: 'c2', user: MOCK_USERS[0], text: 'Amazing food there!', time: '1 day ago' }
@@ -95,8 +101,8 @@ export const POST_RECORDS: Post[] = [
     imageUri: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=900&q=80',
     date: '11/10/2026',
     isBeerFinished: true,
-    eventId: 'brewery-yard-jam',
-    eventTitle: 'Brewery Yard Jam',
+    eventId: getSeedEvent(5)?.id,
+    eventTitle: getSeedEvent(5)?.title,
     likes: ['sarah_night'],
     comments: []
   },

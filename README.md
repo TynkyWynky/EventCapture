@@ -105,6 +105,43 @@ npm run start:services
 npm run start:all
 ```
 
+## Import official Brussels events
+
+The project includes a small importer that pulls upcoming Brussels events from the official `visit.brussels` agenda feed and maps them into the backend event store.
+
+Preview the mapped payloads:
+
+```bash
+npm run events:brussels:preview
+```
+
+Import a few events into `backend/eventcapture.db`:
+
+```bash
+npm run events:brussels:import
+```
+
+Sync the full currently available Brussels feed into both the project seed file and SQLite, pruning stale official-feed rows from SQLite on each sync:
+
+```bash
+npm run events:brussels:sync
+```
+
+To only show drink-friendly Brussels events in the Expo app, set the env toggle before starting Expo:
+
+```powershell
+$env:EXPO_PUBLIC_BRUSSELS_DRINKABLE_ONLY="true"
+npm start
+```
+
+Leave it unset or set it to `false` to show the full Brussels feed.
+
+Useful options:
+
+```bash
+python ./scripts/import_brussels_events.py --limit 5 --date-from 2026-05-06 --output ./tmp/brussels-events.json --dry-run
+```
+
 ## Manual backend start
 
 If you want to run the detector without the helper script:
