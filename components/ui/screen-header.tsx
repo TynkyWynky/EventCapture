@@ -13,6 +13,7 @@ interface ScreenHeaderProps {
   mode?: 'hero' | 'compact';
   surface?: boolean;
   tone?: 'default' | 'inverse';
+  backAccessibilityLabel?: string;
 }
 
 export function ScreenHeader({
@@ -25,10 +26,13 @@ export function ScreenHeader({
   mode = 'hero',
   surface = true,
   tone = 'default',
+  backAccessibilityLabel = 'Go back',
 }: ScreenHeaderProps) {
   const inverse = tone === 'inverse';
   const leftNode = onBack ? (
     <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={backAccessibilityLabel}
       style={[
         styles.iconButton,
         !surface && styles.iconButtonFlat,

@@ -7,24 +7,33 @@ interface IconActionButtonProps {
   icon: keyof typeof Ionicons.glyphMap;
   onPress?: () => void;
   tone?: 'light' | 'dark' | 'subtle' | 'accent';
+  accessibilityLabel?: string;
+  disabled?: boolean;
 }
 
 export function IconActionButton({
   icon,
   onPress,
   tone = 'light',
+  accessibilityLabel,
+  disabled = false,
 }: IconActionButtonProps) {
   const scale = React.useRef(new Animated.Value(1)).current;
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? icon}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
         style={[
           styles.base,
           tone === 'light' && styles.light,
           tone === 'dark' && styles.dark,
           tone === 'subtle' && styles.subtle,
           tone === 'accent' && styles.accent,
+          disabled && styles.disabled,
         ]}
         onPress={onPress}
         onPressIn={() =>
@@ -86,5 +95,8 @@ const styles = StyleSheet.create({
   accent: {
     backgroundColor: Colors.light.tint,
     ...Shadows.card,
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });

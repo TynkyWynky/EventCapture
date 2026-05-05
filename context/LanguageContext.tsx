@@ -46,7 +46,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   };
 
   const t = (key: TranslationKey): string => {
-    return translations[language][key] || translations['EN'][key] || key;
+    const current = translations[language] as Record<TranslationKey, string>;
+    return current[key] || translations.EN[key] || key;
   };
 
   // Wait for hydration before rendering children to prevent UI language flickering

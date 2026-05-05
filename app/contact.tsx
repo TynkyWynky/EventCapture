@@ -9,7 +9,7 @@ import { useUser } from '@/context/UserContext';
 import { submitSupportContact } from '@/services/supportApi';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ContactScreen() {
@@ -57,86 +57,84 @@ export default function ContactScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <ScreenHeader
-          eyebrow={t('contactEyebrow')}
-          title={t('contactTitle')}
-          subtitle={t('contactSubtitle')}
-          onBack={() => router.back()}
-          mode="compact"
-        />
-
-        <SurfaceCard style={styles.heroCard} variant="feature">
-          <Text style={styles.heroTitle}>{t('contactHeroTitle')}</Text>
-          <Text style={styles.heroText}>
-            {t('contactHeroText')}
-          </Text>
-        </SurfaceCard>
-
-        {status === 'error' ? (
-          <FeedbackBanner
-            tone="error"
-            title={t('contactErrTitle')}
-            message={t('contactErrMsg')}
-          />
-        ) : null}
-
-        {status === 'success' ? (
-          <FeedbackBanner
-            tone="success"
-            title={t('contactSuccTitle')}
-            message={t('contactSuccMsg')}
-          />
-        ) : null}
-
-        <SurfaceCard style={styles.sectionCard}>
-          <Text style={styles.label}>{t('contactLblSubj')}</Text>
-          <TextInput
-            style={styles.singleInput}
-            placeholder={t('contactPlhSubj')}
-            placeholderTextColor="#91867f"
-            value={subject}
-            onChangeText={setSubject}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <ScreenHeader
+            eyebrow={t('contactEyebrow')}
+            title={t('contactTitle')}
+            subtitle={t('contactSubtitle')}
+            onBack={() => router.back()}
+            mode="compact"
           />
 
-          <Text style={styles.label}>{t('contactLblMsg')}</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={t('contactPlhMsg')}
-            placeholderTextColor="#91867f"
-            multiline
-            textAlignVertical="top"
-            value={message}
-            onChangeText={setMessage}
-          />
+          <SurfaceCard style={styles.utilityCard} variant="subtle">
+            <Text style={styles.utilityTitle}>{t('contactHeroTitle')}</Text>
+            <Text style={styles.utilityText}>{t('contactHeroText')}</Text>
+          </SurfaceCard>
 
-          <AppButton
-            label={isSubmitting ? t('contactBtnSending') : t('contactBtn')}
-            onPress={() => void handleSend()}
-            disabled={isSubmitting}
-          />
-        </SurfaceCard>
-      </ScrollView>
+          {status === 'error' ? (
+            <FeedbackBanner tone="error" title={t('contactErrTitle')} message={t('contactErrMsg')} />
+          ) : null}
+
+          {status === 'success' ? (
+            <FeedbackBanner tone="success" title={t('contactSuccTitle')} message={t('contactSuccMsg')} />
+          ) : null}
+
+          <SurfaceCard style={styles.sectionCard}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('contactLblSubj')}</Text>
+              <TextInput
+                style={styles.singleInput}
+                placeholder={t('contactPlhSubj')}
+                placeholderTextColor="#91867f"
+                value={subject}
+                onChangeText={setSubject}
+                returnKeyType="next"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('contactLblMsg')}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={t('contactPlhMsg')}
+                placeholderTextColor="#91867f"
+                multiline
+                textAlignVertical="top"
+                value={message}
+                onChangeText={setMessage}
+              />
+            </View>
+
+            <AppButton
+              label={isSubmitting ? t('contactBtnSending') : t('contactBtn')}
+              onPress={() => void handleSend()}
+              disabled={isSubmitting}
+            />
+          </SurfaceCard>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
+  flex: { flex: 1 },
   container: { padding: Layout.screenPadding, gap: Layout.sectionGap, paddingBottom: Layout.bottomPad },
-  heroCard: {},
-  heroTitle: {
+  utilityCard: { gap: 8 },
+  utilityTitle: {
     ...Typography.titleSm,
     color: Colors.light.title,
   },
-  heroText: {
+  utilityText: {
     ...Typography.bodySm,
     color: Colors.light.subtitle,
-    marginTop: 8,
   },
   sectionCard: {
-    gap: 12,
+    gap: 16,
   },
+  inputGroup: { gap: 8 },
   label: {
     color: '#1f1a17',
     fontWeight: '800',

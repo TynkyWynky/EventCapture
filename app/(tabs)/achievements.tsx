@@ -13,7 +13,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,17 +30,21 @@ export default function AchievementsScreen() {
   const nextEvent = events[crowns % Math.max(events.length, 1)];
   const crownLevel = getCrownLevelProgress(crowns);
 
-  const crownJourney = Array.from({ length: CROWN_TARGET }).map((_, index) => {
-    const status = index < crowns ? 'unlocked' : index === crowns ? 'next' : 'locked';
+  const milestoneRows = useMemo(
+    () =>
+      Array.from({ length: CROWN_TARGET }).map((_, index) => {
+        const status = index < crowns ? 'unlocked' : index === crowns ? 'next' : 'locked';
 
-    return {
-      id: `crown-${index + 1}`,
-      index: index + 1,
-      label: CROWN_MILESTONES[index],
-      reward: CROWN_REWARDS[index],
-      status,
-    };
-  });
+        return {
+          id: `crown-${index + 1}`,
+          index: index + 1,
+          label: CROWN_MILESTONES[index],
+          reward: CROWN_REWARDS[index],
+          status,
+        };
+      }),
+    [crowns]
+  );
 
   const recentWins = beerFinishedPosts.slice(0, 3).map((post, index) => {
     const linkedEvent = events.find((event) => event.id === post.eventId);
@@ -50,12 +54,7 @@ export default function AchievementsScreen() {
       title: linkedEvent?.title ?? post.eventTitle ?? 'Captured moment',
       date: post.date,
       place: linkedEvent?.place ?? 'Event moment logged',
-      icon:
-        index === 0
-          ? 'sparkles-outline'
-          : index === 1
-            ? 'flame-outline'
-            : 'diamond-outline',
+      icon: index === 0 ? 'sparkles-outline' : index === 1 ? 'flame-outline' : 'diamond-outline',
     };
   });
 
@@ -64,9 +63,8 @@ export default function AchievementsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <ScreenHeader
           eyebrow={t('achvEyebrow')}
-          title={t('achvTitle')}
-          subtitle={t('achvSubtitle')}
-          onBack={() => router.back()}
+          title={t('rewardsTab')}
+          subtitle={t('rewardsOverviewText')}
           mode="compact"
           leading={
             <View style={styles.headerBadge}>
@@ -74,27 +72,30 @@ export default function AchievementsScreen() {
             </View>
           }
           rightAction={
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
-              <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
+            <View style={styles.headerActions}>
+              <IconActionButton
+                icon="notifications-outline"
+                accessibilityLabel={t('notifTitle')}
+                onPress={() => router.push('/notifications')}
+              />
+              <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
             </View>
           }
         />
 
-        <LinearGradient colors={['#231b17', '#3d261b', '#6a3d1e']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
-          <View style={styles.heroGlow} />
+        <LinearGradient colors={['#231b17', '#3d261b', '#6a3d1e']} style={styles.heroCard}>
           <View style={styles.heroTop}>
-            <View style={styles.heroBadge}>
-              <Ionicons name="diamond-outline" size={24} color={Colors.light.tint} />
-            </View>
             <View style={styles.heroCopy}>
-              <Text style={styles.heroEyebrow}>{t('achvCurrentStreak')}</Text>
+              <Text style={styles.heroEyebrow}>{t('rewardsOverviewTitle')}</Text>
               <Text style={styles.heroTitle}>{crowns} {t('achvCrownsCollected')}</Text>
               <Text style={styles.heroSubtitle}>
                 {remainingCrowns === 0
                   ? t('achvStreakSubMax')
                   : `${remainingCrowns} ${t('achvStreakSubMore')}`}
               </Text>
+            </View>
+            <View style={styles.heroBadgeIcon}>
+              <Ionicons name="diamond-outline" size={24} color={Colors.light.tint} />
             </View>
           </View>
 
@@ -107,28 +108,21 @@ export default function AchievementsScreen() {
           </View>
 
           <View style={styles.levelStrip}>
-            <View style={styles.levelStripHeader}>
-              <View>
-                <Text style={styles.levelStripEyebrow}>{t('achvCurrentLevel')}</Text>
-                <Text style={styles.levelStripTitle}>
-                  {t('levelLabel')} {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
-                </Text>
-              </View>
-              <Text style={styles.levelStripMeta}>
-                {crownLevel.nextLevel
-                  ? `${crownLevel.crownsToNextLevel} ${t('crownsToNextLevel')} ${crownLevel.nextLevel.level}`
-                  : t('achvLegendComplete')}
-              </Text>
-            </View>
-
-            <CrownProgressBar progress={crownLevel.progressWithinLevel} tone="dark" />
+            <Text style={styles.levelTitle}>
+              {t('levelLabel')} {crownLevel.currentLevel.level} · {crownLevel.currentLevel.title}
+            </Text>
+            <Text style={styles.levelMeta}>
+              {crownLevel.nextLevel
+                ? `${crownLevel.crownsToNextLevel} ${t('crownsToNextLevel')} ${crownLevel.nextLevel.level}`
+                : t('achvLegendComplete')}
+            </Text>
           </View>
         </LinearGradient>
 
-        <SurfaceCard style={styles.nextCard} variant="feature">
+        <SurfaceCard style={styles.nextStepCard} variant="feature">
           <View style={styles.sectionRow}>
             <View>
-              <Text style={styles.sectionTitle}>{t('achvNextUnlock')}</Text>
+              <Text style={styles.sectionTitle}>{t('rewardsNextStepTitle')}</Text>
               <Text style={styles.sectionMeta}>
                 Crown {Math.min(crowns + 1, CROWN_TARGET)} · {CROWN_MILESTONES[nextMilestoneIndex]}
               </Text>
@@ -138,11 +132,7 @@ export default function AchievementsScreen() {
             </View>
           </View>
 
-          <Text style={styles.nextCopy}>
-            {remainingCrowns === 0
-              ? t('achvNextCopyMax')
-              : `${t('achvNextCopyMore')} ${nextEvent?.title ?? t('achvYourNextEvent')}${t('achvNextCopyMore2')}`}
-          </Text>
+          <Text style={styles.nextCopy}>{t('rewardsNextStepText')}</Text>
 
           <View style={styles.inlineMetaRow}>
             <View style={styles.inlineMetaChip}>
@@ -157,87 +147,41 @@ export default function AchievementsScreen() {
         </SurfaceCard>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>{t('achvCrownJourney')}</Text>
-          <Text style={styles.sectionMeta}>{crowns}/{CROWN_TARGET} {t('achvUnlockedStat')}</Text>
+          <View>
+            <Text style={styles.sectionTitle}>{t('rewardsMilestonesTitle')}</Text>
+            <Text style={styles.sectionMetaLeft}>{t('rewardsMilestonesSub')}</Text>
+          </View>
+          <Text style={styles.sectionMeta}>{crowns}/{CROWN_TARGET}</Text>
         </View>
 
-        <View style={styles.milestoneGrid}>
-          {crownJourney.map((milestone) => {
-            const unlocked = milestone.status === 'unlocked';
-            const isNext = milestone.status === 'next';
-
-            return (
-              <SurfaceCard
-                key={milestone.id}
-                style={[
-                  styles.milestoneCard,
-                  unlocked && styles.milestoneUnlocked,
-                  isNext && styles.milestoneNext,
-                ]}>
-                <View
-                  style={[
-                    styles.milestoneIcon,
-                    unlocked && styles.milestoneIconUnlocked,
-                    isNext && styles.milestoneIconNext,
-                  ]}>
-                  <Ionicons
-                    name={unlocked ? 'medal' : isNext ? 'sparkles' : 'medal-outline'}
-                    size={20}
-                    color={unlocked || isNext ? Colors.light.tint : '#9d938b'}
-                  />
-                </View>
-                <Text style={styles.milestoneIndex}>Crown {milestone.index}</Text>
-                <Text style={styles.milestoneLabel}>{milestone.label}</Text>
-                <Text style={styles.milestoneReward}>{milestone.reward.perk}</Text>
-                <Text style={[styles.milestoneState, unlocked && styles.milestoneStateUnlocked, isNext && styles.milestoneStateNext]}>
-                  {unlocked ? t('achvStatusUnlocked') : isNext ? t('achvStatusNext') : t('achvStatusLocked')}
-                </Text>
-              </SurfaceCard>
-            );
-          })}
-        </View>
-
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>{t('achvVaultRewards')}</Text>
-          <Text style={styles.sectionMeta}>{t('achvVaultRewardsSub')}</Text>
-        </View>
-
-        <SurfaceCard style={styles.rewardVaultCard}>
-          {crownJourney.map((milestone, index) => {
+        <SurfaceCard style={styles.milestoneCard}>
+          {milestoneRows.map((milestone, index) => {
             const unlocked = milestone.status === 'unlocked';
             const isNext = milestone.status === 'next';
 
             return (
               <View
-                key={`${milestone.id}-reward`}
+                key={milestone.id}
                 style={[
-                  styles.rewardRow,
-                  index === crownJourney.length - 1 && styles.rewardRowLast,
-                  unlocked && styles.rewardRowUnlocked,
-                  isNext && styles.rewardRowNext,
+                  styles.milestoneRow,
+                  isNext && styles.milestoneRowNext,
+                  index === milestoneRows.length - 1 && styles.milestoneRowLast,
                 ]}>
-                <View
-                  style={[
-                    styles.rewardIconWrap,
-                    unlocked && styles.rewardIconWrapUnlocked,
-                    isNext && styles.rewardIconWrapNext,
-                  ]}>
+                <View style={[styles.milestoneIcon, unlocked && styles.milestoneIconUnlocked, isNext && styles.milestoneIconNext]}>
                   <Ionicons
-                    name={milestone.reward.icon as keyof typeof Ionicons.glyphMap}
+                    name={unlocked ? 'medal' : isNext ? 'sparkles' : 'medal-outline'}
                     size={18}
                     color={unlocked || isNext ? Colors.light.tint : '#9d938b'}
                   />
                 </View>
 
-                <View style={styles.rewardCopy}>
-                  <Text style={styles.rewardTitle}>
-                    Crown {milestone.index} · {milestone.reward.perk}
-                  </Text>
-                  <Text style={styles.rewardDetail}>{milestone.reward.detail}</Text>
+                <View style={styles.milestoneCopy}>
+                  <Text style={styles.milestoneTitle}>Crown {milestone.index} · {milestone.label}</Text>
+                  <Text style={styles.milestoneReward}>{milestone.reward.perk}</Text>
                 </View>
 
-                <Text style={[styles.rewardStatus, unlocked && styles.milestoneStateUnlocked, isNext && styles.milestoneStateNext]}>
-                  {unlocked ? t('achvStatusLive') : isNext ? t('achvStatusNext') : t('achvStatusSoon')}
+                <Text style={[styles.milestoneStatus, unlocked && styles.milestoneStatusUnlocked, isNext && styles.milestoneStatusNext]}>
+                  {unlocked ? t('achvStatusUnlocked') : isNext ? t('achvStatusNext') : t('achvStatusLocked')}
                 </Text>
               </View>
             );
@@ -245,15 +189,17 @@ export default function AchievementsScreen() {
         </SurfaceCard>
 
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>{t('achvRecentWins')}</Text>
-          <Text style={styles.sectionMeta}>{t('achvRecentWinsSub')}</Text>
+          <View>
+            <Text style={styles.sectionTitle}>{t('rewardsRecentTitle')}</Text>
+            <Text style={styles.sectionMetaLeft}>{t('rewardsRecentSub')}</Text>
+          </View>
         </View>
 
         {recentWins.length > 0 ? (
           recentWins.map((win) => (
             <SurfaceCard key={win.id} style={styles.winCard} variant="subtle">
               <View style={styles.winBadge}>
-                <Ionicons name={win.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.light.tint} />
+                <Ionicons name={win.icon as keyof typeof Ionicons.glyphMap} size={22} color={Colors.light.tint} />
               </View>
               <View style={styles.winCopy}>
                 <Text style={styles.winTitle}>{win.title}</Text>
@@ -263,11 +209,7 @@ export default function AchievementsScreen() {
             </SurfaceCard>
           ))
         ) : (
-          <EmptyState
-            icon="beer-outline"
-            title="No crown moments yet"
-            message="Finish your first drink capture to start filling your crown vault."
-          />
+          <EmptyState icon="beer-outline" title={t('rewardsEmptyTitle')} message={t('rewardsEmptyMsg')} />
         )}
 
         <AppButton label={t('achvCaptureAnother')} onPress={() => router.push('/camera')} />
@@ -279,12 +221,6 @@ export default function AchievementsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: TabThemes.achievements.background },
   container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
-  heroCard: {
-    borderRadius: Radius.xxl,
-    padding: Spacing.xl,
-    gap: Spacing.lg,
-    overflow: 'hidden',
-  },
   headerBadge: {
     width: 46,
     height: 46,
@@ -295,21 +231,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroGlow: {
-    position: 'absolute',
-    top: -56,
-    right: -24,
-    width: 164,
-    height: 164,
-    borderRadius: 82,
-    backgroundColor: 'rgba(255, 208, 166, 0.12)',
+  headerActions: { flexDirection: 'row', gap: 8 },
+  heroCard: {
+    borderRadius: Radius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
   },
   heroTop: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 14,
   },
-  heroBadge: {
+  heroCopy: { flex: 1, gap: 6 },
+  heroEyebrow: { color: '#d7c4b6', fontSize: 11, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+  heroTitle: { color: '#fff7ef', fontSize: 28, fontWeight: '900' },
+  heroSubtitle: { color: '#dfd0c4', lineHeight: 21 },
+  heroBadgeIcon: {
     width: 52,
     height: 52,
     borderRadius: 20,
@@ -317,34 +255,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroCopy: { flex: 1 },
-  heroEyebrow: {
-    color: '#d7c4b6',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  heroTitle: { color: '#fff7ef', fontSize: 28, fontWeight: '900', marginTop: 4 },
-  heroSubtitle: { color: '#dfd0c4', lineHeight: 21, marginTop: 8 },
   heroStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   levelStrip: {
-    gap: 10,
+    gap: 6,
     backgroundColor: 'rgba(255,247,239,0.08)',
     borderRadius: Radius.lg,
     padding: 12,
   },
-  levelStripHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, alignItems: 'flex-end' },
-  levelStripEyebrow: {
-    color: '#d7c4b6',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-  },
-  levelStripTitle: { color: '#fff7ef', fontSize: 17, fontWeight: '800', marginTop: 4 },
-  levelStripMeta: { color: '#dfd0c4', fontWeight: '700', fontSize: 12.5, flexShrink: 1, textAlign: 'right' },
-  nextCard: { gap: 14 },
+  levelTitle: { color: '#fff7ef', fontSize: 16, fontWeight: '800' },
+  levelMeta: { color: '#dfd0c4', fontWeight: '700', fontSize: 12.5 },
+  nextStepCard: { gap: 14 },
   sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -353,6 +273,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { color: '#1f1a17', fontSize: 20, fontWeight: '800' },
   sectionMeta: { color: '#857a72', fontWeight: '700', flexShrink: 1, textAlign: 'right' },
+  sectionMetaLeft: { color: '#857a72', fontWeight: '600', marginTop: 2 },
   nextBadge: {
     width: 44,
     height: 44,
@@ -377,42 +298,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7ede3',
   },
   inlineMetaText: { color: '#6d635d', fontWeight: '700', fontSize: 12.5 },
-  milestoneGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  milestoneCard: {
-    width: '47%',
-    gap: 10,
-    backgroundColor: '#fbf6f1',
-  },
-  milestoneUnlocked: {
-    backgroundColor: '#fff2e1',
-    borderColor: '#f5cb98',
-  },
-  milestoneNext: {
-    backgroundColor: '#fff8ef',
-    borderColor: '#efc28b',
-  },
-  milestoneIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 18,
-    backgroundColor: '#f1e8de',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  milestoneIconUnlocked: { backgroundColor: '#ffe7c9' },
-  milestoneIconNext: { backgroundColor: '#fff0dc' },
-  milestoneIndex: { color: '#8a7d73', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
-  milestoneLabel: { color: '#1f1a17', fontSize: 17, fontWeight: '800', lineHeight: 22 },
-  milestoneReward: { color: '#6f655e', lineHeight: 19, minHeight: 38 },
-  milestoneState: { color: '#8a7d73', fontWeight: '700' },
-  milestoneStateUnlocked: { color: '#b35d12' },
-  milestoneStateNext: { color: Colors.light.tint },
-  rewardVaultCard: { gap: 2 },
-  rewardRow: {
+  milestoneCard: { gap: 0 },
+  milestoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -420,10 +307,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#efe3d5',
   },
-  rewardRowLast: { borderBottomWidth: 0, paddingBottom: 4 },
-  rewardRowUnlocked: { opacity: 1 },
-  rewardRowNext: { backgroundColor: '#fffaf4', borderRadius: 16, paddingHorizontal: 10 },
-  rewardIconWrap: {
+  milestoneRowNext: {
+    backgroundColor: '#fffaf4',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+  },
+  milestoneRowLast: { borderBottomWidth: 0, paddingBottom: 4 },
+  milestoneIcon: {
     width: 40,
     height: 40,
     borderRadius: 16,
@@ -431,12 +321,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rewardIconWrapUnlocked: { backgroundColor: '#ffe7c9' },
-  rewardIconWrapNext: { backgroundColor: '#fff0dc' },
-  rewardCopy: { flex: 1, gap: 3 },
-  rewardTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 14.5 },
-  rewardDetail: { color: '#7c726b', lineHeight: 19, fontSize: 12.5 },
-  rewardStatus: { color: '#8a7d73', fontWeight: '800', fontSize: 12 },
+  milestoneIconUnlocked: { backgroundColor: '#ffe7c9' },
+  milestoneIconNext: { backgroundColor: '#fff0dc' },
+  milestoneCopy: { flex: 1, gap: 3 },
+  milestoneTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 14.5 },
+  milestoneReward: { color: '#7c726b', lineHeight: 19, fontSize: 12.5 },
+  milestoneStatus: { color: '#8a7d73', fontWeight: '800', fontSize: 12 },
+  milestoneStatusUnlocked: { color: '#b35d12' },
+  milestoneStatusNext: { color: Colors.light.tint },
   winCard: {
     flexDirection: 'row',
     alignItems: 'center',
