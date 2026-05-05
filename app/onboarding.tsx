@@ -9,14 +9,18 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const highlights = [
-  'Discover nights that actually match your mood',
-  'Capture your drink moments and earn crowns',
-  'Save favorite discovery presets for faster browsing',
-];
+import { useLanguage } from '@/context/LanguageContext';
+
+const loopStepKeys = [
+  ['loopFindTitle', 'loopFindBody', 'search-outline'],
+  ['loopCaptureTitle', 'loopCaptureBody', 'camera-outline'],
+  ['loopEarnTitle', 'loopEarnBody', 'ribbon-outline'],
+  ['loopShareTitle', 'loopShareBody', 'chatbubble-ellipses-outline'],
+] as const;
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { t } = useLanguage();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -27,27 +31,31 @@ export default function OnboardingScreen() {
               <LogoMark size={52} />
             </View>
 
-            <Text style={styles.eyebrow}>WELCOME TO EVENTCAPTURE</Text>
-            <Text style={styles.title}>Find the night. Keep the memory.</Text>
-            <Text style={styles.body}>
-              EventCapture helps you discover events around Brussels, save the ones that match your vibe,
-              and turn your best drink moments into a shared nightlife diary.
-            </Text>
+            <Text style={styles.eyebrow}>{t('landingBadge')}</Text>
+            <Text style={styles.title}>{t('onboardingTitle')}</Text>
+            <Text style={styles.body}>{t('onboardingSubtitle')}</Text>
 
             <View style={styles.highlightList}>
-              {highlights.map((item) => (
-                <View key={item} style={styles.highlightRow}>
+              {loopStepKeys.map(([titleKey, bodyKey, icon]) => (
+                <View key={titleKey} style={styles.highlightRow}>
                   <View style={styles.highlightIcon}>
-                    <Ionicons name="sparkles-outline" size={16} color={Colors.light.tint} />
+                    <Ionicons name={icon} size={16} color={Colors.light.tint} />
                   </View>
-                  <Text style={styles.highlightText}>{item}</Text>
+                  <View style={styles.highlightCopy}>
+                    <Text style={styles.highlightTitle}>{t(titleKey)}</Text>
+                    <Text style={styles.highlightText}>{t(bodyKey)}</Text>
+                  </View>
                 </View>
               ))}
             </View>
 
             <View style={styles.actionBlock}>
-              <AppButton label="Sign in" onPress={() => router.push('/auth/login')} size="lg" />
-              <AppButton label="Create account" variant="secondary" onPress={() => router.push('/profile/create')} />
+              <AppButton label={t('onboardingPrimaryCta')} onPress={() => router.push('/auth/login')} size="lg" />
+              <AppButton
+                label={t('onboardingSecondaryCta')}
+                variant="secondary"
+                onPress={() => router.push('/profile/create')}
+              />
             </View>
           </SurfaceCard>
         </ScrollView>
@@ -93,7 +101,7 @@ const styles = StyleSheet.create({
   },
   highlightRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
     backgroundColor: '#fff4e8',
     borderRadius: Radius.lg,
@@ -107,12 +115,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
+    marginTop: 2,
+  },
+  highlightCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  highlightTitle: {
+    color: '#1f1a17',
+    fontWeight: '800',
+    lineHeight: 19,
   },
   highlightText: {
-    flex: 1,
-    color: '#1f1a17',
-    fontWeight: '700',
-    lineHeight: 19,
+    color: '#6f655e',
+    lineHeight: 18,
+    fontSize: 12.5,
   },
   actionBlock: {
     gap: 10,

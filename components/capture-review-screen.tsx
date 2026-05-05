@@ -1,5 +1,7 @@
 import { AppImage } from '@/components/ui/app-image';
+import { AppButton } from '@/components/ui/app-button';
 import { useEvents } from '@/context/EventContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +30,7 @@ export function CaptureReviewScreen({
   topDrink,
 }: CaptureReviewScreenProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { events } = useEvents();
   const [selectedEventId, setSelectedEventId] = useState('');
   const [isPosting, setIsPosting] = useState(false);
@@ -45,13 +48,10 @@ export function CaptureReviewScreen({
 
   const badgeColor = isBeerFinished ? '#0f766e' : '#8a6a52';
   const accentColor = isBeerFinished ? Colors.light.tint : '#8a6a52';
-  const title = isBeerFinished ? 'Crown-worthy capture' : 'Still a moment worth posting';
-  const message = isBeerFinished
-    ? 'Nice shot. Post it to lock in your crown attempt and let the moment land with a little celebration.'
-    : 'No crown this time, but the photo still carries the night. Share it anyway and keep the memory in your feed.';
-  const eventHint = isBeerFinished
-    ? 'Pick the event that should get the crown attempt.'
-    : 'Pick the event this memory belongs to.';
+  const title = isBeerFinished ? t('reviewSuccessTitle') : t('reviewFailTitle');
+  const message = isBeerFinished ? t('reviewSuccessMsg') : t('reviewFailMsg');
+  const eventHint = isBeerFinished ? t('reviewSuccessHint') : t('reviewFailHint');
+  const nextText = isBeerFinished ? t('reviewNextSuccessText') : t('reviewNextFailText');
   const hasAnalysis = Boolean(analysisHeadline || analysisMessage || detectedDrinks.length || topDrink);
 
   const handleSubmit = async () => {
@@ -60,31 +60,34 @@ export function CaptureReviewScreen({
     }
 
     setIsPosting(true);
-    await new Promise((resolve) => setTimeout(resolve, 260));
-    await Promise.resolve(onPost(selectedEvent.id, selectedEvent.title));
+    try {
+      await Promise.resolve(onPost(selectedEvent.id, selectedEvent.title));
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={styles.iconButton}
+            onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={20} color="#1f1a17" />
           </TouchableOpacity>
 
           <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>REVIEW</Text>
-            <Text style={styles.title}>Choose the event</Text>
+            <Text style={styles.eyebrow}>{t('reviewEyebrow')}</Text>
+            <Text style={styles.title}>{t('reviewTitle')}</Text>
           </View>
 
           <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
-            <Ionicons
-              name={isBeerFinished ? 'ribbon' : 'image-outline'}
-              size={14}
-              color="#fff"
-            />
+            <Ionicons name={isBeerFinished ? 'ribbon' : 'refresh-outline'} size={14} color="#fff" />
             <Text style={styles.statusBadgeText}>
-              {isBeerFinished ? 'Crown eligible' : 'Share only'}
+              {isBeerFinished ? t('reviewBadgeSuccess') : t('reviewBadgeFail')}
             </Text>
           </View>
         </View>
@@ -96,11 +99,7 @@ export function CaptureReviewScreen({
             {isBeerFinished ? <View style={styles.heroSparkle} /> : null}
             <AppImage source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
             <View style={[styles.photoBadge, isBeerFinished ? styles.photoBadgeSuccess : styles.photoBadgeSoft]}>
-              <Ionicons
-                name={isBeerFinished ? 'ribbon' : 'images-outline'}
-                size={18}
-                color="#fff"
-              />
+              <Ionicons name={isBeerFinished ? 'ribbon' : 'images-outline'} size={18} color="#fff" />
             </View>
           </View>
 
@@ -118,13 +117,13 @@ export function CaptureReviewScreen({
                   color={accentColor}
                 />
                 <Text style={styles.metaText}>
-                  {isBeerFinished ? 'Eligible for reward' : 'Still worth sharing'}
+                  {isBeerFinished ? t('reviewMetaEligible') : t('reviewMetaWorth')}
                 </Text>
               </View>
               <View style={[styles.metaPill, isBeerFinished ? styles.metaPillWarm : styles.metaPillSoft]}>
                 <Ionicons name="albums-outline" size={14} color={accentColor} />
                 <Text style={styles.metaText}>
-                  {isBeerFinished ? '+1 crown if accepted' : 'Goes to your event story'}
+                  {isBeerFinished ? t('reviewMetaCrown') : t('reviewMetaStory')}
                 </Text>
               </View>
             </View>
@@ -133,10 +132,10 @@ export function CaptureReviewScreen({
 
         {hasAnalysis ? (
           <View style={styles.analysisCard}>
-            <Text style={styles.analysisEyebrow}>Detector result</Text>
+            <Text style={styles.analysisEyebrow}>{t('reviewAnalysisTitle')}</Text>
             <Text style={styles.analysisTitle}>{analysisHeadline ?? 'Capture analyzed'}</Text>
             <Text style={styles.analysisText}>
-              {analysisMessage ?? 'The backend analyzed this photo and attached the result to your review flow.'}
+              {analysisMessage ?? 'The detector analyzed this photo and attached the result to your review flow.'}
             </Text>
 
             <View style={styles.analysisMetaRow}>
@@ -156,8 +155,28 @@ export function CaptureReviewScreen({
           </View>
         ) : null}
 
+        <View style={styles.infoStack}>
+          <View style={styles.infoCard}>
+            <Ionicons name="arrow-forward-outline" size={16} color={Colors.light.tint} />
+            <View style={styles.infoCopy}>
+              <Text style={styles.infoTitle}>{t('reviewNextTitle')}</Text>
+              <Text style={styles.infoText}>{nextText}</Text>
+            </View>
+          </View>
+
+          {!isBeerFinished ? (
+            <View style={styles.infoCard}>
+              <Ionicons name="refresh-outline" size={16} color={Colors.light.tint} />
+              <View style={styles.infoCopy}>
+                <Text style={styles.infoTitle}>{t('reviewRetryTitle')}</Text>
+                <Text style={styles.infoText}>{t('reviewRetryText')}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Post this photo to</Text>
+          <Text style={styles.sectionTitle}>{t('reviewSectionTitle')}</Text>
           <Text style={styles.sectionSubtitle}>{eventHint}</Text>
 
           <View style={styles.eventList}>
@@ -167,6 +186,8 @@ export function CaptureReviewScreen({
               return (
                 <TouchableOpacity
                   key={event.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={event.title}
                   activeOpacity={0.92}
                   style={[styles.eventCard, isSelected && styles.eventCardSelected]}
                   onPress={() => setSelectedEventId(event.id)}>
@@ -183,7 +204,7 @@ export function CaptureReviewScreen({
                       <Text style={styles.eventTitle}>{event.title}</Text>
                       {isSelected ? (
                         <View style={styles.selectedPill}>
-                          <Text style={styles.selectedPillText}>Selected</Text>
+                          <Text style={styles.selectedPillText}>{t('reviewSelectedPill')}</Text>
                         </View>
                       ) : null}
                     </View>
@@ -203,32 +224,30 @@ export function CaptureReviewScreen({
 
         <View style={styles.footerCard}>
           <View>
-            <Text style={styles.footerLabel}>Selected event</Text>
-            <Text style={styles.footerTitle}>
-              {selectedEvent?.title ?? 'Choose an event'}
-            </Text>
+            <Text style={styles.footerLabel}>{t('reviewFooterLabel')}</Text>
+            <Text style={styles.footerTitle}>{selectedEvent?.title ?? t('reviewFooterEmpty')}</Text>
           </View>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.secondaryAction} onPress={() => router.back()}>
-              <Text style={styles.secondaryActionText}>Retake</Text>
-            </TouchableOpacity>
+            <AppButton label={t('reviewBtnRetake')} variant="ghost" onPress={() => router.back()} style={styles.secondaryAction} textStyle={styles.secondaryActionText} />
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
               style={[
                 styles.primaryAction,
                 !selectedEvent && styles.primaryActionDisabled,
                 isPosting && styles.primaryActionDisabled,
               ]}
               disabled={!selectedEvent || isPosting}
-              onPress={handleSubmit}>
+              onPress={() => void handleSubmit()}>
               {isPosting ? (
                 <View style={styles.postingRow}>
                   <ActivityIndicator size="small" color="#fff" />
-                  <Text style={styles.primaryActionText}>Posting...</Text>
+                  <Text style={styles.primaryActionText}>{t('reviewBtnPosting')}</Text>
                 </View>
               ) : (
                 <Text style={styles.primaryActionText}>
-                  {isBeerFinished ? 'Celebrate and post' : 'Share capture'}
+                  {isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -370,12 +389,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12.5,
   },
-  sectionCard: {
-    backgroundColor: '#fffaf5',
-    borderRadius: 28,
-    padding: 18,
-    gap: 12,
-  },
   analysisCard: {
     backgroundColor: '#fffaf5',
     borderRadius: 24,
@@ -418,6 +431,26 @@ const styles = StyleSheet.create({
     color: '#1f1a17',
     fontSize: 12.5,
     fontWeight: '700',
+  },
+  infoStack: { gap: 10 },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 20,
+    backgroundColor: '#fffaf5',
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#ead7c2',
+  },
+  infoCopy: { flex: 1, gap: 2 },
+  infoTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 14.5 },
+  infoText: { color: '#6f655e', lineHeight: 19, fontSize: 12.5 },
+  sectionCard: {
+    backgroundColor: '#fffaf5',
+    borderRadius: 28,
+    padding: 18,
+    gap: 12,
   },
   sectionTitle: {
     color: '#1f1a17',
@@ -546,8 +579,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
-    paddingVertical: 15,
-    alignItems: 'center',
   },
   secondaryActionText: {
     color: '#fff7ef',
@@ -559,6 +590,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.tint,
     paddingVertical: 15,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryActionDisabled: {
     opacity: 0.6,

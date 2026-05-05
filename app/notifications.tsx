@@ -7,10 +7,11 @@ import { useRouter } from 'expo-router';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { useSocial } from '@/context/SocialContext';
 import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { Colors, Layout, Radius, Spacing, Typography } from '@/constants/theme';
+import { Colors, Layout, Typography } from '@/constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -27,64 +28,52 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        {error ? (
-          <SurfaceCard style={styles.bannerCard} variant="subtle">
-            <Text style={styles.bannerText}>{error}</Text>
-          </SurfaceCard>
-        ) : null}
-
-        {!error && (isOffline || isUsingCachedData) ? (
-          <SurfaceCard style={styles.bannerCard} variant="subtle">
-            <Text style={styles.bannerText}>
-              {isOffline
-                ? t('notifOfflineBanner')
-                : t('notifCachedBanner')}
-            </Text>
-          </SurfaceCard>
-        ) : null}
-
         <ScreenHeader
           eyebrow={t('notifEyebrow')}
           title={t('notifTitle')}
+          subtitle={t('notifHeroText')}
           onBack={() => router.back()}
           mode="compact"
           rightAction={
             <TouchableOpacity
-              style={styles.iconButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('notifToastTitle')}
+              style={[styles.iconButton, (!unreadCount || isClearing) && styles.iconButtonDisabled]}
               disabled={!unreadCount || isClearing}
               onPress={() => {
-              setIsClearing(true);
-              void markAllRead()
-                .then(() => {
-                  showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
-                })
-                .catch((error) => {
-                  showToast({
-                    tone: 'error',
-                    title: t('notifTitle'),
-                    message: error instanceof Error ? error.message : t('notifMarkReadError'),
+                setIsClearing(true);
+                void markAllRead()
+                  .then(() => {
+                    showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
+                  })
+                  .catch((markError) => {
+                    showToast({
+                      tone: 'error',
+                      title: t('notifTitle'),
+                      message: markError instanceof Error ? markError.message : t('notifMarkReadError'),
+                    });
+                  })
+                  .finally(() => {
+                    setIsClearing(false);
                   });
-                })
-                .finally(() => {
-                  setIsClearing(false);
-                });
-            }}>
+              }}>
               <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>
           }
         />
 
-        <SurfaceCard style={styles.heroCard} variant="feature">
-          <Text style={styles.heroTitle}>{t('notifHeroTitle')}</Text>
-          <Text style={styles.heroText}>{t('notifHeroText')}</Text>
-        </SurfaceCard>
+        {error ? <FeedbackBanner tone="error" title={t('notifTitle')} message={error} /> : null}
+
+        {!error && (isOffline || isUsingCachedData) ? (
+          <FeedbackBanner
+            tone={isOffline ? 'error' : 'info'}
+            title={isOffline ? 'Live activity is unavailable' : 'Showing saved activity'}
+            message={isOffline ? t('notifOfflineBanner') : t('notifCachedBanner')}
+          />
+        ) : null}
 
         {!items.length ? (
-          <EmptyState
-            icon="notifications-outline"
-            title={t('notifEmptyTitle')}
-            message={t('notifEmptyMsg')}
-          />
+          <EmptyState icon="notifications-outline" title={t('notifEmptyTitle')} message={t('notifEmptyMsg')} />
         ) : null}
 
         {sections.map((section) => {
@@ -96,7 +85,7 @@ export default function NotificationsScreen() {
               <Text style={styles.sectionTitle}>{section}</Text>
 
               {entries.map((item, idx) => (
-                <TouchableOpacity key={`${section}-${idx}`} activeOpacity={0.92} style={styles.card}>
+                <SurfaceCard key={`${section}-${idx}`} style={styles.card}>
                   <View style={[styles.avatar, { backgroundColor: item.color }]}>
                     <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>
                   </View>
@@ -110,9 +99,9 @@ export default function NotificationsScreen() {
                   </View>
 
                   <View style={[styles.iconBadge, { backgroundColor: `${item.color}18` }]}>
-                    <Ionicons name={item.icon as any} size={18} color={item.color} />
+                    <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={18} color={item.color} />
                   </View>
-                </TouchableOpacity>
+                </SurfaceCard>
               ))}
             </View>
           );
@@ -124,7 +113,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.background },
-  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad },
+  container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: 16 },
   iconButton: {
     width: 40,
     height: 40,
@@ -135,47 +124,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroCard: {
-    marginBottom: 20,
-    gap: 6,
-  },
-  bannerCard: {
-    marginBottom: 12,
-  },
-  bannerText: {
-    ...Typography.bodySm,
-    color: Colors.light.subtitle,
-  },
-  heroTitle: {
-    ...Typography.titleSm,
-    color: Colors.light.title,
-    marginBottom: 20,
-  },
-  heroText: {
-    ...Typography.bodySm,
-    color: Colors.light.subtitle,
-  },
+  iconButtonDisabled: { opacity: 0.45 },
   sectionBlock: {
-    marginBottom: 18,
+    gap: 10,
   },
   sectionTitle: {
     ...Typography.eyebrow,
     color: Colors.light.subtitle,
-    marginBottom: 10,
   },
   card: {
-    backgroundColor: Colors.light.card,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   avatar: {
     width: 42,

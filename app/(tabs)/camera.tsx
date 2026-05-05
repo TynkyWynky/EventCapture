@@ -6,8 +6,10 @@ import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Radius } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
+
+const tipKeys = ['cameraGuideVisible', 'cameraGuideLighting', 'cameraGuideSharp'] as const;
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -19,21 +21,21 @@ export default function CameraScreen() {
   const insets = useSafeAreaInsets();
 
   if (!permission) {
-    // Camera permissions are still loading.
     return <View />;
   }
 
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <SafeAreaView style={styles.safe}>
         <View style={[styles.permissionState, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.permissionCard}>
             <Text style={styles.permissionTitle}>{t('cameraPermTitle')}</Text>
-            <Text style={styles.permissionText}>
-              {t('cameraPermText')}
-            </Text>
-            <TouchableOpacity onPress={requestPermission} style={styles.permissionBtn}>
+            <Text style={styles.permissionText}>{t('cameraPermText')}</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('cameraPermBtn')}
+              onPress={requestPermission}
+              style={styles.permissionBtn}>
               <Text style={styles.permissionBtnText}>{t('cameraPermBtn')}</Text>
             </TouchableOpacity>
           </View>
@@ -43,45 +45,41 @@ export default function CameraScreen() {
   }
 
   const takePicture = async () => {
-    if (cameraRef.current && !isProcessing) {
-      setIsProcessing(true);
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.8,
-          base64: false,
-          exif: false,
+    if (!cameraRef.current || isProcessing) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        exif: false,
+      });
+
+      if (photo?.uri) {
+        const analysis = await analyzeBeer(photo.uri);
+        const routeParams = {
+          photoUri: photo.uri,
+          storedImageUri: analysis.storedImageUri ?? '',
+          captureId: analysis.captureId ?? '',
+          analysisHeadline: analysis.summary.headline,
+          analysisMessage: analysis.summary.message,
+          detectedDrinks: analysis.detectedDrinks.join('|'),
+          topDrink: analysis.topDrink ?? '',
+          statusLabel: analysis.summary.status_label,
+        };
+
+        router.push({
+          pathname: analysis.crownEligible ? '/camera/review-success' : '/camera/review-fail',
+          params: routeParams,
         });
-
-        if (photo?.uri) {
-          const analysis = await analyzeBeer(photo.uri);
-          const routeParams = {
-            photoUri: photo.uri,
-            storedImageUri: analysis.storedImageUri ?? '',
-            captureId: analysis.captureId ?? '',
-            analysisHeadline: analysis.summary.headline,
-            analysisMessage: analysis.summary.message,
-            detectedDrinks: analysis.detectedDrinks.join('|'),
-            topDrink: analysis.topDrink ?? '',
-            statusLabel: analysis.summary.status_label,
-          };
-
-          router.push({
-            pathname: analysis.crownEligible ? '/camera/review-success' : '/camera/review-fail',
-            params: routeParams,
-          });
-        }
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : t('cameraErrorText');
-        Alert.alert(
-          t('cameraErrorTitle'),
-          message
-        );
-      } finally {
-        setIsProcessing(false);
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('cameraErrorText');
+      Alert.alert(t('cameraErrorTitle'), message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -89,23 +87,57 @@ export default function CameraScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.container}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.topButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={styles.topButton}
+            onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={20} color="#1f1a17" />
           </TouchableOpacity>
 
-          <View style={{ flex: 1 }}>
+          <View style={styles.titleBlock}>
             <Text style={styles.eyebrow}>{t('cameraEyebrow')}</Text>
             <Text style={styles.title}>{t('cameraTitle')}</Text>
             <Text style={styles.subtitle}>{t('cameraSubtitle')}</Text>
           </View>
 
           <View style={styles.topActions}>
-            <TouchableOpacity style={styles.topButton} onPress={() => router.push('/notifications')}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('notifTitle')}
+              style={styles.topButton}
+              onPress={() => router.push('/notifications')}>
               <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.topButton} onPress={() => router.push('/menu')}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('menuTitle')}
+              style={styles.topButton}
+              onPress={() => router.push('/menu')}>
               <Ionicons name="menu" size={20} color="#1f1a17" />
             </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.guideCard}>
+          <Text style={styles.guideTitle}>{t('cameraGuideTitle')}</Text>
+          <View style={styles.guideList}>
+            {tipKeys.map((key) => (
+              <View key={key} style={styles.guideRow}>
+                <View style={styles.guideBullet}>
+                  <Ionicons name="checkmark" size={12} color={Colors.light.tint} />
+                </View>
+                <Text style={styles.guideText}>{t(key)}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.nextCard}>
+            <Ionicons name="sparkles-outline" size={16} color={Colors.light.tint} />
+            <View style={styles.nextCopy}>
+              <Text style={styles.nextTitle}>{t('cameraGuideNextTitle')}</Text>
+              <Text style={styles.nextText}>{t('cameraGuideNextText')}</Text>
+            </View>
           </View>
         </View>
 
@@ -116,13 +148,13 @@ export default function CameraScreen() {
             <Ionicons name="scan-outline" size={14} color="#fff7ef" />
             <Text style={styles.frameHintText}>{t('cameraHint')}</Text>
           </View>
-          {isProcessing && (
+          {isProcessing ? (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={Colors.light.tint} />
               <Text style={styles.loadingTitle}>{t('cameraLoadingTitle')}</Text>
               <Text style={styles.loadingText}>{t('cameraLoadingText')}</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View style={[styles.controlDock, { paddingBottom: Math.max(insets.bottom, 18) }]}>
@@ -133,14 +165,18 @@ export default function CameraScreen() {
 
           <View style={styles.controlBar}>
             <View style={styles.sideButtonPlaceholder} />
-          <TouchableOpacity
-            style={[styles.shutter, isProcessing && { opacity: 0.5 }]}
-            onPress={takePicture}
-            disabled={isProcessing}>
-            <View style={styles.shutterInner} />
-          </TouchableOpacity>
             <TouchableOpacity
-              style={styles.sideButton}
+              accessibilityRole="button"
+              accessibilityLabel="Take capture"
+              style={[styles.shutter, isProcessing && styles.disabledAction]}
+              onPress={takePicture}
+              disabled={isProcessing}>
+              <View style={styles.shutterInner} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Switch camera"
+              style={[styles.sideButton, isProcessing && styles.disabledAction]}
               onPress={() => setFacing((current) => (current === 'back' ? 'front' : 'back'))}
               disabled={isProcessing}>
               <Ionicons name="camera-reverse-outline" size={22} color="#1f1a17" />
@@ -156,21 +192,19 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.light.tint },
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 12,
   },
   topBar: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 14,
     gap: 10,
   },
-  topActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  titleBlock: { flex: 1, gap: 4, paddingTop: 2 },
+  topActions: { flexDirection: 'row', gap: 8 },
   eyebrow: {
     color: '#fff0e1',
     fontWeight: '800',
@@ -181,12 +215,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 24,
-    marginTop: 2,
   },
   subtitle: {
     color: '#ffe1ca',
-    marginTop: 6,
-    maxWidth: 240,
+    marginTop: 2,
     lineHeight: 20,
   },
   topButton: {
@@ -197,6 +229,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  guideCard: {
+    backgroundColor: '#fff7ef',
+    borderRadius: Radius.xl,
+    padding: 14,
+    gap: 12,
+  },
+  guideTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 16 },
+  guideList: { gap: 8 },
+  guideRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  guideBullet: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff1e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideText: { flex: 1, color: '#5f534b', fontSize: 12.5, lineHeight: 18 },
+  nextCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: Radius.lg,
+    backgroundColor: '#fff1e0',
+    padding: 12,
+  },
+  nextCopy: { flex: 1, gap: 3 },
+  nextTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 13.5 },
+  nextText: { color: '#6f655e', fontSize: 12.5, lineHeight: 18 },
   photoFrame: {
     backgroundColor: '#fff',
     flex: 1,
@@ -208,7 +269,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
-    marginBottom: 18,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -258,7 +318,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff7ef',
     textAlign: 'center',
-    maxWidth: 220,
+    maxWidth: 240,
     lineHeight: 20,
   },
   controlDock: {
@@ -351,5 +411,8 @@ const styles = StyleSheet.create({
   permissionBtnText: {
     color: '#fff',
     fontWeight: '800',
+  },
+  disabledAction: {
+    opacity: 0.5,
   },
 });

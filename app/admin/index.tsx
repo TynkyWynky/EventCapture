@@ -25,7 +25,7 @@ interface AdminUserRecord {
 
 export default function AdminScreen() {
   const router = useRouter();
-  const { user, isAdmin } = useUser();
+  const { isAdmin } = useUser();
   const { posts, deletePost } = usePosts();
   const { events, deleteEvent } = useEvents();
   const { t } = useLanguage();
