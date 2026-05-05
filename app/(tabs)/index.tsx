@@ -5,7 +5,6 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { AppImage } from '@/components/ui/app-image';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
-import { ScreenHeader } from '@/components/ui/screen-header';
 import { getActiveCrownReward, getCrownLevelProgress, getNextCrownReward } from '@/constants/crowns';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
@@ -87,47 +86,54 @@ export default function HomeFeed() {
         {/* ====== HERO ====== */}
         <LinearGradient colors={['#241813', '#4a2a18', Colors.light.tintDark]} style={styles.hero}>
           <View style={styles.heroGlow} />
-
-          <ScreenHeader
-            eyebrow={t('heroEyebrow')}
-            title={`${t('heroTitle')}${user.username}`}
-            subtitle={t('heroText')}
-            leading={<AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />}
-            rightAction={
-              <View style={styles.heroActions}>
-                <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
-                <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
+          <View style={styles.heroGlowSecondary} />
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIdentity}>
+              <View style={styles.avatarFrame}>
+                <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
               </View>
-            }
-            surface={false}
-            tone="inverse"
-          />
+              <View style={styles.heroCopyWrap}>
+                <Text style={styles.heroEyebrow}>{t('heroEyebrow')}</Text>
+                <Text style={styles.heroTitle}>{`${t('heroTitle')}${user.username}`}</Text>
+                <Text style={styles.heroSubtitle}>{t('heroText')}</Text>
+              </View>
+            </View>
+
+            <View style={styles.heroActions}>
+              <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
+              <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
+            </View>
+          </View>
 
           {/* ====== SEARCH BOX ====== */}
-          <View style={styles.searchBox}>
-            <Ionicons name="search" size={18} color="#8d827a" />
-            <TextInput
-              value={activeFilters.searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder={t('searchPlaceholder')}
-              placeholderTextColor="#8d827a"
-              style={styles.searchInput}
-              returnKeyType="search"
-            />
-            {activeFilters.searchQuery.length > 0 ? (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={18} color="#b0a69e" />
-              </TouchableOpacity>
-            ) : null}
-            <View style={styles.searchDivider} />
-            <TouchableOpacity onPress={() => router.push('/filters')} style={styles.filterIconBtn}>
-              <Ionicons name="options-outline" size={18} color={activeFilterCount > 0 ? Colors.light.tint : '#8d827a'} />
-              {activeFilterCount > 0 ? (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                </View>
+          <View style={styles.searchShell}>
+            <View style={styles.searchBox}>
+              <View style={styles.searchIconWrap}>
+                <Ionicons name="search" size={18} color="#8d827a" />
+              </View>
+              <TextInput
+                value={activeFilters.searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder={t('searchPlaceholder')}
+                placeholderTextColor="#8d827a"
+                style={styles.searchInput}
+                returnKeyType="search"
+              />
+              {activeFilters.searchQuery.length > 0 ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color="#b0a69e" />
+                </TouchableOpacity>
               ) : null}
-            </TouchableOpacity>
+              <View style={styles.searchDivider} />
+              <TouchableOpacity onPress={() => router.push('/filters')} style={styles.filterIconBtn}>
+                <Ionicons name="options-outline" size={18} color={activeFilterCount > 0 ? Colors.light.tint : '#8d827a'} />
+                {activeFilterCount > 0 ? (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* ====== ACTIVE FILTER BAR ====== */}
@@ -397,12 +403,6 @@ export default function HomeFeed() {
         )}
 
       </ScrollView>
-
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/event/create')}>
-        <LinearGradient colors={[Colors.light.tint, Colors.light.tintDark]} style={styles.fabInner}>
-          <Ionicons name="add" size={26} color="#fff" />
-        </LinearGradient>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -424,31 +424,86 @@ const styles = StyleSheet.create({
   },
   heroGlow: {
     position: 'absolute',
-    right: -20,
-    top: -10,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    right: -36,
+    top: -42,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-  heroActions: { flexDirection: 'row', gap: 8 },
-  avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)' },
+  heroGlowSecondary: {
+    position: 'absolute',
+    left: -78,
+    bottom: -130,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  heroIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    paddingRight: 8,
+  },
+  avatarFrame: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    padding: 3,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  heroCopyWrap: {
+    flex: 1,
+    gap: 6,
+    paddingTop: 2,
+  },
+  heroActions: { flexDirection: 'row', gap: 8, paddingTop: 6 },
+  avatar: { width: '100%', height: '100%', borderRadius: 28 },
+  heroEyebrow: { color: '#f0c9a9', fontWeight: '800', fontSize: 11, letterSpacing: 1.3, textTransform: 'uppercase' },
+  heroTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 29, lineHeight: 34, maxWidth: 250 },
+  heroSubtitle: { color: '#ead8ca', fontSize: 15, lineHeight: 24, maxWidth: 250 },
 
   // ---- Search ----
+  searchShell: {
+    borderRadius: 30,
+    padding: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
   searchBox: {
     backgroundColor: Colors.light.card,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderRadius: 29,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 15,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
+  searchIconWrap: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   searchInput: { flex: 1, color: '#1f1a17', fontWeight: '600', paddingVertical: 0, fontSize: 15 },
   searchDivider: { width: 1, height: 22, backgroundColor: '#e0d5ca', marginHorizontal: 2 },
-  filterIconBtn: { position: 'relative', padding: 4 },
+  filterIconBtn: { position: 'relative', padding: 4, width: 28, alignItems: 'center' },
   filterBadge: {
     position: 'absolute',
     top: -4,
@@ -643,8 +698,4 @@ const styles = StyleSheet.create({
 
   // ---- Empty ----
   emptyCard: { gap: 14, marginBottom: 16 },
-
-  // ---- FAB ----
-  fab: { position: 'absolute', right: 36, bottom: 110, borderRadius: 30, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 8, zIndex: 10 },
-  fabInner: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
 });

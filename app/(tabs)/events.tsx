@@ -2,7 +2,6 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { AppImage } from '@/components/ui/app-image';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
-import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
@@ -36,20 +35,24 @@ export default function MyEventsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
-        <ScreenHeader
-          eyebrow={t('discoverEyebrow')}
-          title={`${user.city}${t('discoverTitle')}`}
-          subtitle={t('featuredNightsSub')}
-          leading={<AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />}
-          mode="compact"
-          rightAction={
+        <SurfaceCard style={styles.headerCard}>
+          <View style={styles.headerTopRow}>
+            <View style={styles.headerTitleBlock}>
+              <Text style={styles.headerEyebrow}>{t('discoverEyebrow')}</Text>
+              <Text style={styles.headerTitle}>{`${user.city} ${t('discoverTitle').trim()}`}</Text>
+            </View>
             <View style={styles.actions}>
               <IconActionButton icon="notifications-outline" onPress={() => router.push('/notifications')} />
-              <IconActionButton icon="add" onPress={() => router.push('/event/create')} />
+              <IconActionButton icon="add" tone="accent" onPress={() => router.push('/event/create')} />
               <IconActionButton icon="menu" onPress={() => router.push('/menu')} />
             </View>
-          }
-        />
+          </View>
+
+          <View style={styles.headerBottomRow}>
+            <AppImage source={{ uri: user.avatarUri }} style={styles.avatar} contentFit="cover" />
+            <Text style={styles.headerSubtitle}>{t('exploreHeroText')}</Text>
+          </View>
+        </SurfaceCard>
 
         <LinearGradient
           colors={[TabThemes.events.panel, '#17514c', TabThemes.events.accentDark]}
@@ -167,7 +170,47 @@ export default function MyEventsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: TabThemes.events.background },
   container: { padding: Layout.screenPadding, paddingBottom: Layout.bottomPad, gap: Layout.sectionGap },
-  avatar: { width: 48, height: 48, borderRadius: 24 },
+  headerCard: {
+    padding: Spacing.xl,
+    borderRadius: 30,
+    gap: 18,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+  headerTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  headerBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  headerEyebrow: {
+    color: '#8c7d71',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  headerTitle: {
+    color: '#1f1a17',
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    flex: 1,
+    color: '#776b63',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  avatar: { width: 52, height: 52, borderRadius: 26 },
   actions: { flexDirection: 'row', gap: 10 },
   heroCard: {
     borderRadius: Radius.xxl,
