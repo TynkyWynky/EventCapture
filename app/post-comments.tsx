@@ -25,7 +25,7 @@ export default function PostCommentsScreen() {
   const post = posts.find((p) => p.id === postId);
   const comments = post?.comments ?? [];
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!post?.id || !text.trim()) {
       return;
     }
@@ -36,7 +36,7 @@ export default function PostCommentsScreen() {
       avatarUri: user.avatarUri,
     };
 
-    const result = addPostComment(post.id, postUser, text);
+    const result = await addPostComment(post.id, postUser, text);
 
     if (result.ok) {
       setText('');
@@ -141,7 +141,7 @@ export default function PostCommentsScreen() {
             onChangeText={setText}
             multiline
           />
-          <TouchableOpacity style={styles.send} onPress={handleSend}>
+          <TouchableOpacity style={styles.send} onPress={() => void handleSend()}>
             <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
         </View>

@@ -2,6 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import React, { useState } from 'react';
@@ -11,38 +12,39 @@ import { useRouter } from 'expo-router';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
-  const { changePassword } = useUser();
+  const { changePassword, isBusy } = useUser();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (newPassword !== confirmPassword) {
       setSuccess('');
-      setError('New password and confirmation do not match.');
+      setError(t('changePasswordMismatchError'));
       return;
     }
 
-    const result = changePassword(currentPassword, newPassword);
+    const result = await changePassword(currentPassword, newPassword);
 
     if (!result.ok) {
       setSuccess('');
-      setError(result.error ?? 'Unable to change password.');
+      setError(result.error ?? t('changePasswordFailedMessage'));
       return;
     }
 
     setError('');
-    setSuccess('Password updated successfully.');
+    setSuccess(t('changePasswordSuccessInline'));
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
     showToast({
       tone: 'success',
-      title: 'Password updated',
-      message: 'Your next sign-in will use the new password.',
+      title: t('changePasswordToastTitle'),
+      message: t('changePasswordToastMessage'),
     });
   };
 
@@ -55,24 +57,24 @@ export default function ChangePasswordScreen() {
           keyboardDismissMode="on-drag"
           contentContainerStyle={styles.container}>
           <ScreenHeader
-            eyebrow="SECURITY"
-            title="Change password"
-            subtitle="Update your sign-in and keep the account protected."
+            eyebrow={t('changePasswordEyebrow')}
+            title={t('changePasswordTitle')}
+            subtitle={t('changePasswordSubtitle')}
             onBack={() => router.back()}
           />
 
           <SurfaceCard style={styles.heroCard}>
-            <Text style={styles.heroTitle}>Keep your account secure</Text>
+            <Text style={styles.heroTitle}>{t('changePasswordHeroTitle')}</Text>
             <Text style={styles.heroText}>
-              Update your password whenever you want a fresh sign-in.
+              {t('changePasswordHeroText')}
             </Text>
           </SurfaceCard>
 
           <SurfaceCard style={styles.sectionCard}>
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Current password</Text>
+              <Text style={styles.fieldLabel}>{t('changePasswordCurrentLabel')}</Text>
               <TextInput
-                placeholder="Enter current password"
+                placeholder={t('changePasswordCurrentPlaceholder')}
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={currentPassword}
@@ -82,9 +84,9 @@ export default function ChangePasswordScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>New password</Text>
+              <Text style={styles.fieldLabel}>{t('changePasswordNewLabel')}</Text>
               <TextInput
-                placeholder="Enter new password"
+                placeholder={t('changePasswordNewPlaceholder')}
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={newPassword}
@@ -94,9 +96,9 @@ export default function ChangePasswordScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Confirm new password</Text>
+              <Text style={styles.fieldLabel}>{t('changePasswordConfirmLabel')}</Text>
               <TextInput
-                placeholder="Confirm new password"
+                placeholder={t('changePasswordConfirmPlaceholder')}
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={confirmPassword}
@@ -109,7 +111,11 @@ export default function ChangePasswordScreen() {
             {success ? <Text style={styles.successText}>{success}</Text> : null}
           </SurfaceCard>
 
-          <AppButton label="Save new password" onPress={handleSave} />
+          <AppButton
+            label={isBusy ? t('changePasswordSubmitBusy') : t('changePasswordSubmitButton')}
+            onPress={() => void handleSave()}
+            disabled={isBusy}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

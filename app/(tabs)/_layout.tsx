@@ -7,7 +7,6 @@ import { Animated, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Layout, Radius, Shadows, Spacing, TabRouteName, TabThemes, Typography } from '@/constants/theme';
-import { useSocial } from '@/context/SocialContext';
 import { useLanguage } from '@/context/LanguageContext';
 
 function TabButton({
@@ -50,7 +49,6 @@ function TabButton({
 function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const focusedRoute = state.routes[state.index];
-  const { unreadCount } = useSocial();
 
   if (focusedRoute?.name === 'camera') {
     return null;
@@ -95,24 +93,9 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                 color: isFocused ? routeTheme.accent : '#b8ada4',
                 size: 22,
               })}
-              {routeName === 'profile' && unreadCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                </View>
-              ) : null}
             </View>
           )}
 
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            style={[
-              styles.label,
-              isFocused ? { color: routeTheme.accent } : isCameraButton ? styles.cameraLabel : styles.labelMuted,
-            ]}>
-            {label}
-          </Text>
         </View>
       </TabButton>
     );
@@ -122,7 +105,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, Layout.tabBarInset) }]}>
       <View style={styles.bar}>
         <View style={styles.row}>
-          {state.routes.map((route, index) => renderButton(route, index))}
+          {state.routes.filter((route) => route.name !== 'profile').map((route, index) => renderButton(route, index))}
         </View>
       </View>
     </View>
@@ -191,6 +174,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          href: null,
           title: t('profileTab'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={24} color={color} />
@@ -233,7 +217,7 @@ const styles = StyleSheet.create({
   },
   itemContent: {
     alignItems: 'center',
-    gap: 4,
+    gap: 0,
     width: '100%',
   },
   activeMarker: {
@@ -252,25 +236,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: Radius.round,
-    backgroundColor: Colors.light.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: Colors.light.card,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-  },
   cameraWrap: {
     width: 56,
     height: 56,
@@ -285,18 +250,5 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
-  },
-  label: {
-    ...Typography.caption,
-    color: Colors.light.title,
-    textAlign: 'center',
-    width: '100%',
-    paddingHorizontal: 1,
-  },
-  labelMuted: {
-    color: Colors.light.subtitle,
-  },
-  cameraLabel: {
-    color: Colors.light.subtitle,
   },
 });

@@ -2,6 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
 import { Colors, Radius, Typography } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,16 +13,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, user } = useUser();
+  const { signIn, user, isBusy } = useUser();
+  const { t } = useLanguage();
   const [email, setEmail] = useState(user.email);
-  const [password, setPassword] = useState('eventcapture123');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSignIn = () => {
-    const result = signIn(email, password);
+  const handleSignIn = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError(t('loginEmptyError'));
+      return;
+    }
+
+    const result = await signIn(email, password);
 
     if (!result.ok) {
-      setError(result.error ?? 'Sign in failed.');
+      setError(result.error ?? t('loginFailedMessage'));
       return;
     }
 
@@ -42,37 +49,17 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.copy}>
-                <Text style={styles.title}>Welcome back</Text>
+                <Text style={styles.title}>{t('loginTitle')}</Text>
                 <Text style={styles.subtitle}>
-                  Sign in to keep capturing events and moments that matter.
+                  {t('loginSubtitle')}
                 </Text>
-              </View>
-
-              <View style={styles.accountRow}>
-                <TouchableOpacity
-                  style={[styles.demoCard, email === 'demo@eventcapture.app' && styles.demoCardActive]}
-                  activeOpacity={0.85}
-                  onPress={() => { setEmail('demo@eventcapture.app'); setPassword('eventcapture123'); setError(''); }}>
-                  <Text style={styles.demoLabel}>Demo account</Text>
-                  <Text style={styles.demoValue}>demo@eventcapture.app</Text>
-                  <Text style={styles.demoHint}>Tap to fill</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.demoCard, email === 'admin' && styles.demoCardActive]}
-                  activeOpacity={0.85}
-                  onPress={() => { setEmail('admin'); setPassword('admin'); setError(''); }}>
-                  <Text style={styles.demoLabel}>Admin</Text>
-                  <Text style={styles.demoValue}>admin</Text>
-                  <Text style={styles.demoHint}>Tap to fill</Text>
-                </TouchableOpacity>
               </View>
 
               <View style={styles.inputRow}>
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput
                   value={email}
-                  placeholder="Email"
+                  placeholder={t('loginEmailPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   autoCapitalize="none"
@@ -85,7 +72,7 @@ export default function LoginScreen() {
                 <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
                 <TextInput
                   value={password}
-                  placeholder="Password"
+                  placeholder={t('loginPasswordPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   secureTextEntry
@@ -94,16 +81,26 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.metaRow}>
-                <Text style={styles.metaText}>Local email and password sign-in</Text>
-                <TouchableOpacity onPress={() => router.push('/auth/reset')}>
-                  <Text style={styles.metaLink}>Forgot password?</Text>
+                <Text style={styles.metaText}>{t('loginMetaText')}</Text>
+                <TouchableOpacity disabled={isBusy} onPress={() => router.push('/auth/reset')}>
+                  <Text style={styles.metaLink}>{t('loginForgotPassword')}</Text>
                 </TouchableOpacity>
               </View>
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-              <AppButton label="Sign in" onPress={handleSignIn} size="lg" />
-              <AppButton label="Create account" variant="secondary" onPress={() => router.push('/profile/create')} />
+              <AppButton
+                label={isBusy ? t('loginSubmitBusy') : t('loginSubmit')}
+                onPress={() => void handleSignIn()}
+                size="lg"
+                disabled={isBusy}
+              />
+              <AppButton
+                label={t('loginCreateAccount')}
+                variant="secondary"
+                onPress={() => router.push('/profile/create')}
+                disabled={isBusy}
+              />
             </SurfaceCard>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -136,26 +133,6 @@ const styles = StyleSheet.create({
   copy: { gap: 6 },
   title: { ...Typography.titleLg, color: Colors.light.title, textAlign: 'center' },
   subtitle: { ...Typography.body, color: Colors.light.subtitle, textAlign: 'center' },
-  accountRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  demoCard: {
-    flex: 1,
-    backgroundColor: '#fff2e6',
-    borderRadius: Radius.lg,
-    padding: 14,
-    gap: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  demoCardActive: {
-    borderColor: Colors.light.tint,
-    backgroundColor: '#fff8f0',
-  },
-  demoLabel: { color: '#8a6a52', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
-  demoValue: { color: '#1f1a17', fontWeight: '800' },
-  demoHint: { color: '#7d726a', fontSize: 12.5 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

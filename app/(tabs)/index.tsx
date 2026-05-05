@@ -1,5 +1,6 @@
 import { AppButton } from '@/components/ui/app-button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { AppImage } from '@/components/ui/app-image';
 import { StatChip } from '@/components/ui/stat-chip';
@@ -21,8 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeFeed() {
   const router = useRouter();
-  const { posts, crowns } = usePosts();
-  const { events, featuredEventId } = useEvents();
+  const { posts, crowns, isOffline: postsOffline, isUsingCachedData: postsCached, error: postsError } = usePosts();
+  const { events, featuredEventId, isOffline: eventsOffline, isUsingCachedData: eventsCached, error: eventsError } = useEvents();
   const { t } = useLanguage();
 
   const genreFilters = [t('filterGenreLive'), t('filterGenreElec'), t('filterGenreOpen'), t('filterGenreFood'), t('filterGenreOutdoor'), t('filterGenreLate')];
@@ -151,6 +152,14 @@ export default function HomeFeed() {
             </TouchableOpacity>
           </View>
         </LinearGradient>
+
+        {eventsOffline || postsOffline || eventsCached || postsCached ? (
+          <FeedbackBanner
+            tone={eventsOffline || postsOffline ? 'error' : 'info'}
+            title={eventsOffline || postsOffline ? 'Live data is unavailable' : 'Showing cached activity'}
+            message={eventsError || postsError || 'Some content is coming from the last successful sync.'}
+          />
+        ) : null}
 
         {/* ====== DISCOVERY PRESETS ====== */}
         <View style={styles.sectionHeader}>

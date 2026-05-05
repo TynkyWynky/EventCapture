@@ -1,6 +1,7 @@
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { AppImage } from '@/components/ui/app-image';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
@@ -19,15 +20,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MyEventsScreen() {
   const router = useRouter();
-  const { events } = useEvents();
-  const {
-    filteredEvents,
-    activeFilterCount,
-    activePresetId,
-    favoritePresetId,
-    applyPreset,
-    filters,
-  } = useFilters();
+  const { events, isOffline, isUsingCachedData, error } = useEvents();
+  const { filteredEvents, activeFilterCount, activePresetId, favoritePresetId, applyPreset, filters } = useFilters();
   const { user } = useUser();
   const { t } = useLanguage();
   const visibleEvents = activeFilterCount ? filteredEvents : events;
@@ -170,6 +164,14 @@ export default function MyEventsScreen() {
                 );
               })}
             </ScrollView>
+
+            {isOffline || isUsingCachedData ? (
+              <FeedbackBanner
+                tone={isOffline ? 'error' : 'info'}
+                title={isOffline ? 'Live event updates are unavailable' : 'Showing cached events'}
+                message={error ?? 'Reconnect to refresh the latest event list.'}
+              />
+            ) : null}
           </>
         }
         ListEmptyComponent={

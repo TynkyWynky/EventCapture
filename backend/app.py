@@ -1,18 +1,21 @@
 """
-FastAPI server with WebSocket support, persisted captures, and app data storage.
-Serves the web frontend and handles live video frame analysis.
+FastAPI server with auth, event/post persistence, and drink detection flows.
+Serves the browser frontend and handles live video frame analysis.
 """
+
+from __future__ import annotations
 
 import asyncio
 import base64
 import json
 import logging
 import time
+import uuid
 from pathlib import Path
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,69 +32,165 @@ try:
         settings,
     )
     from .database import (
+        add_event_comment,
         add_post_comment,
+        authenticate_user,
+        change_user_password,
         create_capture,
+        create_activity_notification,
+        create_password_reset_token,
+        create_support_request,
+        create_session,
+        create_user,
+        deactivate_user,
+        delete_event,
         delete_post,
+        delete_session,
+        get_event_social_map,
+        get_reward_state,
+        get_unread_notification_count,
+        get_user_by_email,
+        get_user_by_id,
+        get_user_by_session_token,
         init_database,
+        list_notifications,
         list_captures,
         list_events,
+        list_planned_events,
         list_posts,
+        list_users,
+        mark_all_notifications_read,
+        reset_user_password,
+        consume_password_reset_token,
+        set_event_plan_note,
+        set_event_plan_status,
+        toggle_event_like,
+        toggle_event_save,
         toggle_post_like,
+        update_user_profile,
         upsert_event,
         upsert_post,
+        database_exists,
     )
     from .detector import DrinkDetector
+    from .mailer import log_dev_reset_token, password_reset_delivery_ready, send_password_reset_email
     from .schemas import (
+        AddEventCommentRequest,
+        ActivityNotificationRequest,
         AddPostCommentRequest,
         AnalyzeCaptureResponse,
+        AuthTokenResponse,
         CaptureListItemResponse,
         CaptureRecordResponse,
+        ChangePasswordRequest,
         DebugSnapshotResponse,
         DebugStatusResponse,
         DetectImageResponse,
         EventPayload,
+        EventPlanListResponse,
+        EventPlanNoteRequest,
+        EventPlanRequest,
+        EventSocialMapResponse,
+        EventSocialStateResponse,
         HealthResponse,
+        LoginRequest,
+        MessageResponse,
+        NotificationItemResponse,
+        NotificationListResponse,
         PostPayload,
+        RegisterRequest,
+        ResetPasswordConfirmRequest,
+        ResetPasswordRequestPayload,
+        ResetPasswordRequestResponse,
+        ResetPasswordRequest,
+        RewardStateResponse,
         StatusResponse,
-        TogglePostLikeRequest,
+        SupportContactRequest,
+        SupportContactResponse,
+        UpdateProfileRequest,
+        UserProfileResponse,
     )
 except ImportError:
     from api_utils import build_analysis_summary, serialize_debug_regions, serialize_detections
-    from config import (
-        CUSTOM_MODEL_PATH,
-        DATABASE_PATH,
-        DEBUG_DIR,
-        DEFAULT_MODEL_PATH,
-        FRONTEND_DIR,
-        MEDIA_DIR,
-        settings,
-    )
+    from config import CUSTOM_MODEL_PATH, DATABASE_PATH, DEBUG_DIR, DEFAULT_MODEL_PATH, FRONTEND_DIR, MEDIA_DIR, settings
     from database import (
+        add_event_comment,
         add_post_comment,
+        authenticate_user,
+        change_user_password,
         create_capture,
+        create_activity_notification,
+        create_password_reset_token,
+        create_support_request,
+        create_session,
+        create_user,
+        deactivate_user,
+        delete_event,
         delete_post,
+        delete_session,
+        get_event_social_map,
+        get_reward_state,
+        get_unread_notification_count,
+        get_user_by_email,
+        get_user_by_id,
+        get_user_by_session_token,
         init_database,
+        list_notifications,
         list_captures,
         list_events,
+        list_planned_events,
         list_posts,
+        list_users,
+        mark_all_notifications_read,
+        reset_user_password,
+        consume_password_reset_token,
+        set_event_plan_note,
+        set_event_plan_status,
+        toggle_event_like,
+        toggle_event_save,
         toggle_post_like,
+        update_user_profile,
         upsert_event,
         upsert_post,
+        database_exists,
     )
     from detector import DrinkDetector
+    from mailer import log_dev_reset_token, password_reset_delivery_ready, send_password_reset_email
     from schemas import (
+        AddEventCommentRequest,
+        ActivityNotificationRequest,
         AddPostCommentRequest,
         AnalyzeCaptureResponse,
+        AuthTokenResponse,
         CaptureListItemResponse,
         CaptureRecordResponse,
+        ChangePasswordRequest,
         DebugSnapshotResponse,
         DebugStatusResponse,
         DetectImageResponse,
         EventPayload,
+        EventPlanListResponse,
+        EventPlanNoteRequest,
+        EventPlanRequest,
+        EventSocialMapResponse,
+        EventSocialStateResponse,
         HealthResponse,
+        LoginRequest,
+        MessageResponse,
+        NotificationItemResponse,
+        NotificationListResponse,
         PostPayload,
+        RegisterRequest,
+        ResetPasswordConfirmRequest,
+        ResetPasswordRequestPayload,
+        ResetPasswordRequestResponse,
+        ResetPasswordRequest,
+        RewardStateResponse,
         StatusResponse,
-        TogglePostLikeRequest,
+        SupportContactRequest,
+        SupportContactResponse,
+        UpdateProfileRequest,
+        UserProfileResponse,
     )
 
 logging.basicConfig(level=logging.INFO)
@@ -99,9 +198,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.title, version=settings.version)
 
+if settings.environment.lower() == "production" and settings.secret_key == "change-me-for-production":
+    raise RuntimeError("EVENTCAPTURE_SECRET_KEY must be set in production.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"] if settings.debug else list(settings.allowed_origins),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -119,13 +221,82 @@ last_debug_snapshot = DebugSnapshotResponse()
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
 
-def _save_debug_artifacts(
-    frame: np.ndarray,
-    annotated: np.ndarray,
-    debug_regions: dict,
-    detections: list,
-    source: str,
-) -> None:
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    started_at = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Unhandled backend error", extra={"request_id": request_id, "path": request.url.path})
+        raise
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 1)
+    response.headers["X-Request-Id"] = request_id
+    logger.info(
+        "%s %s -> %s (%.1f ms) [%s]",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        request_id,
+    )
+    return response
+
+
+def _user_response(user: dict[str, object]) -> UserProfileResponse:
+    return UserProfileResponse(**user)
+
+
+def _extract_bearer_token(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="Invalid authentication token.")
+    return token.strip()
+
+
+def get_current_user(authorization: str | None = Header(default=None)) -> dict[str, object]:
+    token = _extract_bearer_token(authorization)
+    user = get_user_by_session_token(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Your session is invalid or expired.")
+    return user
+
+
+def get_admin_user(current_user: dict[str, object] = Depends(get_current_user)) -> dict[str, object]:
+    if str(current_user["role"]) != "admin":
+        raise HTTPException(status_code=403, detail="Admin access is required.")
+    return current_user
+
+
+def get_optional_current_user(authorization: str | None = Header(default=None)) -> dict[str, object] | None:
+    if not authorization:
+        return None
+    try:
+        token = _extract_bearer_token(authorization)
+    except HTTPException:
+        return None
+    return get_user_by_session_token(token)
+
+
+@app.exception_handler(PermissionError)
+async def permission_error_handler(_: Request, exc: PermissionError):
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+
+@app.exception_handler(KeyError)
+async def key_error_handler(_: Request, exc: KeyError):
+    detail = exc.args[0] if exc.args else "Resource not found."
+    return JSONResponse(status_code=404, content={"detail": str(detail)})
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(_: Request, exc: ValueError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+def _save_debug_artifacts(frame: np.ndarray, annotated: np.ndarray, debug_regions: dict, detections: list, source: str) -> None:
     global last_debug_snapshot
 
     frame_path = DEBUG_DIR / "latest_frame.jpg"
@@ -156,7 +327,7 @@ def _build_status_response() -> StatusResponse:
         custom_model_path=str(CUSTOM_MODEL_PATH) if CUSTOM_MODEL_PATH.exists() else None,
         drink_classes=list(settings.supported_drinks),
         database_path=str(DATABASE_PATH),
-        database_exists=DATABASE_PATH.exists(),
+        database_exists=database_exists(),
         media_dir=str(MEDIA_DIR),
     )
 
@@ -167,11 +338,7 @@ def _decode_image(contents: bytes) -> np.ndarray | None:
 
 
 def _encode_jpeg_bytes(image: np.ndarray, quality: int) -> bytes:
-    success, buffer = cv2.imencode(
-        ".jpg",
-        image,
-        [cv2.IMWRITE_JPEG_QUALITY, quality],
-    )
+    success, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
     if not success:
         raise RuntimeError("Failed to encode image.")
     return buffer.tobytes()
@@ -219,7 +386,6 @@ def _run_image_analysis(frame: np.ndarray) -> dict[str, object]:
     response_detections = serialize_detections(detections)
     response_debug = serialize_debug_regions(debug_regions)
     response_summary = build_analysis_summary(detections)
-
     return {
         "detections": detections,
         "annotated": annotated,
@@ -230,30 +396,15 @@ def _run_image_analysis(frame: np.ndarray) -> dict[str, object]:
     }
 
 
-def _persist_capture_artifacts(
-    *,
-    request: Request,
-    frame: np.ndarray,
-    annotated: np.ndarray,
-    source: str,
-    summary: dict[str, object],
-    response_detections: list[dict[str, object]],
-    username: str | None,
-    event_id: str | None,
-    event_title: str | None,
-) -> CaptureRecordResponse:
+def _persist_capture_artifacts(*, request: Request, frame: np.ndarray, annotated: np.ndarray, source: str, summary: dict[str, object], response_detections: list[dict[str, object]], username: str | None, event_id: str | None, event_title: str | None) -> CaptureRecordResponse:
     capture_preview_id = f"capture-{int(time.time() * 1000)}"
     capture_dir = MEDIA_DIR / "captures" / capture_preview_id
     capture_dir.mkdir(parents=True, exist_ok=True)
 
     original_relative_path = Path("captures") / capture_preview_id / "original.jpg"
     annotated_relative_path = Path("captures") / capture_preview_id / "annotated.jpg"
-    (MEDIA_DIR / original_relative_path).write_bytes(
-        _encode_jpeg_bytes(frame, settings.upload_jpeg_quality)
-    )
-    (MEDIA_DIR / annotated_relative_path).write_bytes(
-        _encode_jpeg_bytes(annotated, settings.upload_jpeg_quality)
-    )
+    (MEDIA_DIR / original_relative_path).write_bytes(_encode_jpeg_bytes(frame, settings.upload_jpeg_quality))
+    (MEDIA_DIR / annotated_relative_path).write_bytes(_encode_jpeg_bytes(annotated, settings.upload_jpeg_quality))
 
     capture = create_capture(
         username=username,
@@ -265,8 +416,12 @@ def _persist_capture_artifacts(
         summary=summary,
         detections=response_detections,
     )
-
     return _serialize_capture_response(request, capture)
+
+
+def _auth_response(user: dict[str, object]) -> AuthTokenResponse:
+    session = create_session(str(user["id"]), settings.session_ttl_hours)
+    return AuthTokenResponse(token=session["token"], expires_at=session["expires_at"], user=_user_response(user))
 
 
 @app.get("/")
@@ -284,13 +439,17 @@ async def script():
     return FileResponse(FRONTEND_DIR / "app.js", media_type="application/javascript")
 
 
+@app.get("/health", response_model=HealthResponse)
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(
-        ok=DEFAULT_MODEL_PATH.exists(),
+        ok=DEFAULT_MODEL_PATH.exists() and database_exists(),
+        status="ok" if database_exists() else "degraded",
+        environment=settings.environment,
+        version=settings.version,
         model_exists=DEFAULT_MODEL_PATH.exists(),
         custom_model_exists=CUSTOM_MODEL_PATH.exists(),
-        database_exists=DATABASE_PATH.exists(),
+        database_exists=database_exists(),
         database_path=str(DATABASE_PATH),
     )
 
@@ -313,9 +472,256 @@ async def debug_status():
     )
 
 
+@app.post("/api/auth/register", response_model=AuthTokenResponse, status_code=201)
+async def register(payload: RegisterRequest):
+    if get_user_by_email(payload.email) is not None:
+        raise HTTPException(status_code=409, detail="An account with that email already exists.")
+    try:
+        user = create_user(
+            email=str(payload.email),
+            username=payload.username,
+            password=payload.password,
+            full_name=payload.full_name,
+            city=payload.city,
+            bio=payload.bio,
+            avatar_uri=payload.avatar_uri,
+        )
+    except Exception as exc:
+        message = str(exc).lower()
+        if "unique" in message:
+            raise HTTPException(status_code=409, detail="That username or email is already in use.") from exc
+        raise
+    return _auth_response(user)
+
+
+@app.post("/api/auth/login", response_model=AuthTokenResponse)
+async def login(payload: LoginRequest):
+    user = authenticate_user(str(payload.email), payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Email or password is incorrect.")
+    return _auth_response(user)
+
+
+@app.post("/api/auth/logout", response_model=MessageResponse)
+async def logout(authorization: str | None = Header(default=None)):
+    token = _extract_bearer_token(authorization)
+    delete_session(token)
+    return MessageResponse(message="Signed out successfully.")
+
+
+@app.delete("/api/auth/account", response_model=MessageResponse)
+async def delete_account(
+    current_user: dict[str, object] = Depends(get_current_user),
+    authorization: str | None = Header(default=None),
+):
+    if str(current_user["role"]) == "admin":
+        raise HTTPException(status_code=403, detail="Admin accounts cannot self-delete from this route.")
+    if not deactivate_user(str(current_user["id"])):
+        raise HTTPException(status_code=404, detail="User not found.")
+    token = _extract_bearer_token(authorization)
+    delete_session(token)
+    return MessageResponse(message="Account deleted successfully.")
+
+
+@app.get("/api/auth/me", response_model=UserProfileResponse)
+async def me(current_user: dict[str, object] = Depends(get_current_user)):
+    return _user_response(current_user)
+
+
+@app.put("/api/auth/profile", response_model=UserProfileResponse)
+async def update_profile(payload: UpdateProfileRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    existing = get_user_by_email(str(payload.email))
+    if existing is not None and existing["id"] != current_user["id"]:
+        raise HTTPException(status_code=409, detail="That email address is already in use.")
+    try:
+        updated = update_user_profile(
+            str(current_user["id"]),
+            username=payload.username,
+            full_name=payload.full_name,
+            city=payload.city,
+            bio=payload.bio,
+            avatar_uri=payload.avatar_uri,
+            email=str(payload.email),
+        )
+    except Exception as exc:
+        if "unique" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="That username or email is already in use.") from exc
+        raise
+    return _user_response(updated)
+
+
+@app.post("/api/auth/change-password", response_model=MessageResponse)
+async def change_password(payload: ChangePasswordRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="Choose a different new password.")
+    if not change_user_password(str(current_user["id"]), payload.current_password, payload.new_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect.")
+    return MessageResponse(message="Password updated successfully.")
+
+
+@app.post("/api/auth/reset-password/request", response_model=ResetPasswordRequestResponse)
+async def request_password_reset(payload: ResetPasswordRequestPayload):
+    delivery_ready = password_reset_delivery_ready()
+    if settings.environment.lower() == "production" and not delivery_ready:
+        raise HTTPException(status_code=503, detail="Password reset delivery is not configured for this environment.")
+
+    token = create_password_reset_token(str(payload.email), settings.password_reset_token_ttl_minutes)
+    response = ResetPasswordRequestResponse(
+        message="If an account matches that email, password reset instructions have been prepared."
+    )
+    if token and delivery_ready:
+        try:
+            send_password_reset_email(
+                recipient=str(payload.email).strip().lower(),
+                reset_token=token,
+                expires_minutes=settings.password_reset_token_ttl_minutes,
+            )
+        except Exception:
+            logger.exception("Password reset delivery failed")
+            raise HTTPException(status_code=503, detail="Password reset delivery is temporarily unavailable.")
+
+    if settings.debug and settings.expose_dev_reset_token and token:
+        log_dev_reset_token(str(payload.email), token)
+        response.reset_token = token
+    return response
+
+
+@app.post("/api/auth/reset-password/confirm", response_model=MessageResponse)
+async def confirm_password_reset(payload: ResetPasswordConfirmRequest):
+    if not consume_password_reset_token(payload.token, payload.new_password):
+        raise HTTPException(status_code=400, detail="This password reset link is invalid or has expired.")
+    return MessageResponse(message="Password reset successfully.")
+
+
+@app.get("/api/users", response_model=list[UserProfileResponse])
+async def get_users(_: dict[str, object] = Depends(get_admin_user)):
+    return [_user_response(user) for user in list_users()]
+
+
+@app.get("/api/rewards/me", response_model=RewardStateResponse)
+async def get_rewards(current_user: dict[str, object] = Depends(get_current_user)):
+    return RewardStateResponse(**get_reward_state(str(current_user["id"])))
+
+
+@app.get("/api/notifications", response_model=NotificationListResponse)
+async def get_notifications(current_user: dict[str, object] = Depends(get_current_user), limit: int = 50):
+    user_id = str(current_user["id"])
+    return NotificationListResponse(
+        items=[NotificationItemResponse(**item) for item in list_notifications(user_id, limit=limit)],
+        unread_count=get_unread_notification_count(user_id),
+    )
+
+
+@app.post("/api/notifications/read-all", response_model=MessageResponse)
+async def read_all_notifications(current_user: dict[str, object] = Depends(get_current_user)):
+    mark_all_notifications_read(str(current_user["id"]))
+    return MessageResponse(message="Notifications marked as read.")
+
+@app.post("/api/notifications/activity", response_model=NotificationItemResponse)
+async def create_activity(payload: ActivityNotificationRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    created = create_activity_notification(
+        str(current_user["id"]),
+        actor=current_user,
+        title=payload.title,
+        message=payload.message,
+        icon=payload.icon,
+        color=payload.color,
+        related_type=payload.related_type,
+        related_id=payload.related_id,
+    )
+    return NotificationItemResponse(**created)
+
+
+@app.delete("/api/users/{user_id}", response_model=MessageResponse)
+async def ban_user(user_id: str, _: dict[str, object] = Depends(get_admin_user)):
+    if not deactivate_user(user_id):
+        raise HTTPException(status_code=404, detail="User not found.")
+    return MessageResponse(message="User removed successfully.")
+
+
+@app.get("/api/events", response_model=list[EventPayload])
+async def get_events():
+    return [EventPayload(**event) for event in list_events()]
+
+
+@app.post("/api/events", response_model=EventPayload)
+async def create_or_update_event(payload: EventPayload, current_user: dict[str, object] = Depends(get_current_user)):
+    return EventPayload(**upsert_event(payload.model_dump(), current_user))
+
+
+@app.delete("/api/events/{event_id}", response_model=MessageResponse)
+async def remove_event(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    deleted = delete_event(event_id, current_user)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Event not found.")
+    return MessageResponse(message="Event deleted successfully.")
+
+
+@app.get("/api/events/social", response_model=EventSocialMapResponse)
+async def get_event_social(current_user: dict[str, object] = Depends(get_current_user)):
+    return EventSocialMapResponse(items=get_event_social_map(str(current_user["id"])))
+
+
+@app.post("/api/events/{event_id}/likes/toggle", response_model=EventSocialStateResponse)
+async def toggle_like(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    return EventSocialStateResponse(**toggle_event_like(event_id, current_user))
+
+
+@app.post("/api/events/{event_id}/save-toggle", response_model=EventSocialStateResponse)
+async def toggle_save(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    return EventSocialStateResponse(**toggle_event_save(event_id, current_user))
+
+
+@app.post("/api/events/{event_id}/plan", response_model=EventSocialStateResponse)
+async def update_event_plan(event_id: str, payload: EventPlanRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    return EventSocialStateResponse(**set_event_plan_status(event_id, current_user, payload.status))
+
+
+@app.post("/api/events/{event_id}/plan-note", response_model=EventSocialStateResponse)
+async def update_event_plan_note(event_id: str, payload: EventPlanNoteRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    return EventSocialStateResponse(**set_event_plan_note(event_id, current_user, payload.note))
+
+
+@app.post("/api/events/{event_id}/comments", response_model=EventSocialStateResponse)
+async def create_event_comment(event_id: str, payload: AddEventCommentRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    return EventSocialStateResponse(**add_event_comment(event_id, current_user, payload.text))
+
+
+@app.get("/api/events/plans", response_model=EventPlanListResponse)
+async def get_event_plans(current_user: dict[str, object] = Depends(get_current_user)):
+    return EventPlanListResponse(items=list_planned_events(str(current_user["id"])))
+
+
+@app.get("/api/posts", response_model=list[PostPayload])
+async def get_posts():
+    return [PostPayload(**post) for post in list_posts()]
+
+
+@app.post("/api/posts", response_model=PostPayload)
+async def create_post(payload: PostPayload, current_user: dict[str, object] = Depends(get_current_user)):
+    return PostPayload(**upsert_post(payload.model_dump(exclude_none=True), current_user))
+
+
+@app.post("/api/posts/{post_id}/likes/toggle", response_model=PostPayload)
+async def toggle_post_like_route(post_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    return PostPayload(**toggle_post_like(post_id, current_user))
+
+
+@app.post("/api/posts/{post_id}/comments", response_model=PostPayload)
+async def create_post_comment(post_id: str, payload: AddPostCommentRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    return PostPayload(**add_post_comment(post_id, current_user, payload.text, "Just now"))
+
+
+@app.delete("/api/posts/{post_id}", response_model=MessageResponse)
+async def remove_post(post_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    deleted = delete_post(post_id, current_user)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Post not found.")
+    return MessageResponse(message="Post deleted successfully.")
+
+
 @app.post("/api/detect", response_model=DetectImageResponse)
 async def detect_image(file: UploadFile = File(...)):
-    """Detect drinks in an uploaded image."""
     contents = await file.read()
     if len(contents) > settings.max_upload_bytes:
         return JSONResponse(status_code=413, content={"error": "File too large"})
@@ -325,16 +731,8 @@ async def detect_image(file: UploadFile = File(...)):
         return JSONResponse(status_code=400, content={"error": "Invalid image"})
 
     analysis = _run_image_analysis(frame)
-    _save_debug_artifacts(
-        frame,
-        analysis["annotated"],
-        analysis["debug_regions"],
-        analysis["detections"],
-        source="upload",
-    )
-    annotated_b64 = base64.b64encode(
-        _encode_jpeg_bytes(analysis["annotated"], settings.upload_jpeg_quality)
-    ).decode("utf-8")
+    _save_debug_artifacts(frame, analysis["annotated"], analysis["debug_regions"], analysis["detections"], source="upload")
+    annotated_b64 = base64.b64encode(_encode_jpeg_bytes(analysis["annotated"], settings.upload_jpeg_quality)).decode("utf-8")
 
     return DetectImageResponse(
         detections=analysis["response_detections"],
@@ -348,9 +746,9 @@ async def detect_image(file: UploadFile = File(...)):
 async def analyze_and_store_capture(
     request: Request,
     file: UploadFile = File(...),
-    username: str | None = Form(default=None),
     event_id: str | None = Form(default=None),
     event_title: str | None = Form(default=None),
+    current_user: dict[str, object] = Depends(get_current_user),
 ):
     contents = await file.read()
     if len(contents) > settings.max_upload_bytes:
@@ -361,16 +759,8 @@ async def analyze_and_store_capture(
         return JSONResponse(status_code=400, content={"error": "Invalid image"})
 
     analysis = _run_image_analysis(frame)
-    _save_debug_artifacts(
-        frame,
-        analysis["annotated"],
-        analysis["debug_regions"],
-        analysis["detections"],
-        source="capture_upload",
-    )
-    annotated_b64 = base64.b64encode(
-        _encode_jpeg_bytes(analysis["annotated"], settings.upload_jpeg_quality)
-    ).decode("utf-8")
+    _save_debug_artifacts(frame, analysis["annotated"], analysis["debug_regions"], analysis["detections"], source="capture_upload")
+    annotated_b64 = base64.b64encode(_encode_jpeg_bytes(analysis["annotated"], settings.upload_jpeg_quality)).decode("utf-8")
     capture_response = _persist_capture_artifacts(
         request=request,
         frame=frame,
@@ -378,7 +768,7 @@ async def analyze_and_store_capture(
         source="capture_upload",
         summary=analysis["response_summary"].model_dump(),
         response_detections=[item.model_dump() for item in analysis["response_detections"]],
-        username=username.strip() if username else None,
+        username=str(current_user["username"]),
         event_id=event_id.strip() if event_id else None,
         event_title=event_title.strip() if event_title else None,
     )
@@ -393,85 +783,39 @@ async def analyze_and_store_capture(
 
 
 @app.get("/api/captures", response_model=list[CaptureListItemResponse])
-async def get_captures(request: Request, limit: int = 20):
+async def get_captures(request: Request, limit: int = 20, _: dict[str, object] = Depends(get_current_user)):
     captures = list_captures(limit=limit)
     return [_serialize_capture_list_item(request, capture) for capture in captures]
 
 
-@app.get("/api/events", response_model=list[EventPayload])
-async def get_events():
-    return [EventPayload(**event) for event in list_events()]
-
-
-@app.post("/api/events", response_model=EventPayload)
-async def create_event(payload: EventPayload):
-    return EventPayload(**upsert_event(payload.model_dump()))
-
-
-@app.get("/api/posts", response_model=list[PostPayload])
-async def get_posts():
-    return [PostPayload(**post) for post in list_posts()]
-
-
-@app.post("/api/posts", response_model=PostPayload)
-async def create_post(payload: PostPayload):
-    return PostPayload(**upsert_post(payload.model_dump()))
-
-
-@app.post("/api/posts/{post_id}/likes/toggle", response_model=PostPayload)
-async def toggle_like(post_id: str, payload: TogglePostLikeRequest):
-    try:
-        post = toggle_post_like(post_id, payload.username.strip())
-    except KeyError as error:
-        raise HTTPException(status_code=404, detail="Post not found.") from error
-
-    return PostPayload(**post)
-
-
-@app.post("/api/posts/{post_id}/comments", response_model=PostPayload)
-async def create_post_comment(post_id: str, payload: AddPostCommentRequest):
-    if not payload.text.strip():
-        raise HTTPException(status_code=400, detail="Comment text is required.")
-
-    try:
-        post = add_post_comment(
-            post_id,
-            payload.user.model_dump(),
-            payload.text.strip(),
-            "Just now",
-        )
-    except KeyError as error:
-        raise HTTPException(status_code=404, detail="Post not found.") from error
-
-    return PostPayload(**post)
-
-
-@app.delete("/api/posts/{post_id}")
-async def remove_post(post_id: str):
-    deleted = delete_post(post_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Post not found.")
-
-    return {"deleted": True}
+@app.post("/support/contact", response_model=SupportContactResponse)
+@app.post("/api/support/contact", response_model=SupportContactResponse)
+async def contact_support(payload: SupportContactRequest, current_user: dict[str, object] | None = Depends(get_optional_current_user)):
+    fallback_email = str(current_user["email"]) if current_user is not None else ""
+    email = (payload.email or fallback_email).strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="An email address is required so support can reply.")
+    created = create_support_request(
+        email=email,
+        subject=payload.subject,
+        message=payload.message,
+        user_id=str(current_user["id"]) if current_user is not None else None,
+    )
+    return SupportContactResponse(**created)
 
 
 @app.websocket("/ws/detect")
 async def websocket_detect(websocket: WebSocket):
-    """WebSocket endpoint for real-time drink detection from webcam frames."""
     await websocket.accept()
     logger.info("WebSocket client connected")
-
     frame_count = 0
     last_fps_time = time.time()
     fps = 0
-
     try:
         while True:
-            # Receive base64 encoded frame from client
             data = await websocket.receive_text()
             message = json.loads(data)
 
-            # Drain any queued frames — only process the latest one
             while True:
                 try:
                     newer = await asyncio.wait_for(
@@ -486,51 +830,28 @@ async def websocket_detect(websocket: WebSocket):
 
             if message.get("type") == "frame":
                 frame_data = message["data"]
-
-                # Remove data URL prefix if present
                 if "," in frame_data:
                     frame_data = frame_data.split(",", 1)[1]
 
-                # Decode frame
                 img_bytes = base64.b64decode(frame_data)
                 nparr = np.frombuffer(img_bytes, np.uint8)
                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
                 if frame is None:
                     continue
 
-                # Run detection in thread pool to avoid blocking the event loop
                 conf_threshold = message.get("conf_threshold", 0.35)
-                detections = await asyncio.to_thread(
-                    detector.detect, frame, conf_threshold=conf_threshold
-                )
+                detections = await asyncio.to_thread(detector.detect, frame, conf_threshold=conf_threshold)
                 debug_regions = detector.get_debug_regions()
                 summary = build_analysis_summary(detections)
                 response_detections = serialize_detections(detections)
                 response_debug = serialize_debug_regions(debug_regions)
 
-                # Annotate frame in thread pool
-                annotated = await asyncio.to_thread(
-                    detector.annotate_frame, frame, detections
-                )
-                await asyncio.to_thread(
-                    _save_debug_artifacts,
-                    frame,
-                    annotated,
-                    debug_regions,
-                    detections,
-                    "websocket",
-                )
+                annotated = await asyncio.to_thread(detector.annotate_frame, frame, detections)
+                await asyncio.to_thread(_save_debug_artifacts, frame, annotated, debug_regions, detections, "websocket")
 
-                # Encode result
-                _, buffer = cv2.imencode(
-                    ".jpg",
-                    annotated,
-                    [cv2.IMWRITE_JPEG_QUALITY, settings.websocket_jpeg_quality],
-                )
+                _, buffer = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, settings.websocket_jpeg_quality])
                 result_b64 = base64.b64encode(buffer).decode("utf-8")
 
-                # Calculate FPS
                 frame_count += 1
                 now = time.time()
                 if now - last_fps_time >= 1.0:
@@ -538,7 +859,6 @@ async def websocket_detect(websocket: WebSocket):
                     frame_count = 0
                     last_fps_time = now
 
-                # Send results
                 response = {
                     "type": "detection",
                     "frame": f"data:image/jpeg;base64,{result_b64}",
@@ -555,8 +875,8 @@ async def websocket_detect(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+    except Exception as exc:  # pragma: no cover
+        logger.error("WebSocket error: %s", exc)
 
 
 if __name__ == "__main__":

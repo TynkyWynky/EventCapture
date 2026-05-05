@@ -15,8 +15,8 @@ interface ApiPostComment {
 }
 
 interface ApiPost {
-  id: string;
-  user: ApiAppUser;
+  id: string | null;
+  user?: ApiAppUser | null;
   image_uri: string;
   date: string;
   is_beer_finished: boolean;
@@ -25,10 +25,12 @@ interface ApiPost {
   likes: string[];
   comments: ApiPostComment[];
   capture_id?: string | null;
+  crown_awarded?: boolean;
+  crown_count?: number | null;
 }
 
 interface ApiEvent {
-  id: string;
+  id?: string | null;
   title: string;
   short_title?: string | null;
   date: string;
@@ -48,6 +50,7 @@ interface ApiEvent {
   badge: string;
   description: string;
   tags: string[];
+  created_by_user_id?: string | null;
 }
 
 export interface RemotePostUser {
@@ -64,8 +67,8 @@ export interface RemotePostComment {
 }
 
 export interface RemotePostRecord {
-  id: string;
-  user: RemotePostUser;
+  id?: string;
+  user?: RemotePostUser;
   imageUri: string;
   date: string;
   isBeerFinished: boolean;
@@ -74,11 +77,13 @@ export interface RemotePostRecord {
   likes: string[];
   comments: RemotePostComment[];
   captureId?: string;
+  crownAwarded?: boolean;
+  crownCount?: number;
 }
 
 function mapApiEventToEventRecord(event: ApiEvent): EventRecord {
   return {
-    id: event.id,
+    id: String(event.id ?? ''),
     title: event.title,
     shortTitle: event.short_title ?? undefined,
     date: event.date,
@@ -128,12 +133,14 @@ function mapEventRecordToApiEvent(event: EventRecord): ApiEvent {
 
 function mapApiPostToRemotePost(post: ApiPost): RemotePostRecord {
   return {
-    id: post.id,
-    user: {
-      id: post.user.id,
-      username: post.user.username,
-      avatarUri: post.user.avatar_uri,
-    },
+    id: post.id ?? undefined,
+    user: post.user
+      ? {
+          id: post.user.id,
+          username: post.user.username,
+          avatarUri: post.user.avatar_uri,
+        }
+      : undefined,
     imageUri: post.image_uri,
     date: post.date,
     isBeerFinished: post.is_beer_finished,
@@ -153,39 +160,27 @@ function mapApiPostToRemotePost(post: ApiPost): RemotePostRecord {
         }))
       : [],
     captureId: post.capture_id ?? undefined,
+    crownAwarded: Boolean(post.crown_awarded),
+    crownCount: typeof post.crown_count === 'number' ? post.crown_count : undefined,
   };
 }
 
 function mapRemotePostToApiPost(post: RemotePostRecord): ApiPost {
   return {
-    id: post.id,
-    user: {
-      id: post.user.id,
-      username: post.user.username,
-      avatar_uri: post.user.avatarUri,
-    },
+    id: post.id ?? null,
     image_uri: post.imageUri,
     date: post.date,
     is_beer_finished: post.isBeerFinished,
     event_id: post.eventId ?? null,
     event_title: post.eventTitle ?? null,
     likes: post.likes,
-    comments: post.comments.map((comment) => ({
-      id: comment.id,
-      user: {
-        id: comment.user.id,
-        username: comment.user.username,
-        avatar_uri: comment.user.avatarUri,
-      },
-      text: comment.text,
-      time: comment.time,
-    })),
+    comments: [],
     capture_id: post.captureId ?? null,
   };
 }
 
 export async function fetchRemoteEvents(): Promise<EventRecord[]> {
-  const payload = await apiGet<ApiEvent[]>('/api/events');
+  const payload = await apiGet<ApiEvent[]>('/api/events', false);
   return Array.isArray(payload) ? payload.map(mapApiEventToEventRecord) : [];
 }
 
@@ -194,8 +189,12 @@ export async function upsertRemoteEvent(event: EventRecord): Promise<EventRecord
   return mapApiEventToEventRecord(payload);
 }
 
+export async function deleteRemoteEvent(eventId: string): Promise<void> {
+  await apiDelete(`/api/events/${eventId}`);
+}
+
 export async function fetchRemotePosts(): Promise<RemotePostRecord[]> {
-  const payload = await apiGet<ApiPost[]>('/api/posts');
+  const payload = await apiGet<ApiPost[]>('/api/posts', false);
   return Array.isArray(payload) ? payload.map(mapApiPostToRemotePost) : [];
 }
 
@@ -204,24 +203,13 @@ export async function upsertRemotePost(post: RemotePostRecord): Promise<RemotePo
   return mapApiPostToRemotePost(payload);
 }
 
-export async function toggleRemotePostLike(postId: string, username: string): Promise<RemotePostRecord> {
-  const payload = await apiPostJson<ApiPost>(`/api/posts/${postId}/likes/toggle`, { username });
+export async function toggleRemotePostLike(postId: string): Promise<RemotePostRecord> {
+  const payload = await apiPostJson<ApiPost>(`/api/posts/${postId}/likes/toggle`, {});
   return mapApiPostToRemotePost(payload);
 }
 
-export async function addRemotePostComment(
-  postId: string,
-  user: RemotePostUser,
-  text: string
-): Promise<RemotePostRecord> {
-  const payload = await apiPostJson<ApiPost>(`/api/posts/${postId}/comments`, {
-    user: {
-      id: user.id,
-      username: user.username,
-      avatar_uri: user.avatarUri,
-    },
-    text,
-  });
+export async function addRemotePostComment(postId: string, text: string): Promise<RemotePostRecord> {
+  const payload = await apiPostJson<ApiPost>(`/api/posts/${postId}/comments`, { text });
   return mapApiPostToRemotePost(payload);
 }
 

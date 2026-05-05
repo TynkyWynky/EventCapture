@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Modal, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,108 +12,141 @@ import { Colors, Layout, Typography } from '@/constants/theme';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { deleteRemoteUser, listRemoteUsers } from '@/services/authApi';
+import { useToast } from '@/context/ToastContext';
 
-const USERS_LIST = [
-  {
-    id: 'u_admin',
-    username: 'admin',
-    email: 'admin',
-    role: 'Admin',
-    avatar: 'https://i.pravatar.cc/160?img=68',
-  },
-  {
-    id: 'u_demo',
-    username: 'eventfriend',
-    email: 'demo@eventcapture.app',
-    role: 'User',
-    avatar: 'https://i.pravatar.cc/160?img=64',
-  },
-  {
-    id: 'u1',
-    username: 'alex',
-    email: 'alex@example.com',
-    role: 'User',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-  },
-  {
-    id: 'u2',
-    username: 'sarah_night',
-    email: 'sarah@example.com',
-    role: 'User',
-    avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=150&q=80',
-  },
-  {
-    id: 's_lina',
-    username: 'Lina',
-    email: 'lina@example.com',
-    role: 'User',
-    avatar: 'https://i.pravatar.cc/150?img=32',
-  },
-  {
-    id: 's_milan',
-    username: 'Milan',
-    email: 'milan@example.com',
-    role: 'User',
-    avatar: 'https://i.pravatar.cc/150?img=11',
-  },
-];
+interface AdminUserRecord {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  avatar: string;
+}
 
 export default function AdminScreen() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, isAdmin } = useUser();
   const { posts, deletePost } = usePosts();
   const { events, deleteEvent } = useEvents();
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'users' | 'posts' | 'events'>('events');
-  const [usersList, setUsersList] = useState(USERS_LIST);
-  const [selectedUser, setSelectedUser] = useState<typeof USERS_LIST[0] | null>(null);
+  const [usersList, setUsersList] = useState<AdminUserRecord[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AdminUserRecord | null>(null);
 
   useEffect(() => {
     // If not admin, redirect back to home
-    if (user.email !== 'admin') {
+    if (!isAdmin) {
       router.replace('/(tabs)');
     }
-  }, [user.email, router]);
+  }, [isAdmin, router]);
 
-  if (user.email !== 'admin') {
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    listRemoteUsers()
+      .then((users) => {
+        setUsersList(
+          users.map((entry) => ({
+            id: entry.id,
+            username: entry.username,
+            email: entry.email,
+            role: entry.role === 'admin' ? 'Admin' : 'User',
+            avatar: entry.avatar_uri,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, [isAdmin]);
+
+  if (!isAdmin) {
     return null; // Don't render until redirected
   }
 
-  const handleDeletePost = (postId: string) => {
-    Alert.alert(t('adminConfirmDelPostTitle'), t('adminConfirmDelPostMsg'), [
-      { text: t('adminBtnCancel'), style: 'cancel' },
+  const confirmAction = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    confirmLabel: string,
+    cancelLabel: string
+  ) => {
+    if (Platform.OS === 'web') {
+      const accepted = typeof window !== 'undefined' ? window.confirm(`${title}\n\n${message}`) : true;
+      if (accepted) {
+        onConfirm();
+      }
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: cancelLabel, style: 'cancel' },
       {
-        text: t('adminBtnDelete'),
+        text: confirmLabel,
         style: 'destructive',
-        onPress: () => deletePost(postId),
+        onPress: onConfirm,
       },
     ]);
+  };
+
+  const handleDeletePost = (postId: string) => {
+    confirmAction(
+      t('adminConfirmDelPostTitle'),
+      t('adminConfirmDelPostMsg'),
+      () => {
+        void deletePost(postId);
+      },
+      t('adminBtnDelete'),
+      t('adminBtnCancel')
+    );
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    Alert.alert(t('adminConfirmDelEventTitle'), t('adminConfirmDelEventMsg'), [
-      { text: t('adminBtnCancel'), style: 'cancel' },
-      {
-        text: t('adminBtnDelete'),
-        style: 'destructive',
-        onPress: () => deleteEvent(eventId),
+    confirmAction(
+      t('adminConfirmDelEventTitle'),
+      t('adminConfirmDelEventMsg'),
+      () => {
+        void deleteEvent(eventId)
+          .then(() => {
+            showToast({
+              tone: 'success',
+              title: 'Event deleted',
+              message: 'The event was removed successfully.',
+            });
+          })
+          .catch((error) => {
+            showToast({
+              tone: 'error',
+              title: 'Delete failed',
+              message: error instanceof Error ? error.message : 'Unable to delete this event.',
+            });
+          });
       },
-    ]);
+      t('adminBtnDelete'),
+      t('adminBtnCancel')
+    );
   };
 
   const handleDeleteUser = (userId: string) => {
-    if (userId === 'u_admin') {
+    const targetUser = usersList.find((entry) => entry.id === userId);
+    if (targetUser?.role === 'Admin') {
       Alert.alert(t('adminCannotDelAdminTitle'), t('adminCannotDelAdminMsg'));
       return;
     }
-    Alert.alert(t('adminConfirmBanUserTitle'), t('adminConfirmBanUserMsg'), [
-      { text: t('adminBtnCancel'), style: 'cancel' },
-      {
-        text: t('adminBtnBan'),
-        style: 'destructive',
-        onPress: () => setUsersList((prev) => prev.filter(u => u.id !== userId)),
+    confirmAction(
+      t('adminConfirmBanUserTitle'),
+      t('adminConfirmBanUserMsg'),
+      () => {
+        void deleteRemoteUser(userId)
+          .then(() => {
+            setUsersList((prev) => prev.filter((u) => u.id !== userId));
+          })
+          .catch(() => {});
       },
-    ]);
+      t('adminBtnBan'),
+      t('adminBtnCancel')
+    );
   };
 
   const renderStatsOverview = () => (
@@ -261,33 +294,33 @@ export default function AdminScreen() {
       ) : null}
       
       {events.map((event) => (
-        <TouchableOpacity key={event.id} activeOpacity={0.9} onPress={() => router.push({ pathname: '/event/detail', params: { eventId: event.id } })}>
-          <SurfaceCard style={styles.eventCard} variant="subtle">
+        <SurfaceCard key={event.id} style={styles.eventCard} variant="subtle">
+          <TouchableOpacity activeOpacity={0.9} onPress={() => router.push({ pathname: '/event/detail', params: { eventId: event.id } })}>
             <Image source={{ uri: event.heroImage || 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=1400&q=80' }} style={styles.eventImage} />
-            <View style={styles.eventInfo}>
-              <Text style={styles.eventTitle}>{event.title}</Text>
-              <Text style={styles.eventDate}>{event.fullDate}</Text>
-              <Text style={styles.eventPlace}>{event.place}</Text>
-              
-              <View style={styles.eventActions}>
-                <AppButton
-                  label={t('adminBtnEdit')}
-                  variant="secondary"
-                  onPress={() => router.push({ pathname: './event-edit', params: { eventId: event.id } })}
-                  style={styles.editEventButton}
-                  textStyle={styles.editEventButtonText}
-                />
-                <AppButton
-                  label={t('adminBtnDelete')}
-                  variant="secondary"
-                  onPress={() => handleDeleteEvent(event.id)}
-                  style={styles.deleteButton}
-                  textStyle={styles.deleteButtonText}
-                />
-              </View>
+          </TouchableOpacity>
+          <View style={styles.eventInfo}>
+            <Text style={styles.eventTitle}>{event.title}</Text>
+            <Text style={styles.eventDate}>{event.fullDate}</Text>
+            <Text style={styles.eventPlace}>{event.place}</Text>
+            
+            <View style={styles.eventActions}>
+              <AppButton
+                label={t('adminBtnEdit')}
+                variant="secondary"
+                onPress={() => router.push({ pathname: '/admin/event-edit', params: { eventId: event.id } })}
+                style={styles.editEventButton}
+                textStyle={styles.editEventButtonText}
+              />
+              <AppButton
+                label={t('adminBtnDelete')}
+                variant="secondary"
+                onPress={() => handleDeleteEvent(event.id)}
+                style={styles.deleteButton}
+                textStyle={styles.deleteButtonText}
+              />
             </View>
-          </SurfaceCard>
-        </TouchableOpacity>
+          </View>
+        </SurfaceCard>
       ))}
     </View>
   );
