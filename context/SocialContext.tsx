@@ -88,6 +88,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const { events } = useEvents();
   const [socialState, setSocialState] = useState<SocialStateMap>({});
   const [notifications, setNotifications] = useState<ActivityItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [isUsingCachedData, setIsUsingCachedData] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
@@ -137,6 +138,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       setSocialState({});
       setNotifications([]);
+      setUnreadCount(0);
       return;
     }
 
@@ -168,6 +170,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         createdAt: item.created_at,
       }))
     );
+    setUnreadCount(remoteNotifications.unread_count);
     setIsUsingCachedData(false);
     setIsOffline(false);
     setError(null);
@@ -181,6 +184,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated) {
       setSocialState({});
       setNotifications([]);
+      setUnreadCount(0);
       return;
     }
 
@@ -212,6 +216,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           },
           ...prev,
         ]);
+        setUnreadCount((prev) => prev + 1);
       },
       getEventSocial: (eventId) => {
         if (!eventId || Array.isArray(eventId)) {
@@ -257,13 +262,13 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         ...item,
         time: timeAgo(item.createdAt),
       })),
-      unreadCount: notifications.length,
+      unreadCount,
       isUsingCachedData,
       isOffline,
       error,
       markAllRead: async () => {
         await markNotificationsRead();
-        setNotifications([]);
+        setUnreadCount(0);
       },
       getLikedEvents: () =>
         events
@@ -284,7 +289,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           .filter((entry) => entry.saved || entry.planStatus),
       refreshSocial,
     };
-  }, [error, events, isOffline, isUsingCachedData, notifications, socialState]);
+  }, [error, events, isOffline, isUsingCachedData, notifications, socialState, unreadCount]);
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;
 }

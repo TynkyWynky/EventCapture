@@ -7,9 +7,11 @@ import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } fr
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function CameraScreen() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,12 +29,12 @@ export default function CameraScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={[styles.permissionState, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.permissionCard}>
-            <Text style={styles.permissionTitle}>Camera access needed</Text>
+            <Text style={styles.permissionTitle}>{t('cameraPermTitle')}</Text>
             <Text style={styles.permissionText}>
-              We need access to your camera so you can snap your drink without anything covering the controls.
+              {t('cameraPermText')}
             </Text>
             <TouchableOpacity onPress={requestPermission} style={styles.permissionBtn}>
-              <Text style={styles.permissionBtnText}>Grant Permission</Text>
+              <Text style={styles.permissionBtnText}>{t('cameraPermBtn')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -69,13 +71,12 @@ export default function CameraScreen() {
           });
         }
       } catch (error) {
-        console.error('Failed to take picture:', error);
         const message =
           error instanceof Error
             ? error.message
-            : 'The photo was captured, but the detector backend could not analyze it.';
+            : t('cameraErrorText');
         Alert.alert(
-          'Detection unavailable',
+          t('cameraErrorTitle'),
           message
         );
       } finally {
@@ -93,9 +94,9 @@ export default function CameraScreen() {
           </TouchableOpacity>
 
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>CAPTURE</Text>
-            <Text style={styles.title}>Capture your drink</Text>
-            <Text style={styles.subtitle}>Keep the cup inside the frame and tap the shutter.</Text>
+            <Text style={styles.eyebrow}>{t('cameraEyebrow')}</Text>
+            <Text style={styles.title}>{t('cameraTitle')}</Text>
+            <Text style={styles.subtitle}>{t('cameraSubtitle')}</Text>
           </View>
 
           <View style={styles.topActions}>
@@ -113,13 +114,13 @@ export default function CameraScreen() {
           <View style={styles.frameGuide} pointerEvents="none" />
           <View style={styles.frameHint} pointerEvents="none">
             <Ionicons name="scan-outline" size={14} color="#fff7ef" />
-            <Text style={styles.frameHintText}>Center the glass inside the guide</Text>
+            <Text style={styles.frameHintText}>{t('cameraHint')}</Text>
           </View>
           {isProcessing && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={Colors.light.tint} />
-              <Text style={styles.loadingTitle}>Checking your capture</Text>
-              <Text style={styles.loadingText}>Uploading the photo to the detection backend and preparing your review.</Text>
+              <Text style={styles.loadingTitle}>{t('cameraLoadingTitle')}</Text>
+              <Text style={styles.loadingText}>{t('cameraLoadingText')}</Text>
             </View>
           )}
         </View>
@@ -127,7 +128,7 @@ export default function CameraScreen() {
         <View style={[styles.controlDock, { paddingBottom: Math.max(insets.bottom, 18) }]}>
           <View style={styles.tipPill}>
             <Ionicons name="beer-outline" size={16} color="#fff7ef" />
-            <Text style={styles.tipText}>Best result: keep the glass fully visible.</Text>
+            <Text style={styles.tipText}>{t('cameraTip')}</Text>
           </View>
 
           <View style={styles.controlBar}>

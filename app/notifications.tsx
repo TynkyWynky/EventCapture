@@ -14,9 +14,10 @@ import { Colors, Layout, Radius, Spacing, Typography } from '@/constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { notifications, markAllRead } = useSocial();
+  const { notifications, unreadCount, markAllRead, isOffline, isUsingCachedData, error } = useSocial();
   const { showToast } = useToast();
   const { t } = useLanguage();
+  const [isClearing, setIsClearing] = React.useState(false);
   const items = notifications.map((item, index) => ({
     ...item,
     section: index < 3 ? t('notifSectionNew') : t('notifSectionEarlier'),
@@ -26,13 +27,33 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        {error ? (
+          <SurfaceCard style={styles.bannerCard} variant="subtle">
+            <Text style={styles.bannerText}>{error}</Text>
+          </SurfaceCard>
+        ) : null}
+
+        {!error && (isOffline || isUsingCachedData) ? (
+          <SurfaceCard style={styles.bannerCard} variant="subtle">
+            <Text style={styles.bannerText}>
+              {isOffline
+                ? t('notifOfflineBanner')
+                : t('notifCachedBanner')}
+            </Text>
+          </SurfaceCard>
+        ) : null}
+
         <ScreenHeader
           eyebrow={t('notifEyebrow')}
           title={t('notifTitle')}
           onBack={() => router.back()}
           mode="compact"
           rightAction={
-            <TouchableOpacity style={styles.iconButton} onPress={() => {
+            <TouchableOpacity
+              style={styles.iconButton}
+              disabled={!unreadCount || isClearing}
+              onPress={() => {
+              setIsClearing(true);
               void markAllRead()
                 .then(() => {
                   showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
@@ -41,8 +62,11 @@ export default function NotificationsScreen() {
                   showToast({
                     tone: 'error',
                     title: t('notifTitle'),
-                    message: error instanceof Error ? error.message : 'Unable to mark notifications as read.',
+                    message: error instanceof Error ? error.message : t('notifMarkReadError'),
                   });
+                })
+                .finally(() => {
+                  setIsClearing(false);
                 });
             }}>
               <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
@@ -114,6 +138,13 @@ const styles = StyleSheet.create({
   heroCard: {
     marginBottom: 20,
     gap: 6,
+  },
+  bannerCard: {
+    marginBottom: 12,
+  },
+  bannerText: {
+    ...Typography.bodySm,
+    color: Colors.light.subtitle,
   },
   heroTitle: {
     ...Typography.titleSm,

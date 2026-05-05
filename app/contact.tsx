@@ -43,12 +43,12 @@ export default function ContactScreen() {
         title: t('contactToastTitle'),
         message: t('contactToastMsg'),
       });
-    } catch {
+    } catch (error) {
       setStatus('error');
       showToast({
         tone: 'error',
         title: t('contactErrTitle'),
-        message: t('contactErrMsg'),
+        message: error instanceof Error ? error.message : t('contactErrMsg'),
       });
     } finally {
       setIsSubmitting(false);
@@ -110,7 +110,11 @@ export default function ContactScreen() {
             onChangeText={setMessage}
           />
 
-          <AppButton label={isSubmitting ? 'Sending...' : t('contactBtn')} onPress={() => void handleSend()} />
+          <AppButton
+            label={isSubmitting ? t('contactBtnSending') : t('contactBtn')}
+            onPress={() => void handleSend()}
+            disabled={isSubmitting}
+          />
         </SurfaceCard>
       </ScrollView>
     </SafeAreaView>

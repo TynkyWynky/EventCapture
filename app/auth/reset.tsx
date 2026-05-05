@@ -2,6 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
 import { Colors, Radius, Typography } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,8 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResetScreen() {
   const router = useRouter();
-  const { user, requestPasswordReset, resetPassword } = useUser();
+  const { user, requestPasswordReset, resetPassword, isBusy } = useUser();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [email, setEmail] = useState(user.email);
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -31,15 +33,15 @@ export default function ResetScreen() {
 
     if (!result.ok) {
       setSuccess('');
-      setError(result.error ?? 'Unable to start password reset.');
+      setError(result.error ?? t('resetRequestFailedMessage'));
       return;
     }
 
     if (result.resetToken) {
       setResetToken(result.resetToken);
-      setSuccess('A development reset token was generated. Use it below to finish resetting your password.');
+      setSuccess(t('resetDevTokenSuccess'));
     } else {
-      setSuccess('If that email is registered, password reset instructions will be sent when delivery is configured.');
+      setSuccess(t('resetEmailSentSuccess'));
     }
     setError('');
   };
@@ -47,13 +49,13 @@ export default function ResetScreen() {
   const handleReset = async () => {
     if (newPassword !== confirmPassword) {
       setSuccess('');
-      setError('New password and confirmation do not match.');
+      setError(t('resetMismatchError'));
       return;
     }
 
     if (!resetToken.trim()) {
       setSuccess('');
-      setError('Enter the reset token to finish changing your password.');
+      setError(t('resetTokenRequiredError'));
       return;
     }
 
@@ -63,19 +65,19 @@ export default function ResetScreen() {
 
     if (!result.ok) {
       setSuccess('');
-      setError(result.error ?? 'Unable to reset password.');
+      setError(result.error ?? t('resetConfirmFailedMessage'));
       return;
     }
 
     setError('');
-    setSuccess('Password reset successfully. You can now sign in.');
+    setSuccess(t('resetSuccessMessage'));
     setResetToken('');
     setNewPassword('');
     setConfirmPassword('');
     showToast({
       tone: 'success',
-      title: 'Password reset',
-      message: 'You can sign in again with the new password.',
+      title: t('resetSuccessTitle'),
+      message: t('resetSuccessMessage'),
     });
   };
 
@@ -90,16 +92,16 @@ export default function ResetScreen() {
               </View>
 
               <View style={styles.copy}>
-                <Text style={styles.title}>Reset password</Text>
+                <Text style={styles.title}>{t('resetTitle')}</Text>
                 <Text style={styles.subtitle}>
-                  Enter your email and choose a new password to get back into your account.
+                  {t('resetSubtitle')}
                 </Text>
               </View>
 
               <View style={styles.inputRow}>
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder="you@example.com"
+                  placeholder={t('resetEmailPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={email}
@@ -108,12 +110,17 @@ export default function ResetScreen() {
                 />
               </View>
 
-              <AppButton label={isRequesting ? 'Preparing reset...' : 'Send reset instructions'} onPress={() => void handleRequestReset()} size="lg" />
+              <AppButton
+                label={isRequesting ? t('resetRequestBusy') : t('resetRequestButton')}
+                onPress={() => void handleRequestReset()}
+                size="lg"
+                disabled={isRequesting || isResetting || isBusy}
+              />
 
               <View style={styles.inputRow}>
                 <Ionicons name="key-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder="Reset token"
+                  placeholder={t('resetTokenPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={resetToken}
@@ -125,7 +132,7 @@ export default function ResetScreen() {
               <View style={styles.inputRow}>
                 <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder="New password"
+                  placeholder={t('resetNewPasswordPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={newPassword}
@@ -137,7 +144,7 @@ export default function ResetScreen() {
               <View style={styles.inputRow}>
                 <Ionicons name="shield-checkmark-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder="Confirm new password"
+                  placeholder={t('resetConfirmPasswordPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={confirmPassword}
@@ -149,8 +156,18 @@ export default function ResetScreen() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {success ? <Text style={styles.successText}>{success}</Text> : null}
 
-              <AppButton label={isResetting ? 'Resetting password...' : 'Reset password'} onPress={() => void handleReset()} size="lg" />
-              <AppButton label="Back to login" variant="secondary" onPress={() => router.back()} />
+              <AppButton
+                label={isResetting ? t('resetConfirmBusy') : t('resetConfirmButton')}
+                onPress={() => void handleReset()}
+                size="lg"
+                disabled={isRequesting || isResetting || isBusy}
+              />
+              <AppButton
+                label={t('resetBackButton')}
+                variant="secondary"
+                onPress={() => router.back()}
+                disabled={isRequesting || isResetting || isBusy}
+              />
             </SurfaceCard>
           </ScrollView>
         </KeyboardAvoidingView>

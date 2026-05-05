@@ -28,7 +28,7 @@ export default function LoginScreen() {
     const result = await signIn(email, password);
 
     if (!result.ok) {
-      setError(result.error ?? 'Sign in failed.');
+      setError(result.error ?? t('loginFailedMessage'));
       return;
     }
 

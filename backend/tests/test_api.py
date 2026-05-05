@@ -132,8 +132,16 @@ class EventCaptureApiTests(unittest.TestCase):
         self.assertEqual(status, 200, payload)
         self.assertIn("message", payload)
         self.assertTrue(payload.get("reset_token"))
-
         reset_token = payload["reset_token"]
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/auth/reset-password/request",
+            {"email": "missing-account@example.com"},
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertIn("message", payload)
+        self.assertFalse(payload.get("reset_token"))
         status, payload = self.api_request(
             "POST",
             "/api/auth/reset-password/confirm",
@@ -227,6 +235,18 @@ class EventCaptureApiTests(unittest.TestCase):
         status, notifications_payload = self.api_request("GET", "/api/notifications", token=owner["token"])
         self.assertEqual(status, 200, notifications_payload)
         self.assertEqual(notifications_payload["unread_count"], 0)
+
+    def test_protected_routes_and_guest_support_validation(self):
+        status, payload = self.api_request("GET", "/api/rewards/me")
+        self.assertEqual(status, 401, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/support/contact",
+            {"subject": "Guest message", "message": "Need help with a missing event listing."},
+        )
+        self.assertEqual(status, 400, payload)
+        self.assertIn("detail", payload)
 
     def test_event_post_like_comment_and_delete_permissions(self):
         alice = self.register_and_login("owner@example.com", "owner")

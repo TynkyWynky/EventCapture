@@ -1,6 +1,6 @@
 # EventCapture
 
-EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOLOv8 drink detection service. The mobile app focuses on event discovery, social posting, crown rewards, and a camera flow that checks whether a captured drink photo is crown eligible.
+EventCapture is an Expo Router nightlife app backed by a FastAPI + YOLOv8 drink detection service. The mobile app focuses on event discovery, social posting, crown rewards, and a camera flow that checks whether a captured drink photo is crown eligible.
 
 ## What is in this repo
 
@@ -25,8 +25,8 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 - Splash and onboarding route into login or the authenticated tab experience
 - Primary navigation includes feed, events, camera, social, and rewards, while profile lives in the burger menu
 - The camera screen captures a photo, sends it to the backend, and routes to a success or fail review screen
-- Posting a crown-eligible capture increments the local crown counter and reward progression
-- Admin and support-style screens exist, but they are part of the prototype flow rather than a production admin backend
+- Posting a crown-eligible capture increments backend-backed crown rewards and reward progression
+- Admin and support screens use the same backend APIs as the rest of the app, but admin moderation is still intentionally lightweight
 
 ## Tech stack
 
@@ -61,7 +61,13 @@ Important backend variables:
 - `EVENTCAPTURE_PORT`
 - `EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN`
 - `EVENTCAPTURE_PASSWORD_RESET_TOKEN_TTL_MINUTES`
-- `EVENTCAPTURE_SUPPORT_EMAIL_TO`
+- `EVENTCAPTURE_RESET_EMAIL_FROM`
+- `EVENTCAPTURE_SMTP_HOST`
+- `EVENTCAPTURE_SMTP_PORT`
+- `EVENTCAPTURE_SMTP_USERNAME`
+- `EVENTCAPTURE_SMTP_PASSWORD`
+- `EVENTCAPTURE_SMTP_USE_TLS`
+- `EVENTCAPTURE_SMTP_USE_SSL`
 
 ### Install app dependencies
 
@@ -354,8 +360,8 @@ When the app uses the persisted capture endpoint, the backend also:
 ```text
 app/                  Expo Router screens
 components/           Shared UI and review components
-constants/            Seed event data, crown definitions, theme values
-context/              AsyncStorage-backed demo state providers
+constants/            Crown definitions, translations, theme values
+context/              Authenticated app state with backend-backed data and explicit offline cache
 services/             App-side backend and detector API integration
 backend/              FastAPI app, YOLO detector, SQLite storage, config, schemas, debug artifacts
 frontend/             Simple browser detector demo
@@ -412,19 +418,98 @@ If `pip install -r backend/requirements.txt` fails with certificate validation e
 
 - In development, `POST /api/auth/reset-password/request` can return a temporary reset token when `EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN=true`
 - In production, insecure direct password resets are disabled
-- A real delivery channel for reset instructions still needs to be configured before using the reset flow in production
+- Production reset delivery should be configured with SMTP environment variables
+- The backend never returns reset tokens in production responses
+
+Recommended SMTP variables:
+
+- `EVENTCAPTURE_RESET_EMAIL_FROM`
+- `EVENTCAPTURE_SMTP_HOST`
+- `EVENTCAPTURE_SMTP_PORT`
+- `EVENTCAPTURE_SMTP_USERNAME`
+- `EVENTCAPTURE_SMTP_PASSWORD`
+- `EVENTCAPTURE_SMTP_USE_TLS`
+- `EVENTCAPTURE_SMTP_USE_SSL`
+
+If production reset delivery is requested without mailer configuration, the API returns a safe configuration error instead of exposing reset tokens.
 
 ### Production safety
 
 - Set a real `EVENTCAPTURE_SECRET_KEY` before running with `EVENTCAPTURE_ENV=production`
 - Keep `EVENTCAPTURE_DEBUG=false` in production
 - Restrict `EVENTCAPTURE_ALLOWED_ORIGINS` to your deployed frontend origins
-- For SQLite deployments, plan routine backups for `backend/eventcapture.db` and `backend/storage/`
-- If you expect multi-instance backend deployments, document or migrate to PostgreSQL before scaling beyond a single-node setup
+- Configure `EXPO_PUBLIC_BACKEND_API_URL` for your production frontend or device builds
+
+### SQLite backup and restore
+
+For single-node or local production use, SQLite remains acceptable.
+
+Backup guidance:
+
+- Stop writes if possible before copying `backend/eventcapture.db`
+- Back up `backend/eventcapture.db`
+- Back up `backend/storage/` because captures and media files live there
+- Optionally back up `backend/debug/` if detector debugging artifacts matter to your team
+
+Restore guidance:
+
+- Replace the database file with the backup copy
+- Restore the matching `backend/storage/` directory so capture records and files stay aligned
+- Restart the backend and confirm `GET /health` returns a healthy database state
+
+### PostgreSQL migration path
+
+Current persistence lives in SQLite tables for:
+
+- `users`
+- `sessions`
+- `events`
+- `event_reactions`
+- `event_comments`
+- `posts`
+- `post_likes`
+- `post_comments`
+- `captures`
+- `reward_transactions`
+- `password_reset_tokens`
+- `notifications`
+- `support_requests`
+
+Recommended production migration path for multi-instance deployments:
+
+1. Introduce SQLAlchemy plus Alembic for explicit models and migrations.
+2. Replace the direct `sqlite3` helper layer with a repository or ORM-backed data layer that supports both SQLite and PostgreSQL.
+3. Add an `EVENTCAPTURE_DATABASE_URL` style configuration for PostgreSQL deployments while preserving the current SQLite path for local development.
+4. Export existing SQLite data, import it into PostgreSQL, and validate auth, posts, events, rewards, notifications, and support data before cutover.
+
+### Monitoring and logging
+
+- The backend now emits request-level logs with a request ID header (`X-Request-Id`) for each HTTP response
+- Avoid logging bearer tokens, passwords, reset tokens, or full reset links in production
+- Capture backend stdout/stderr in your process manager or hosting platform
+- Monitor:
+  - `GET /health`
+  - backend process restarts
+  - password reset delivery failures
+  - database file growth and backup success
+  - media storage growth in `backend/storage/`
+
+### Production checklist
+
+- Set `EVENTCAPTURE_ENV=production`
+- Set `EVENTCAPTURE_DEBUG=false`
+- Set a real `EVENTCAPTURE_SECRET_KEY`
+- Restrict `EVENTCAPTURE_ALLOWED_ORIGINS`
+- Set `EXPO_PUBLIC_BACKEND_API_URL` for the deployed frontend or Expo build
+- Configure SMTP variables for password reset delivery
+- Decide whether SQLite backups are sufficient or whether you need PostgreSQL before launch
+- Run `npm run check`
+- Run backend tests
+- Complete manual QA for auth, events, posts, comments, rewards, notifications, support, and camera capture
 
 ## Notes and limitations
 
 - The browser detector demo is still present and useful for detector debugging, but the main experience is the Expo app
-- Notifications are still a lightweight local activity layer rather than a full backend notification system
+- Notifications are backend-backed and persist across reloads, but they still refresh through polling/manual reload rather than realtime push
 - The helper scripts are PowerShell-first and currently tailored to this Windows setup
 - Runtime-generated backend data now lives in `backend/eventcapture.db`, `backend/storage/`, and `backend/debug/` and is ignored by git
