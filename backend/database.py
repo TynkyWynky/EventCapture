@@ -78,6 +78,7 @@ def init_database() -> None:
                 city TEXT NOT NULL,
                 avatar_uri TEXT NOT NULL DEFAULT '',
                 role TEXT NOT NULL DEFAULT 'user',
+                crown_count INTEGER NOT NULL DEFAULT 0,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -206,6 +207,57 @@ def init_database() -> None:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS reward_transactions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, source_type, source_id, reason),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                consumed_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                actor_user_id TEXT,
+                actor_username TEXT NOT NULL DEFAULT '',
+                actor_avatar_uri TEXT NOT NULL DEFAULT '',
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                icon TEXT NOT NULL,
+                color TEXT NOT NULL,
+                related_type TEXT,
+                related_id TEXT,
+                is_read INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                read_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS support_requests (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                email TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+
             CREATE TABLE IF NOT EXISTS capture_detections (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 capture_id TEXT NOT NULL,
@@ -221,6 +273,7 @@ def init_database() -> None:
 
         _ensure_column(connection, "events", "created_by_user_id", "TEXT")
         _ensure_column(connection, "post_likes", "user_id", "TEXT")
+        _ensure_column(connection, "users", "crown_count", "INTEGER NOT NULL DEFAULT 0")
         connection.commit()
 
 
@@ -246,6 +299,7 @@ def _user_profile_from_row(row: sqlite3.Row) -> dict[str, object]:
         "email": row["email"],
         "avatar_uri": row["avatar_uri"],
         "role": row["role"],
+        "crown_count": int(row["crown_count"]) if "crown_count" in row.keys() else 0,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -282,6 +336,7 @@ def create_user(*, email: str, username: str, password: str, full_name: str, cit
         city.strip(),
         avatar_uri.strip(),
         role,
+        0,
         1,
         now,
         now,
@@ -292,9 +347,9 @@ def create_user(*, email: str, username: str, password: str, full_name: str, cit
             """
             INSERT INTO users (
                 id, email, username, password_hash, full_name, bio, city, avatar_uri,
-                role, is_active, created_at, updated_at
+                role, crown_count, is_active, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             payload,
         )
@@ -439,6 +494,258 @@ def deactivate_user(user_id: str) -> bool:
         connection.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         connection.commit()
         return cursor.rowcount > 0
+
+
+def _create_notification(
+    connection: sqlite3.Connection,
+    *,
+    user_id: str,
+    actor: dict[str, object] | None,
+    title: str,
+    message: str,
+    icon: str,
+    color: str,
+    related_type: str | None = None,
+    related_id: str | None = None,
+) -> dict[str, object]:
+    notification_id = _new_id("notification")
+    created_at = _utc_now()
+    actor_username = str(actor["username"]) if actor is not None else ""
+    actor_avatar_uri = str(actor["avatar_uri"]) if actor is not None else ""
+    actor_user_id = str(actor["id"]) if actor is not None else None
+    connection.execute(
+        """
+        INSERT INTO notifications (
+            id, user_id, actor_user_id, actor_username, actor_avatar_uri, title, message,
+            icon, color, related_type, related_id, is_read, created_at, read_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NULL)
+        """,
+        (
+            notification_id,
+            user_id,
+            actor_user_id,
+            actor_username,
+            actor_avatar_uri,
+            title.strip(),
+            message.strip(),
+            icon,
+            color,
+            related_type,
+            related_id,
+            created_at,
+        ),
+    )
+    row = connection.execute("SELECT * FROM notifications WHERE id = ?", (notification_id,)).fetchone()
+    if row is None:
+        raise RuntimeError("Failed to load notification after insert.")
+    return _notification_from_row(row)
+
+
+def _notification_from_row(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": row["id"],
+        "actor_username": row["actor_username"],
+        "actor_avatar_uri": row["actor_avatar_uri"],
+        "title": row["title"],
+        "message": row["message"],
+        "icon": row["icon"],
+        "color": row["color"],
+        "related_type": row["related_type"],
+        "related_id": row["related_id"],
+        "is_read": bool(row["is_read"]),
+        "created_at": row["created_at"],
+    }
+
+
+def list_notifications(user_id: str, limit: int = 50) -> list[dict[str, object]]:
+    safe_limit = max(1, min(limit, 100))
+    with closing(_get_connection()) as connection:
+        rows = connection.execute(
+            "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+            (user_id, safe_limit),
+        ).fetchall()
+        return [_notification_from_row(row) for row in rows]
+
+
+def get_unread_notification_count(user_id: str) -> int:
+    with closing(_get_connection()) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = 0",
+            (user_id,),
+        ).fetchone()
+        return int(row["count"]) if row is not None else 0
+
+
+def mark_all_notifications_read(user_id: str) -> int:
+    with closing(_get_connection()) as connection:
+        cursor = connection.execute(
+            "UPDATE notifications SET is_read = 1, read_at = ? WHERE user_id = ? AND is_read = 0",
+            (_utc_now(), user_id),
+        )
+        connection.commit()
+        return int(cursor.rowcount)
+
+
+def create_activity_notification(
+    user_id: str,
+    *,
+    actor: dict[str, object] | None,
+    title: str,
+    message: str,
+    icon: str,
+    color: str,
+    related_type: str | None = None,
+    related_id: str | None = None,
+) -> dict[str, object]:
+    with closing(_get_connection()) as connection:
+        notification = _create_notification(
+            connection,
+            user_id=user_id,
+            actor=actor,
+            title=title,
+            message=message,
+            icon=icon,
+            color=color,
+            related_type=related_type,
+            related_id=related_id,
+        )
+        connection.commit()
+        return notification
+
+
+def award_crowns(
+    connection: sqlite3.Connection,
+    *,
+    user_id: str,
+    amount: int,
+    reason: str,
+    source_type: str,
+    source_id: str,
+) -> bool:
+    reward_id = _new_id("reward")
+    try:
+        connection.execute(
+            """
+            INSERT INTO reward_transactions (id, user_id, amount, reason, source_type, source_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (reward_id, user_id, amount, reason, source_type, source_id, _utc_now()),
+        )
+    except sqlite3.IntegrityError:
+        return False
+
+    connection.execute(
+        "UPDATE users SET crown_count = crown_count + ?, updated_at = ? WHERE id = ?",
+        (amount, _utc_now(), user_id),
+    )
+    return True
+
+
+def list_reward_history(user_id: str, limit: int = 25) -> list[dict[str, object]]:
+    safe_limit = max(1, min(limit, 100))
+    with closing(_get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT id, amount, reason, source_type, source_id, created_at
+            FROM reward_transactions
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (user_id, safe_limit),
+        ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "amount": int(row["amount"]),
+                "reason": row["reason"],
+                "source_type": row["source_type"],
+                "source_id": row["source_id"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+
+def get_reward_state(user_id: str) -> dict[str, object]:
+    user = get_user_by_id(user_id)
+    if user is None:
+        raise KeyError(user_id)
+    return {
+        "crown_count": int(user["crown_count"]),
+        "history": list_reward_history(user_id),
+    }
+
+
+def create_password_reset_token(email: str, ttl_minutes: int) -> str | None:
+    user = get_user_by_email(email)
+    if user is None:
+        return None
+
+    token = generate_session_token()
+    token_hash = hash_session_token(token)
+    token_id = _new_id("reset")
+    now = _utc_now()
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)).isoformat(timespec="seconds")
+
+    with closing(_get_connection()) as connection:
+        connection.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id = ? OR expires_at <= ? OR consumed_at IS NOT NULL",
+            (str(user["id"]), now),
+        )
+        connection.execute(
+            """
+            INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at, consumed_at)
+            VALUES (?, ?, ?, ?, ?, NULL)
+            """,
+            (token_id, str(user["id"]), token_hash, expires_at, now),
+        )
+        connection.commit()
+    return token
+
+
+def consume_password_reset_token(token: str, new_password: str) -> bool:
+    token_hash = hash_session_token(token)
+    now = _utc_now()
+    with closing(_get_connection()) as connection:
+        row = connection.execute(
+            """
+            SELECT user_id
+            FROM password_reset_tokens
+            WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > ?
+            """,
+            (token_hash, now),
+        ).fetchone()
+        if row is None:
+            return False
+        user_id = str(row["user_id"])
+        connection.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ? AND is_active = 1",
+            (hash_password(new_password), now, user_id),
+        )
+        connection.execute(
+            "UPDATE password_reset_tokens SET consumed_at = ? WHERE token_hash = ?",
+            (now, token_hash),
+        )
+        connection.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        connection.commit()
+        return True
+
+
+def create_support_request(*, email: str, subject: str, message: str, user_id: str | None = None) -> dict[str, object]:
+    request_id = _new_id("support")
+    created_at = _utc_now()
+    with closing(_get_connection()) as connection:
+        connection.execute(
+            """
+            INSERT INTO support_requests (id, user_id, email, subject, message, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'open', ?)
+            """,
+            (request_id, user_id, email.strip().lower(), subject.strip(), message.strip(), created_at),
+        )
+        connection.commit()
+    return {"id": request_id, "message": "Support request received."}
 
 
 def _event_from_row(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[str, object]:
@@ -695,8 +1002,8 @@ def _event_social_state(connection: sqlite3.Connection, event_id: str, user_id: 
 
 def toggle_event_like(event_id: str, actor: dict[str, object]) -> dict[str, object]:
     with closing(_get_connection()) as connection:
-        event_exists = connection.execute("SELECT 1 FROM events WHERE id = ?", (event_id,)).fetchone()
-        if event_exists is None:
+        event_row = connection.execute("SELECT created_by_user_id, title FROM events WHERE id = ?", (event_id,)).fetchone()
+        if event_row is None:
             raise KeyError(event_id)
         current = connection.execute(
             "SELECT liked FROM event_reactions WHERE event_id = ? AND user_id = ?",
@@ -704,6 +1011,19 @@ def toggle_event_like(event_id: str, actor: dict[str, object]) -> dict[str, obje
         ).fetchone()
         next_liked = 0 if current is not None and int(current["liked"]) == 1 else 1
         _upsert_event_reaction(connection, event_id=event_id, user_id=str(actor["id"]), liked=next_liked)
+        owner_id = event_row["created_by_user_id"]
+        if next_liked == 1 and owner_id and owner_id != actor["id"]:
+            _create_notification(
+                connection,
+                user_id=str(owner_id),
+                actor=actor,
+                title="Event liked",
+                message=f"{actor['username']} liked {event_row['title']}.",
+                icon="heart",
+                color="#e45b5b",
+                related_type="event",
+                related_id=event_id,
+            )
         connection.commit()
         return _event_social_state(connection, event_id, str(actor["id"]))
 
@@ -736,8 +1056,8 @@ def set_event_plan_status(event_id: str, actor: dict[str, object], status: str |
     if status is not None and status not in EVENT_PLAN_STATUSES:
         raise ValueError("Unsupported plan status.")
     with closing(_get_connection()) as connection:
-        event_exists = connection.execute("SELECT 1 FROM events WHERE id = ?", (event_id,)).fetchone()
-        if event_exists is None:
+        event_row = connection.execute("SELECT title FROM events WHERE id = ?", (event_id,)).fetchone()
+        if event_row is None:
             raise KeyError(event_id)
         _upsert_event_reaction(
             connection,
@@ -746,6 +1066,18 @@ def set_event_plan_status(event_id: str, actor: dict[str, object], status: str |
             saved=1 if status else None,
             plan_status=status,
         )
+        if status:
+            _create_notification(
+                connection,
+                user_id=str(actor["id"]),
+                actor=actor,
+                title="Plan updated",
+                message=f"You marked {event_row['title']} as {status}.",
+                icon="calendar",
+                color="#0f766e" if status == "going" else "#f47b20",
+                related_type="event",
+                related_id=event_id,
+            )
         connection.commit()
         return _event_social_state(connection, event_id, str(actor["id"]))
 
@@ -770,8 +1102,8 @@ def add_event_comment(event_id: str, actor: dict[str, object], text: str) -> dic
     comment_id = _new_id("event-comment")
     created_at = _utc_now()
     with closing(_get_connection()) as connection:
-        event_exists = connection.execute("SELECT 1 FROM events WHERE id = ?", (event_id,)).fetchone()
-        if event_exists is None:
+        event_row = connection.execute("SELECT created_by_user_id, title FROM events WHERE id = ?", (event_id,)).fetchone()
+        if event_row is None:
             raise KeyError(event_id)
         connection.execute(
             """
@@ -780,6 +1112,19 @@ def add_event_comment(event_id: str, actor: dict[str, object], text: str) -> dic
             """,
             (comment_id, event_id, actor["id"], actor["username"], actor["avatar_uri"], text.strip(), created_at),
         )
+        owner_id = event_row["created_by_user_id"]
+        if owner_id and owner_id != actor["id"]:
+            _create_notification(
+                connection,
+                user_id=str(owner_id),
+                actor=actor,
+                title="New event comment",
+                message=f"{actor['username']} commented on {event_row['title']}.",
+                icon="chatbubble-ellipses-outline",
+                color="#0f766e",
+                related_type="event",
+                related_id=event_id,
+            )
         connection.commit()
         return _event_social_state(connection, event_id, str(actor["id"]))
 
@@ -851,6 +1196,8 @@ def _post_from_row(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[str
         "likes": _load_post_likes(connection, str(row["id"])),
         "comments": _load_post_comments(connection, str(row["id"])),
         "capture_id": row["capture_id"],
+        "crown_awarded": False,
+        "crown_count": None,
     }
 
 
@@ -868,6 +1215,7 @@ def _load_post_by_id(connection: sqlite3.Connection, post_id: str) -> dict[str, 
 def upsert_post(post: dict[str, object], actor: dict[str, object]) -> dict[str, object]:
     now = _utc_now()
     post_id = str(post.get("id") or _new_id("post"))
+    crown_awarded = False
     with closing(_get_connection()) as connection:
         existing = connection.execute("SELECT user_id, created_at FROM posts WHERE id = ?", (post_id,)).fetchone()
         if existing is not None and existing["user_id"] != actor["id"] and actor["role"] != "admin":
@@ -919,17 +1267,43 @@ def upsert_post(post: dict[str, object], actor: dict[str, object]) -> dict[str, 
                 """,
                 (payload["username"], payload["event_id"], payload["event_title"], payload["capture_id"]),
             )
+        if payload["is_beer_finished"]:
+            reward_source_type = "capture" if payload["capture_id"] else "post"
+            reward_source_id = str(payload["capture_id"] or post_id)
+            crown_awarded = award_crowns(
+                connection,
+                user_id=str(actor["id"]),
+                amount=1,
+                reason="qualifying_capture_post",
+                source_type=reward_source_type,
+                source_id=reward_source_id,
+            )
+            if crown_awarded:
+                _create_notification(
+                    connection,
+                    user_id=str(actor["id"]),
+                    actor=actor,
+                    title="Crown earned",
+                    message=f"You earned a crown for {payload['event_title'] or 'your latest capture'}.",
+                    icon="ribbon",
+                    color="#f47b20",
+                    related_type="post",
+                    related_id=post_id,
+                )
         connection.commit()
         persisted = _load_post_by_id(connection, post_id)
+        crown_count_row = connection.execute("SELECT crown_count FROM users WHERE id = ?", (actor["id"],)).fetchone()
     if persisted is None:
         raise RuntimeError("Failed to load post after upsert.")
+    persisted["crown_awarded"] = crown_awarded
+    persisted["crown_count"] = int(crown_count_row["crown_count"]) if crown_count_row is not None else None
     return persisted
 
 
 def toggle_post_like(post_id: str, actor: dict[str, object]) -> dict[str, object]:
     with closing(_get_connection()) as connection:
-        post_exists = connection.execute("SELECT 1 FROM posts WHERE id = ?", (post_id,)).fetchone()
-        if post_exists is None:
+        post_row = connection.execute("SELECT user_id, event_title FROM posts WHERE id = ?", (post_id,)).fetchone()
+        if post_row is None:
             raise KeyError(post_id)
         existing = connection.execute(
             "SELECT 1 FROM post_likes WHERE post_id = ? AND user_id = ?",
@@ -940,6 +1314,18 @@ def toggle_post_like(post_id: str, actor: dict[str, object]) -> dict[str, object
                 "INSERT INTO post_likes (post_id, user_id, username, created_at) VALUES (?, ?, ?, ?)",
                 (post_id, actor["id"], actor["username"], _utc_now()),
             )
+            if post_row["user_id"] != actor["id"]:
+                _create_notification(
+                    connection,
+                    user_id=str(post_row["user_id"]),
+                    actor=actor,
+                    title="Post liked",
+                    message=f"{actor['username']} liked your post.",
+                    icon="heart",
+                    color="#e45b5b",
+                    related_type="post",
+                    related_id=post_id,
+                )
         else:
             connection.execute(
                 "DELETE FROM post_likes WHERE post_id = ? AND user_id = ?",
@@ -956,8 +1342,8 @@ def add_post_comment(post_id: str, actor: dict[str, object], text: str, time_lab
     comment_id = _new_id("comment")
     created_at = _utc_now()
     with closing(_get_connection()) as connection:
-        post_exists = connection.execute("SELECT 1 FROM posts WHERE id = ?", (post_id,)).fetchone()
-        if post_exists is None:
+        post_row = connection.execute("SELECT user_id FROM posts WHERE id = ?", (post_id,)).fetchone()
+        if post_row is None:
             raise KeyError(post_id)
         connection.execute(
             """
@@ -966,6 +1352,18 @@ def add_post_comment(post_id: str, actor: dict[str, object], text: str, time_lab
             """,
             (comment_id, post_id, actor["id"], actor["username"], actor["avatar_uri"], text.strip(), time_label, created_at),
         )
+        if post_row["user_id"] != actor["id"]:
+            _create_notification(
+                connection,
+                user_id=str(post_row["user_id"]),
+                actor=actor,
+                title="New post comment",
+                message=f"{actor['username']} commented on your post.",
+                icon="chatbubble-ellipses-outline",
+                color="#0f766e",
+                related_type="post",
+                related_id=post_id,
+            )
         connection.commit()
         persisted = _load_post_by_id(connection, post_id)
     if persisted is None:

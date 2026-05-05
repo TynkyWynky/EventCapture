@@ -7,6 +7,7 @@ import {
   fetchCurrentUser,
   loginAccount,
   logoutAccount,
+  requestPasswordReset,
   registerAccount,
   resetAccountPassword,
   updateAccountProfile,
@@ -22,6 +23,7 @@ export interface UserProfile {
   email: string;
   avatarUri: string;
   role: string;
+  crownCount: number;
 }
 
 interface AuthActionResult {
@@ -36,12 +38,14 @@ interface UserContextType {
   isBusy: boolean;
   isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<AuthActionResult>;
-  createProfile: (profile: Omit<UserProfile, 'id' | 'role' | 'email'> & { email?: string; password: string }) => Promise<AuthActionResult>;
+  createProfile: (profile: Omit<UserProfile, 'id' | 'role' | 'email' | 'crownCount'> & { email?: string; password: string }) => Promise<AuthActionResult>;
   updateProfile: (profile: Partial<UserProfile>) => Promise<AuthActionResult>;
-  resetPassword: (email: string, newPassword: string) => Promise<AuthActionResult>;
+  requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string; resetToken?: string }>;
+  resetPassword: (token: string, newPassword: string) => Promise<AuthActionResult>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<AuthActionResult>;
   deleteAccount: () => Promise<AuthActionResult>;
   signOut: () => Promise<void>;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 interface StoredSessionState {
@@ -60,6 +64,7 @@ const EMPTY_USER: UserProfile = {
   email: '',
   avatarUri: DEFAULT_AVATAR,
   role: 'user',
+  crownCount: 0,
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -73,6 +78,7 @@ function mapApiUserToProfile(user: {
   email: string;
   avatar_uri: string;
   role: string;
+  crown_count: number;
 }): UserProfile {
   return {
     id: user.id,
@@ -83,6 +89,7 @@ function mapApiUserToProfile(user: {
     email: user.email,
     avatarUri: user.avatar_uri || DEFAULT_AVATAR,
     role: user.role,
+    crownCount: typeof user.crown_count === 'number' ? user.crown_count : 0,
   };
 }
 
@@ -180,6 +187,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
       isReady,
       isBusy,
       isAdmin: user.role === 'admin',
+      refreshCurrentUser: async () => {
+        if (!token) {
+          return;
+        }
+
+        const currentUser = await fetchCurrentUser();
+        setUser(mapApiUserToProfile(currentUser));
+        setIsAuthenticated(true);
+      },
       signIn: async (email, password) => {
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedPassword = password.trim();
@@ -261,10 +277,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setIsBusy(false);
         }
       },
-      resetPassword: async (email, newPassword) => {
+      requestPasswordReset: async (email) => {
         setIsBusy(true);
         try {
-          await resetAccountPassword(email.trim(), newPassword.trim());
+          const response = await requestPasswordReset(email.trim());
+          return { ok: true, resetToken: response.reset_token ?? undefined };
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unable to start password reset.',
+          };
+        } finally {
+          setIsBusy(false);
+        }
+      },
+      resetPassword: async (tokenValue, newPassword) => {
+        setIsBusy(true);
+        try {
+          await resetAccountPassword(tokenValue.trim(), newPassword.trim());
           return { ok: true };
         } catch (error) {
           return {
@@ -326,7 +356,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [isAuthenticated, isBusy, isReady, user]
+    [isAuthenticated, isBusy, isReady, token, user]
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

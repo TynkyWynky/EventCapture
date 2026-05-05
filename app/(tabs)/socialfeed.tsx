@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppImage } from '@/components/ui/app-image';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { usePosts } from '@/context/PostContext';
 import type { Post } from '@/constants/posts';
@@ -15,7 +16,7 @@ import { useLanguage } from '@/context/LanguageContext';
 
 export default function SocialFeedScreen() {
   const router = useRouter();
-  const { posts, togglePostLike } = usePosts();
+  const { posts, togglePostLike, isOffline, isUsingCachedData, error } = usePosts();
   const { user } = useUser();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
@@ -150,6 +151,17 @@ export default function SocialFeedScreen() {
         data={posts}
         keyExtractor={(item) => item.id}
         renderItem={renderPost}
+        ListHeaderComponent={
+          isOffline || isUsingCachedData ? (
+            <View style={styles.bannerWrap}>
+              <FeedbackBanner
+                tone={isOffline ? 'error' : 'info'}
+                title={isOffline ? 'Feed updates are unavailable' : 'Showing cached posts'}
+                message={error ?? 'Reconnect to refresh the latest social activity.'}
+              />
+            </View>
+          ) : null
+        }
         contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 120) }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -183,6 +195,10 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: 14,
+  },
+  bannerWrap: {
+    paddingHorizontal: Layout.screenPadding,
+    paddingBottom: 14,
   },
   separator: {
     height: 18,

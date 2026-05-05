@@ -25,6 +25,8 @@ interface ApiPost {
   likes: string[];
   comments: ApiPostComment[];
   capture_id?: string | null;
+  crown_awarded?: boolean;
+  crown_count?: number | null;
 }
 
 interface ApiEvent {
@@ -75,6 +77,8 @@ export interface RemotePostRecord {
   likes: string[];
   comments: RemotePostComment[];
   captureId?: string;
+  crownAwarded?: boolean;
+  crownCount?: number;
 }
 
 function mapApiEventToEventRecord(event: ApiEvent): EventRecord {
@@ -156,6 +160,8 @@ function mapApiPostToRemotePost(post: ApiPost): RemotePostRecord {
         }))
       : [],
     captureId: post.capture_id ?? undefined,
+    crownAwarded: Boolean(post.crown_awarded),
+    crownCount: typeof post.crown_count === 'number' ? post.crown_count : undefined,
   };
 }
 

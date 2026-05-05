@@ -123,12 +123,12 @@ export default function EditEventScreen() {
       return;
     }
 
-    addActivity({
+    await addActivity({
       user: user.username,
       text: `updated event ${title}`,
       icon: 'create-outline',
       color: Colors.light.accent,
-    });
+    }).catch(() => {});
     
     showToast({
       tone: 'success',

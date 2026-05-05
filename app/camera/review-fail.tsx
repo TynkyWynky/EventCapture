@@ -26,11 +26,11 @@ export default function ReviewFailScreen() {
   const { user } = useUser();
   const { t } = useLanguage();
 
-  const handlePost = (eventId: string, eventTitle: string) => {
+  const handlePost = async (eventId: string, eventTitle: string) => {
     if (photoUri) {
-      addPost({
+      const result = await addPost({
         user: {
-          id: user.username, // In a real app this would be a proper ID
+          id: user.username,
           username: user.username,
           avatarUri: user.avatarUri,
         },
@@ -40,12 +40,21 @@ export default function ReviewFailScreen() {
         eventTitle,
         captureId: captureId || undefined,
       });
-      addActivity({
+      if (!result.ok) {
+        showToast({
+          tone: 'error',
+          title: 'Post failed',
+          message: result.error ?? 'Your post could not be published right now.',
+        });
+        return;
+      }
+
+      await addActivity({
         user: user.username,
         text: `${t('activitySharedCapture')} ${eventTitle}`,
         icon: 'image-outline',
         color: Colors.light.tint,
-      });
+      }).catch(() => {});
       showToast({
         tone: 'info',
         title: t('toastSharedTitle'),

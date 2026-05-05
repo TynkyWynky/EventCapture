@@ -13,13 +13,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResetScreen() {
   const router = useRouter();
-  const { user, resetPassword } = useUser();
+  const { user, requestPasswordReset, resetPassword } = useUser();
   const { showToast } = useToast();
   const [email, setEmail] = useState(user.email);
+  const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleRequestReset = async () => {
+    setIsRequesting(true);
+    const result = await requestPasswordReset(email);
+    setIsRequesting(false);
+
+    if (!result.ok) {
+      setSuccess('');
+      setError(result.error ?? 'Unable to start password reset.');
+      return;
+    }
+
+    if (result.resetToken) {
+      setResetToken(result.resetToken);
+      setSuccess('A development reset token was generated. Use it below to finish resetting your password.');
+    } else {
+      setSuccess('If that email is registered, password reset instructions will be sent when delivery is configured.');
+    }
+    setError('');
+  };
 
   const handleReset = async () => {
     if (newPassword !== confirmPassword) {
@@ -28,7 +51,15 @@ export default function ResetScreen() {
       return;
     }
 
-    const result = await resetPassword(email, newPassword);
+    if (!resetToken.trim()) {
+      setSuccess('');
+      setError('Enter the reset token to finish changing your password.');
+      return;
+    }
+
+    setIsResetting(true);
+    const result = await resetPassword(resetToken, newPassword);
+    setIsResetting(false);
 
     if (!result.ok) {
       setSuccess('');
@@ -38,6 +69,7 @@ export default function ResetScreen() {
 
     setError('');
     setSuccess('Password reset successfully. You can now sign in.');
+    setResetToken('');
     setNewPassword('');
     setConfirmPassword('');
     showToast({
@@ -76,6 +108,20 @@ export default function ResetScreen() {
                 />
               </View>
 
+              <AppButton label={isRequesting ? 'Preparing reset...' : 'Send reset instructions'} onPress={() => void handleRequestReset()} size="lg" />
+
+              <View style={styles.inputRow}>
+                <Ionicons name="key-outline" size={18} color="#81776f" />
+                <TextInput
+                  placeholder="Reset token"
+                  placeholderTextColor="#9a9189"
+                  style={styles.input}
+                  value={resetToken}
+                  onChangeText={setResetToken}
+                  autoCapitalize="none"
+                />
+              </View>
+
               <View style={styles.inputRow}>
                 <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
                 <TextInput
@@ -103,7 +149,7 @@ export default function ResetScreen() {
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               {success ? <Text style={styles.successText}>{success}</Text> : null}
 
-              <AppButton label="Reset password" onPress={() => void handleReset()} size="lg" />
+              <AppButton label={isResetting ? 'Resetting password...' : 'Reset password'} onPress={() => void handleReset()} size="lg" />
               <AppButton label="Back to login" variant="secondary" onPress={() => router.back()} />
             </SurfaceCard>
           </ScrollView>

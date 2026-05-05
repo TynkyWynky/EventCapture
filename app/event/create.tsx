@@ -62,36 +62,44 @@ export default function CreateEventScreen() {
     const [datePart, timePart] = dateTime.includes('  ')
       ? dateTime.split('  ')
       : [dateTime, 'Time to be confirmed'];
-    const createdEvent = await createEvent({
-      title,
-      description,
-      address,
-      place,
-      date: datePart || 'TBD',
-      fullDate: dateTime || 'Date to be confirmed',
-      time: timePart || 'Time to be confirmed',
-      vibe,
-      price,
-      priceLabel: price ? `${price} entry` : 'Free entry',
-      heroImage: coverUrl,
-    });
+    try {
+      const createdEvent = await createEvent({
+        title,
+        description,
+        address,
+        place,
+        date: datePart || 'TBD',
+        fullDate: dateTime || 'Date to be confirmed',
+        time: timePart || 'Time to be confirmed',
+        vibe,
+        price,
+        priceLabel: price ? `${price} entry` : 'Free entry',
+        heroImage: coverUrl,
+      });
 
-    addActivity({
-      user: user.username,
-      text: `created ${createdEvent.title}`,
-      icon: 'calendar-outline',
-      color: Colors.light.accent,
-    });
-    showToast({
-      tone: 'success',
-      title: 'Event published',
-      message: `${createdEvent.title} is now live in discovery.`,
-    });
+      await addActivity({
+        user: user.username,
+        text: `created ${createdEvent.title}`,
+        icon: 'calendar-outline',
+        color: Colors.light.accent,
+      }).catch(() => {});
+      showToast({
+        tone: 'success',
+        title: 'Event published',
+        message: `${createdEvent.title} is now live in discovery.`,
+      });
 
-    router.replace({
-      pathname: '/event/detail',
-      params: { eventId: createdEvent.id },
-    });
+      router.replace({
+        pathname: '/event/detail',
+        params: { eventId: createdEvent.id },
+      });
+    } catch (error) {
+      showToast({
+        tone: 'error',
+        title: 'Event failed',
+        message: error instanceof Error ? error.message : 'The event could not be published right now.',
+      });
+    }
   };
 
   const isPublishDisabled = !title.trim() || !address.trim() || !dateTime.trim();

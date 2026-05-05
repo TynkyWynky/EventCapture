@@ -14,14 +14,16 @@ EventCapture is an Expo Router nightlife app prototype backed by a FastAPI + YOL
 - The mobile app is the main product surface
 - Auth, profiles, events, posts, likes, comments, event planning state, and persisted captures are backend-driven
 - AsyncStorage remains only as local session persistence and offline cache, not as the primary production datastore
+- Events, posts, and social state now treat the backend as the source of truth and only fall back to cached data when the API is unavailable
 - Drink captures are stored by the backend in SQLite plus media files so posted photos survive app restarts and can be reused later
-- Crown rewards are still awarded on the app side from detector-backed results
+- Crown rewards are awarded and persisted by the backend when qualifying capture posts are created
+- Notifications and support requests are backend-backed and survive reloads across devices
 - The backend also saves the latest analyzed and annotated frames into `backend/debug/`
 
 ## Main app flows
 
 - Splash and onboarding route into login or the authenticated tab experience
-- Tabs include feed, events, camera, social, rewards, and profile
+- Primary navigation includes feed, events, camera, social, and rewards, while profile lives in the burger menu
 - The camera screen captures a photo, sends it to the backend, and routes to a success or fail review screen
 - Posting a crown-eligible capture increments the local crown counter and reward progression
 - Admin and support-style screens exist, but they are part of the prototype flow rather than a production admin backend
@@ -57,6 +59,9 @@ Important backend variables:
 - `EVENTCAPTURE_ENV`
 - `EVENTCAPTURE_DEBUG`
 - `EVENTCAPTURE_PORT`
+- `EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN`
+- `EVENTCAPTURE_PASSWORD_RESET_TOKEN_TTL_MINUTES`
+- `EVENTCAPTURE_SUPPORT_EMAIL_TO`
 
 ### Install app dependencies
 
@@ -316,8 +321,14 @@ When the app uses the persisted capture endpoint, the backend also:
 | `/api/auth/me` | GET | Load the currently signed-in user |
 | `/api/auth/profile` | PUT | Update the current user's profile |
 | `/api/auth/change-password` | POST | Change the current user's password |
+| `/api/auth/reset-password/request` | POST | Create a one-time password reset token flow without revealing account existence |
+| `/api/auth/reset-password/confirm` | POST | Redeem a one-time password reset token |
 | `/api/users` | GET | List users for admins |
 | `/api/users/{userId}` | DELETE | Remove a user as admin |
+| `/api/rewards/me` | GET | Load the current user's crown count and reward history |
+| `/api/notifications` | GET | Load backend-backed notifications and unread count |
+| `/api/notifications/read-all` | POST | Mark all notifications as read |
+| `/api/notifications/activity` | POST | Persist user activity items that should survive reloads |
 | `/api/detect` | POST | Analyze a single uploaded image |
 | `/api/captures/analyze` | POST | Analyze an image, persist original + annotated media, and store the detection result |
 | `/api/captures` | GET | List recent persisted capture summaries |
@@ -334,6 +345,7 @@ When the app uses the persisted capture endpoint, the backend also:
 | `/api/posts/{postId}/likes/toggle` | POST | Toggle the current user's like on a post |
 | `/api/posts/{postId}/comments` | POST | Add a post comment as the current user |
 | `/api/posts/{postId}` | DELETE | Delete a post |
+| `/api/support/contact` | POST | Persist a support/contact submission |
 | `/ws/detect` | WebSocket | Real-time frame-by-frame detector stream |
 | `/` | GET | Browser demo UI from `frontend/` |
 
@@ -395,6 +407,20 @@ If `pip install -r backend/requirements.txt` fails with certificate validation e
 - Android emulator should use `10.0.2.2`
 - Physical devices need the computer's LAN IP
 - If detection works in the browser but not on-device, the backend URL is usually the cause
+
+### Password reset in development vs production
+
+- In development, `POST /api/auth/reset-password/request` can return a temporary reset token when `EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN=true`
+- In production, insecure direct password resets are disabled
+- A real delivery channel for reset instructions still needs to be configured before using the reset flow in production
+
+### Production safety
+
+- Set a real `EVENTCAPTURE_SECRET_KEY` before running with `EVENTCAPTURE_ENV=production`
+- Keep `EVENTCAPTURE_DEBUG=false` in production
+- Restrict `EVENTCAPTURE_ALLOWED_ORIGINS` to your deployed frontend origins
+- For SQLite deployments, plan routine backups for `backend/eventcapture.db` and `backend/storage/`
+- If you expect multi-instance backend deployments, document or migrate to PostgreSQL before scaling beyond a single-node setup
 
 ## Notes and limitations
 

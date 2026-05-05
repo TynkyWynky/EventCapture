@@ -62,6 +62,16 @@ class BackendSettings:
     session_ttl_hours: int
     allowed_origins: tuple[str, ...]
     allow_insecure_password_reset: bool
+    expose_dev_reset_token: bool
+    password_reset_token_ttl_minutes: int
+    support_email_to: str | None
+    reset_email_from: str | None
+    smtp_host: str | None
+    smtp_port: int
+    smtp_username: str | None
+    smtp_password: str | None
+    smtp_use_tls: bool
+    smtp_use_ssl: bool
     supported_drinks: tuple[str, ...]
 
 
@@ -85,6 +95,16 @@ def _load_settings() -> BackendSettings:
         session_ttl_hours=_env_int("EVENTCAPTURE_SESSION_TTL_HOURS", 24 * 14),
         allowed_origins=tuple(origin.strip() for origin in configured_origins.split(",") if origin.strip()),
         allow_insecure_password_reset=_env_bool("EVENTCAPTURE_ALLOW_INSECURE_PASSWORD_RESET", True),
+        expose_dev_reset_token=_env_bool("EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN", True),
+        password_reset_token_ttl_minutes=_env_int("EVENTCAPTURE_PASSWORD_RESET_TOKEN_TTL_MINUTES", 30),
+        support_email_to=os.getenv("EVENTCAPTURE_SUPPORT_EMAIL_TO"),
+        reset_email_from=os.getenv("EVENTCAPTURE_RESET_EMAIL_FROM"),
+        smtp_host=os.getenv("EVENTCAPTURE_SMTP_HOST"),
+        smtp_port=_env_int("EVENTCAPTURE_SMTP_PORT", 587),
+        smtp_username=os.getenv("EVENTCAPTURE_SMTP_USERNAME"),
+        smtp_password=os.getenv("EVENTCAPTURE_SMTP_PASSWORD"),
+        smtp_use_tls=_env_bool("EVENTCAPTURE_SMTP_USE_TLS", True),
+        smtp_use_ssl=_env_bool("EVENTCAPTURE_SMTP_USE_SSL", False),
         supported_drinks=(
             "Water",
             "Coffee",

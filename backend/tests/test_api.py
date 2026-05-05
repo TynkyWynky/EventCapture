@@ -120,6 +120,114 @@ class EventCaptureApiTests(unittest.TestCase):
         status, _ = self.api_request("GET", "/api/auth/me", token=session["token"])
         self.assertEqual(status, 401)
 
+    def test_password_reset_support_rewards_and_notifications(self):
+        owner = self.register_and_login("reward-owner@example.com", "rewardowner")
+        other = self.register_and_login("reward-other@example.com", "rewardother")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/auth/reset-password/request",
+            {"email": "reward-owner@example.com"},
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertIn("message", payload)
+        self.assertTrue(payload.get("reset_token"))
+
+        reset_token = payload["reset_token"]
+        status, payload = self.api_request(
+            "POST",
+            "/api/auth/reset-password/confirm",
+            {"token": reset_token, "new_password": "NewPassword123!"},
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, _ = self.api_request(
+            "POST",
+            "/api/auth/login",
+            {"email": "reward-owner@example.com", "password": "Password123!"},
+        )
+        self.assertEqual(status, 401)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/auth/login",
+            {"email": "reward-owner@example.com", "password": "NewPassword123!"},
+        )
+        self.assertEqual(status, 200, payload)
+        owner = {"token": payload["token"], "user_id": payload["user"]["id"]}
+
+        status, support_payload = self.api_request(
+            "POST",
+            "/api/support/contact",
+            {"subject": "Help needed", "message": "The camera upload was slow in my test session."},
+            token=owner["token"],
+        )
+        self.assertEqual(status, 200, support_payload)
+        self.assertTrue(support_payload["id"].startswith("support-"))
+
+        status, post_payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "id": "reward-post-1",
+                "image_uri": "https://example.com/reward-post.jpg",
+                "date": "12/10/2026",
+                "is_beer_finished": True,
+                "event_title": "Reward Night",
+                "likes": [],
+                "comments": [],
+                "capture_id": "capture-reward-1",
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 200, post_payload)
+        self.assertTrue(post_payload["crown_awarded"])
+        self.assertEqual(post_payload["crown_count"], 1)
+
+        status, reward_payload = self.api_request("GET", "/api/rewards/me", token=owner["token"])
+        self.assertEqual(status, 200, reward_payload)
+        self.assertEqual(reward_payload["crown_count"], 1)
+        self.assertEqual(len(reward_payload["history"]), 1)
+
+        status, second_post_payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "id": "reward-post-1",
+                "image_uri": "https://example.com/reward-post.jpg",
+                "date": "12/10/2026",
+                "is_beer_finished": True,
+                "event_title": "Reward Night",
+                "likes": [],
+                "comments": [],
+                "capture_id": "capture-reward-1",
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 200, second_post_payload)
+        self.assertFalse(second_post_payload["crown_awarded"])
+        self.assertEqual(second_post_payload["crown_count"], 1)
+
+        status, _ = self.api_request(
+            "POST",
+            "/api/posts/reward-post-1/likes/toggle",
+            {},
+            token=other["token"],
+        )
+        self.assertEqual(status, 200)
+
+        status, notifications_payload = self.api_request("GET", "/api/notifications", token=owner["token"])
+        self.assertEqual(status, 200, notifications_payload)
+        self.assertGreaterEqual(notifications_payload["unread_count"], 1)
+        self.assertTrue(any(item["related_id"] == "reward-post-1" for item in notifications_payload["items"]))
+
+        status, _ = self.api_request("POST", "/api/notifications/read-all", {}, token=owner["token"])
+        self.assertEqual(status, 200)
+
+        status, notifications_payload = self.api_request("GET", "/api/notifications", token=owner["token"])
+        self.assertEqual(status, 200, notifications_payload)
+        self.assertEqual(notifications_payload["unread_count"], 0)
+
     def test_event_post_like_comment_and_delete_permissions(self):
         alice = self.register_and_login("owner@example.com", "owner")
         bob = self.register_and_login("other@example.com", "other")

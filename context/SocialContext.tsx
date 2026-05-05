@@ -16,6 +16,7 @@ import {
   toggleEventLikeRemote,
   toggleEventSaveRemote,
 } from '@/services/eventSocialApi';
+import { createActivityNotification, fetchNotifications, markNotificationsRead } from '@/services/notificationsApi';
 
 export type { EventPlanStatus };
 
@@ -26,20 +27,24 @@ export interface ActivityItem {
   time: string;
   icon: string;
   color: string;
-  createdAt: number;
+  createdAt: string;
+  avatarUri?: string;
 }
 
 interface SocialContextType {
   getEventSocial: (eventId?: string | string[]) => EventSocialState | undefined;
-  toggleEventLike: (eventId: string, eventTitle: string) => void;
-  toggleEventSave: (eventId: string, eventTitle: string) => void;
-  setEventPlanStatus: (eventId: string, eventTitle: string, status: EventPlanStatus) => void;
-  setEventPlanNote: (eventId: string, note: string) => void;
-  addEventComment: (eventId: string, eventTitle: string, text: string) => { ok: boolean; error?: string };
-  addActivity: (item: Omit<ActivityItem, 'id' | 'createdAt' | 'time'>) => void;
+  toggleEventLike: (eventId: string, eventTitle: string) => Promise<void>;
+  toggleEventSave: (eventId: string, eventTitle: string) => Promise<void>;
+  setEventPlanStatus: (eventId: string, eventTitle: string, status: EventPlanStatus) => Promise<void>;
+  setEventPlanNote: (eventId: string, note: string) => Promise<void>;
+  addEventComment: (eventId: string, eventTitle: string, text: string) => Promise<{ ok: boolean; error?: string }>;
+  addActivity: (item: Omit<ActivityItem, 'id' | 'createdAt' | 'time'>) => Promise<void>;
   notifications: ActivityItem[];
   unreadCount: number;
-  markAllRead: () => void;
+  isUsingCachedData: boolean;
+  isOffline: boolean;
+  error: string | null;
+  markAllRead: () => Promise<void>;
   getLikedEvents: () => { eventId: string; eventTitle: string; likedBy: SocialUser[] }[];
   getPlannedEvents: () => {
     eventId: string;
@@ -62,8 +67,8 @@ const emptySocialState: EventSocialState = {
   planNote: '',
 };
 
-function timeAgo(timestamp: number) {
-  const diffMinutes = Math.max(1, Math.round((Date.now() - timestamp) / 60000));
+function timeAgo(timestamp: string) {
+  const diffMinutes = Math.max(1, Math.round((Date.now() - new Date(timestamp).getTime()) / 60000));
   if (diffMinutes < 60) {
     return `${diffMinutes}m ago`;
   }
@@ -79,11 +84,14 @@ function timeAgo(timestamp: number) {
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
 export function SocialProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated } = useUser();
+  const { isAuthenticated } = useUser();
   const { events } = useEvents();
   const [socialState, setSocialState] = useState<SocialStateMap>({});
   const [notifications, setNotifications] = useState<ActivityItem[]>([]);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [isUsingCachedData, setIsUsingCachedData] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -97,11 +105,10 @@ export function SocialProvider({ children }: { children: ReactNode }) {
 
         const parsed = JSON.parse(rawState) as {
           socialState?: SocialStateMap;
-          notifications?: ActivityItem[];
         };
 
         setSocialState(parsed.socialState ?? {});
-        setNotifications(Array.isArray(parsed.notifications) ? parsed.notifications : []);
+        setIsUsingCachedData(Object.keys(parsed.socialState ?? {}).length > 0);
       } catch {
         await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
       } finally {
@@ -123,18 +130,20 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ socialState, notifications })).catch(() => {});
-  }, [hasHydrated, notifications, socialState]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ socialState })).catch(() => {});
+  }, [hasHydrated, socialState]);
 
   const refreshSocial = async () => {
     if (!isAuthenticated) {
       setSocialState({});
+      setNotifications([]);
       return;
     }
 
-    const [remoteSocial, remotePlans] = await Promise.all([
+    const [remoteSocial, remotePlans, remoteNotifications] = await Promise.all([
       fetchEventSocialMap(),
       fetchPlannedEventsRemote(),
+      fetchNotifications(),
     ]);
 
     const nextState: SocialStateMap = { ...remoteSocial };
@@ -147,6 +156,21 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       };
     }
     setSocialState(nextState);
+    setNotifications(
+      remoteNotifications.items.map((item) => ({
+        id: item.id,
+        user: item.actor_username,
+        avatarUri: item.actor_avatar_uri,
+        text: item.message,
+        time: timeAgo(item.created_at),
+        icon: item.icon,
+        color: item.color,
+        createdAt: item.created_at,
+      }))
+    );
+    setIsUsingCachedData(false);
+    setIsOffline(false);
+    setError(null);
   };
 
   useEffect(() => {
@@ -156,28 +180,39 @@ export function SocialProvider({ children }: { children: ReactNode }) {
 
     if (!isAuthenticated) {
       setSocialState({});
+      setNotifications([]);
       return;
     }
 
-    void refreshSocial().catch(() => {});
+    void refreshSocial().catch((refreshError) => {
+      setIsOffline(true);
+      setError(refreshError instanceof Error ? refreshError.message : 'Unable to refresh activity right now.');
+    });
   }, [hasHydrated, isAuthenticated]);
 
   const value = useMemo<SocialContextType>(() => {
-    const pushNotification = (item: Omit<ActivityItem, 'id' | 'createdAt' | 'time'>) => {
-      const createdAt = Date.now();
-      setNotifications((prev) => [
-        {
-          ...item,
-          id: `${item.icon}-${createdAt}`,
-          createdAt,
-          time: timeAgo(createdAt),
-        },
-        ...prev,
-      ]);
-    };
-
     return {
-      addActivity: pushNotification,
+      addActivity: async (item) => {
+        const created = await createActivityNotification({
+          title: item.text,
+          message: item.text,
+          icon: item.icon,
+          color: item.color,
+        });
+        setNotifications((prev) => [
+          {
+            id: created.id,
+            user: created.actor_username,
+            avatarUri: created.actor_avatar_uri,
+            text: created.message,
+            time: timeAgo(created.created_at),
+            icon: created.icon,
+            color: created.color,
+            createdAt: created.created_at,
+          },
+          ...prev,
+        ]);
+      },
       getEventSocial: (eventId) => {
         if (!eventId || Array.isArray(eventId)) {
           return undefined;
@@ -185,83 +220,49 @@ export function SocialProvider({ children }: { children: ReactNode }) {
 
         return socialState[eventId];
       },
-      toggleEventLike: (eventId, eventTitle) => {
-        void toggleEventLikeRemote(eventId)
-          .then((nextState) => {
-            setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
-            pushNotification({
-              user: user.username,
-              text: `${nextState.liked ? 'liked' : 'removed a like from'} ${eventTitle}`,
-              icon: 'heart',
-              color: '#e45b5b',
-            });
-          })
-          .catch(() => {});
+      toggleEventLike: async (eventId, _eventTitle) => {
+        const nextState = await toggleEventLikeRemote(eventId);
+        setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
       },
-      toggleEventSave: (eventId, eventTitle) => {
-        void toggleEventSaveRemote(eventId)
-          .then((nextState) => {
-            setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
-            pushNotification({
-              user: user.username,
-              text: `${nextState.saved ? 'saved' : 'unsaved'} ${eventTitle}`,
-              icon: 'bookmark-outline',
-              color: '#f47b20',
-            });
-          })
-          .catch(() => {});
+      toggleEventSave: async (eventId, _eventTitle) => {
+        const nextState = await toggleEventSaveRemote(eventId);
+        setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
       },
-      setEventPlanStatus: (eventId, eventTitle, status) => {
-        void setEventPlanStatusRemote(eventId, status)
-          .then((nextState) => {
-            setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
-            pushNotification({
-              user: user.username,
-              text:
-                status === 'going'
-                  ? `is going to ${eventTitle}`
-                  : status === 'maybe'
-                    ? `added ${eventTitle} as maybe`
-                    : `removed ${eventTitle} from the night plan`,
-              icon: status === 'going' ? 'calendar' : status === 'maybe' ? 'time-outline' : 'close-circle-outline',
-              color: status === 'going' ? '#0f766e' : status === 'maybe' ? '#f47b20' : '#857a72',
-            });
-          })
-          .catch(() => {});
+      setEventPlanStatus: async (eventId, _eventTitle, status) => {
+        const nextState = await setEventPlanStatusRemote(eventId, status);
+        setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
       },
-      setEventPlanNote: (eventId, note) => {
-        void setEventPlanNoteRemote(eventId, note)
-          .then((nextState) => {
-            setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
-          })
-          .catch(() => {});
+      setEventPlanNote: async (eventId, note) => {
+        const nextState = await setEventPlanNoteRemote(eventId, note);
+        setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
       },
-      addEventComment: (eventId, eventTitle, text) => {
+      addEventComment: async (eventId, _eventTitle, text) => {
         const trimmed = text.trim();
         if (!trimmed) {
           return { ok: false, error: 'Write a comment before sending.' };
         }
 
-        void addEventCommentRemote(eventId, trimmed)
-          .then((nextState) => {
-            setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
-            pushNotification({
-              user: user.username,
-              text: `commented on ${eventTitle}`,
-              icon: 'chatbubble-ellipses-outline',
-              color: '#0f766e',
-            });
-          })
-          .catch(() => {});
-
-        return { ok: true };
+        try {
+          const nextState = await addEventCommentRemote(eventId, trimmed);
+          setSocialState((prev) => ({ ...prev, [eventId]: nextState }));
+          return { ok: true };
+        } catch (commentError) {
+          return {
+            ok: false,
+            error: commentError instanceof Error ? commentError.message : 'Unable to add that comment right now.',
+          };
+        }
       },
       notifications: notifications.map((item) => ({
         ...item,
         time: timeAgo(item.createdAt),
       })),
       unreadCount: notifications.length,
-      markAllRead: () => {
+      isUsingCachedData,
+      isOffline,
+      error,
+      markAllRead: async () => {
+        await markNotificationsRead();
         setNotifications([]);
       },
       getLikedEvents: () =>
@@ -283,7 +284,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           .filter((entry) => entry.saved || entry.planStatus),
       refreshSocial,
     };
-  }, [events, notifications, socialState, user.username]);
+  }, [error, events, isOffline, isUsingCachedData, notifications, socialState]);
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;
 }

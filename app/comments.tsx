@@ -24,12 +24,12 @@ export default function CommentsScreen() {
   const social = getEventSocial(eventId);
   const comments = useMemo(() => social?.comments ?? [], [social?.comments]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!event?.id) {
       return;
     }
 
-    const result = addEventComment(event.id, event.title, text);
+    const result = await addEventComment(event.id, event.title, text);
 
     if (result.ok) {
       setText('');
@@ -90,7 +90,7 @@ export default function CommentsScreen() {
             value={text}
             onChangeText={setText}
           />
-          <TouchableOpacity style={styles.send} onPress={handleSend}>
+          <TouchableOpacity style={styles.send} onPress={() => void handleSend()}>
             <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
         </View>

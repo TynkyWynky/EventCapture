@@ -2,6 +2,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
 import { Colors, Radius, Typography } from '@/constants/theme';
+import { useLanguage } from '@/context/LanguageContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,12 +13,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, user } = useUser();
+  const { signIn, user, isBusy } = useUser();
+  const { t } = useLanguage();
   const [email, setEmail] = useState(user.email);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleSignIn = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError(t('loginEmptyError'));
+      return;
+    }
+
     const result = await signIn(email, password);
 
     if (!result.ok) {
@@ -42,9 +49,9 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.copy}>
-                <Text style={styles.title}>Welcome back</Text>
+                <Text style={styles.title}>{t('loginTitle')}</Text>
                 <Text style={styles.subtitle}>
-                  Sign in to keep capturing events and moments that matter.
+                  {t('loginSubtitle')}
                 </Text>
               </View>
 
@@ -52,7 +59,7 @@ export default function LoginScreen() {
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput
                   value={email}
-                  placeholder="Email"
+                  placeholder={t('loginEmailPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   autoCapitalize="none"
@@ -65,7 +72,7 @@ export default function LoginScreen() {
                 <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
                 <TextInput
                   value={password}
-                  placeholder="Password"
+                  placeholder={t('loginPasswordPlaceholder')}
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   secureTextEntry
@@ -74,16 +81,26 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.metaRow}>
-                <Text style={styles.metaText}>Secure backend email and password sign-in</Text>
-                <TouchableOpacity onPress={() => router.push('/auth/reset')}>
-                  <Text style={styles.metaLink}>Forgot password?</Text>
+                <Text style={styles.metaText}>{t('loginMetaText')}</Text>
+                <TouchableOpacity disabled={isBusy} onPress={() => router.push('/auth/reset')}>
+                  <Text style={styles.metaLink}>{t('loginForgotPassword')}</Text>
                 </TouchableOpacity>
               </View>
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-              <AppButton label="Sign in" onPress={() => void handleSignIn()} size="lg" />
-              <AppButton label="Create account" variant="secondary" onPress={() => router.push('/profile/create')} />
+              <AppButton
+                label={isBusy ? t('loginSubmitBusy') : t('loginSubmit')}
+                onPress={() => void handleSignIn()}
+                size="lg"
+                disabled={isBusy}
+              />
+              <AppButton
+                label={t('loginCreateAccount')}
+                variant="secondary"
+                onPress={() => router.push('/profile/create')}
+                disabled={isBusy}
+              />
             </SurfaceCard>
           </ScrollView>
         </KeyboardAvoidingView>

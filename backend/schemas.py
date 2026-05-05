@@ -100,6 +100,7 @@ class UserProfileResponse(AppUserResponse):
     city: str
     email: str
     role: str
+    crown_count: int = 0
     created_at: str
     updated_at: str
 
@@ -141,6 +142,20 @@ class ChangePasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     email: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ResetPasswordRequestPayload(BaseModel):
+    email: str
+
+
+class ResetPasswordRequestResponse(BaseModel):
+    message: str
+    reset_token: str | None = None
+
+
+class ResetPasswordConfirmRequest(BaseModel):
+    token: str = Field(min_length=12, max_length=512)
     new_password: str = Field(min_length=8, max_length=128)
 
 
@@ -229,6 +244,8 @@ class PostPayload(BaseModel):
     likes: list[str] = Field(default_factory=list)
     comments: list[PostCommentResponse] = Field(default_factory=list)
     capture_id: str | None = None
+    crown_awarded: bool = False
+    crown_count: int | None = None
 
 
 class AddPostCommentRequest(BaseModel):
@@ -265,4 +282,57 @@ class AnalyzeCaptureResponse(DetectImageResponse):
 
 
 class MessageResponse(BaseModel):
+    message: str
+
+
+class RewardTransactionResponse(BaseModel):
+    id: str
+    amount: int
+    reason: str
+    source_type: str
+    source_id: str
+    created_at: str
+
+
+class RewardStateResponse(BaseModel):
+    crown_count: int
+    history: list[RewardTransactionResponse] = Field(default_factory=list)
+
+
+class NotificationItemResponse(BaseModel):
+    id: str
+    actor_username: str
+    actor_avatar_uri: str
+    title: str
+    message: str
+    icon: str
+    color: str
+    related_type: str | None = None
+    related_id: str | None = None
+    is_read: bool = False
+    created_at: str
+
+
+class NotificationListResponse(BaseModel):
+    items: list[NotificationItemResponse] = Field(default_factory=list)
+    unread_count: int = 0
+
+
+class ActivityNotificationRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    message: str = Field(min_length=1, max_length=500)
+    icon: str = Field(min_length=1, max_length=60)
+    color: str = Field(min_length=1, max_length=20)
+    related_type: str | None = Field(default=None, max_length=60)
+    related_id: str | None = Field(default=None, max_length=120)
+
+
+class SupportContactRequest(BaseModel):
+    subject: str = Field(min_length=3, max_length=160)
+    message: str = Field(min_length=10, max_length=4000)
+    email: str | None = Field(default=None, max_length=320)
+
+
+class SupportContactResponse(BaseModel):
+    id: str
     message: str

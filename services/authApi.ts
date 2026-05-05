@@ -9,6 +9,7 @@ export interface ApiUserProfile {
   email: string;
   avatar_uri: string;
   role: string;
+  crown_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -69,9 +70,20 @@ export async function changeAccountPassword(currentPassword: string, newPassword
   });
 }
 
-export async function resetAccountPassword(email: string, newPassword: string): Promise<void> {
-  await apiPostJson('/api/auth/reset-password', {
+export interface PasswordResetRequestResponse {
+  message: string;
+  reset_token?: string | null;
+}
+
+export async function requestPasswordReset(email: string): Promise<PasswordResetRequestResponse> {
+  return apiPostJson<PasswordResetRequestResponse>('/api/auth/reset-password/request', {
     email,
+  }, 'POST', false);
+}
+
+export async function resetAccountPassword(token: string, newPassword: string): Promise<void> {
+  await apiPostJson('/api/auth/reset-password/confirm', {
+    token,
     new_password: newPassword,
   }, 'POST', false);
 }

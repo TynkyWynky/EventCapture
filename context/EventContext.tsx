@@ -23,6 +23,9 @@ interface EventContextType {
   events: EventRecord[];
   featuredEventId: string;
   isLoading: boolean;
+  isUsingCachedData: boolean;
+  isOffline: boolean;
+  error: string | null;
   createEvent: (input: CreateEventInput) => Promise<EventRecord>;
   updateEvent: (eventId: string, updates: Partial<EventRecord>) => Promise<EventRecord | undefined>;
   deleteEvent: (eventId: string) => Promise<void>;
@@ -97,6 +100,9 @@ export function EventProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUsingCachedData, setIsUsingCachedData] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -106,7 +112,9 @@ export function EventProvider({ children }: { children: ReactNode }) {
         if (!isMounted) {
           return;
         }
-        setEvents(parseStoredEvents(storedEvents));
+        const cachedEvents = parseStoredEvents(storedEvents);
+        setEvents(cachedEvents);
+        setIsUsingCachedData(cachedEvents.length > 0);
       } finally {
         if (isMounted) {
           setHasHydrated(true);
@@ -133,6 +141,13 @@ export function EventProvider({ children }: { children: ReactNode }) {
     try {
       const remoteEvents = await fetchRemoteEvents();
       setEvents(remoteEvents);
+      setIsUsingCachedData(false);
+      setIsOffline(false);
+      setError(null);
+    } catch (refreshError) {
+      setIsOffline(true);
+      setError(refreshError instanceof Error ? refreshError.message : 'Unable to load events right now.');
+      throw refreshError;
     } finally {
       setIsLoading(false);
     }
@@ -142,9 +157,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
     if (!hasHydrated) {
       return;
     }
-    void refreshEvents().catch(() => {
-      setIsLoading(false);
-    });
+    void refreshEvents().catch(() => {});
   }, [hasHydrated]);
 
   const value = useMemo<EventContextType>(() => {
@@ -154,6 +167,9 @@ export function EventProvider({ children }: { children: ReactNode }) {
       events,
       featuredEventId,
       isLoading,
+      isUsingCachedData,
+      isOffline,
+      error,
       createEvent: async (input) => {
         if (!isAuthenticated) {
           throw new Error('Sign in to create an event.');
@@ -199,6 +215,9 @@ export function EventProvider({ children }: { children: ReactNode }) {
 
         const persistedEvent = await upsertRemoteEvent(draftEvent);
         setEvents((prev) => mergeEventCollections([persistedEvent], prev.filter((item) => item.id !== persistedEvent.id)));
+        setIsUsingCachedData(false);
+        setIsOffline(false);
+        setError(null);
         return persistedEvent;
       },
       updateEvent: async (eventId, updates) => {
@@ -210,11 +229,17 @@ export function EventProvider({ children }: { children: ReactNode }) {
         const nextEvent = { ...current, ...updates };
         const persistedEvent = await upsertRemoteEvent(nextEvent);
         setEvents((prev) => mergeEventCollections([persistedEvent], prev.filter((event) => event.id !== eventId)));
+        setIsUsingCachedData(false);
+        setIsOffline(false);
+        setError(null);
         return persistedEvent;
       },
       deleteEvent: async (eventId) => {
         await deleteRemoteEvent(eventId);
         setEvents((prev) => prev.filter((event) => event.id !== eventId));
+        setIsUsingCachedData(false);
+        setIsOffline(false);
+        setError(null);
       },
       getEventById: (eventId) => {
         if (!eventId || Array.isArray(eventId)) {
@@ -225,7 +250,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
       },
       refreshEvents,
     };
-  }, [events, isAuthenticated, isLoading, user]);
+  }, [error, events, isAuthenticated, isLoading, isOffline, isUsingCachedData, user]);
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 }

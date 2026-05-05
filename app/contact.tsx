@@ -5,6 +5,8 @@ import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useUser } from '@/context/UserContext';
+import { submitSupportContact } from '@/services/supportApi';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput } from 'react-native';
@@ -13,25 +15,44 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function ContactScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useUser();
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [status, setStatus] = useState<'idle' | 'error' | 'success'>('idle');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { t } = useLanguage();
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!subject.trim() || !message.trim()) {
       setStatus('error');
       return;
     }
 
-    setStatus('success');
-    setSubject('');
-    setMessage('');
-    showToast({
-      tone: 'success',
-      title: t('contactToastTitle'),
-      message: t('contactToastMsg'),
-    });
+    setIsSubmitting(true);
+    try {
+      await submitSupportContact({
+        subject: subject.trim(),
+        message: message.trim(),
+        email: user.email,
+      });
+      setStatus('success');
+      setSubject('');
+      setMessage('');
+      showToast({
+        tone: 'success',
+        title: t('contactToastTitle'),
+        message: t('contactToastMsg'),
+      });
+    } catch {
+      setStatus('error');
+      showToast({
+        tone: 'error',
+        title: t('contactErrTitle'),
+        message: t('contactErrMsg'),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -89,7 +110,7 @@ export default function ContactScreen() {
             onChangeText={setMessage}
           />
 
-          <AppButton label={t('contactBtn')} onPress={handleSend} />
+          <AppButton label={isSubmitting ? 'Sending...' : t('contactBtn')} onPress={() => void handleSend()} />
         </SurfaceCard>
       </ScrollView>
     </SafeAreaView>

@@ -10,11 +10,12 @@ import base64
 import json
 import logging
 import time
+import uuid
 from pathlib import Path
 
 import cv2
 import numpy as np
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +37,9 @@ try:
         authenticate_user,
         change_user_password,
         create_capture,
+        create_activity_notification,
+        create_password_reset_token,
+        create_support_request,
         create_session,
         create_user,
         deactivate_user,
@@ -43,16 +47,21 @@ try:
         delete_post,
         delete_session,
         get_event_social_map,
+        get_reward_state,
+        get_unread_notification_count,
         get_user_by_email,
         get_user_by_id,
         get_user_by_session_token,
         init_database,
+        list_notifications,
         list_captures,
         list_events,
         list_planned_events,
         list_posts,
         list_users,
+        mark_all_notifications_read,
         reset_user_password,
+        consume_password_reset_token,
         set_event_plan_note,
         set_event_plan_status,
         toggle_event_like,
@@ -64,8 +73,10 @@ try:
         database_exists,
     )
     from .detector import DrinkDetector
+    from .mailer import log_dev_reset_token, password_reset_delivery_ready, send_password_reset_email
     from .schemas import (
         AddEventCommentRequest,
+        ActivityNotificationRequest,
         AddPostCommentRequest,
         AnalyzeCaptureResponse,
         AuthTokenResponse,
@@ -84,10 +95,18 @@ try:
         HealthResponse,
         LoginRequest,
         MessageResponse,
+        NotificationItemResponse,
+        NotificationListResponse,
         PostPayload,
         RegisterRequest,
+        ResetPasswordConfirmRequest,
+        ResetPasswordRequestPayload,
+        ResetPasswordRequestResponse,
         ResetPasswordRequest,
+        RewardStateResponse,
         StatusResponse,
+        SupportContactRequest,
+        SupportContactResponse,
         UpdateProfileRequest,
         UserProfileResponse,
     )
@@ -100,6 +119,9 @@ except ImportError:
         authenticate_user,
         change_user_password,
         create_capture,
+        create_activity_notification,
+        create_password_reset_token,
+        create_support_request,
         create_session,
         create_user,
         deactivate_user,
@@ -107,16 +129,21 @@ except ImportError:
         delete_post,
         delete_session,
         get_event_social_map,
+        get_reward_state,
+        get_unread_notification_count,
         get_user_by_email,
         get_user_by_id,
         get_user_by_session_token,
         init_database,
+        list_notifications,
         list_captures,
         list_events,
         list_planned_events,
         list_posts,
         list_users,
+        mark_all_notifications_read,
         reset_user_password,
+        consume_password_reset_token,
         set_event_plan_note,
         set_event_plan_status,
         toggle_event_like,
@@ -128,8 +155,10 @@ except ImportError:
         database_exists,
     )
     from detector import DrinkDetector
+    from mailer import log_dev_reset_token, password_reset_delivery_ready, send_password_reset_email
     from schemas import (
         AddEventCommentRequest,
+        ActivityNotificationRequest,
         AddPostCommentRequest,
         AnalyzeCaptureResponse,
         AuthTokenResponse,
@@ -148,10 +177,18 @@ except ImportError:
         HealthResponse,
         LoginRequest,
         MessageResponse,
+        NotificationItemResponse,
+        NotificationListResponse,
         PostPayload,
         RegisterRequest,
+        ResetPasswordConfirmRequest,
+        ResetPasswordRequestPayload,
+        ResetPasswordRequestResponse,
         ResetPasswordRequest,
+        RewardStateResponse,
         StatusResponse,
+        SupportContactRequest,
+        SupportContactResponse,
         UpdateProfileRequest,
         UserProfileResponse,
     )
@@ -160,6 +197,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.title, version=settings.version)
+
+if settings.environment.lower() == "production" and settings.secret_key == "change-me-for-production":
+    raise RuntimeError("EVENTCAPTURE_SECRET_KEY must be set in production.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -179,6 +219,28 @@ detector = DrinkDetector(
 last_debug_snapshot = DebugSnapshotResponse()
 
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    started_at = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Unhandled backend error", extra={"request_id": request_id, "path": request.url.path})
+        raise
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 1)
+    response.headers["X-Request-Id"] = request_id
+    logger.info(
+        "%s %s -> %s (%.1f ms) [%s]",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        request_id,
+    )
+    return response
 
 
 def _user_response(user: dict[str, object]) -> UserProfileResponse:
@@ -206,6 +268,16 @@ def get_admin_user(current_user: dict[str, object] = Depends(get_current_user)) 
     if str(current_user["role"]) != "admin":
         raise HTTPException(status_code=403, detail="Admin access is required.")
     return current_user
+
+
+def get_optional_current_user(authorization: str | None = Header(default=None)) -> dict[str, object] | None:
+    if not authorization:
+        return None
+    try:
+        token = _extract_bearer_token(authorization)
+    except HTTPException:
+        return None
+    return get_user_by_session_token(token)
 
 
 @app.exception_handler(PermissionError)
@@ -487,18 +559,77 @@ async def change_password(payload: ChangePasswordRequest, current_user: dict[str
     return MessageResponse(message="Password updated successfully.")
 
 
-@app.post("/api/auth/reset-password", response_model=MessageResponse)
-async def reset_password(payload: ResetPasswordRequest):
-    if not settings.allow_insecure_password_reset and not settings.debug:
-        raise HTTPException(status_code=501, detail="Password reset is not configured for this environment.")
-    if not reset_user_password(str(payload.email), payload.new_password):
-        raise HTTPException(status_code=404, detail="No account matches that email address.")
+@app.post("/api/auth/reset-password/request", response_model=ResetPasswordRequestResponse)
+async def request_password_reset(payload: ResetPasswordRequestPayload):
+    delivery_ready = password_reset_delivery_ready()
+    if settings.environment.lower() == "production" and not delivery_ready:
+        raise HTTPException(status_code=503, detail="Password reset delivery is not configured for this environment.")
+
+    token = create_password_reset_token(str(payload.email), settings.password_reset_token_ttl_minutes)
+    response = ResetPasswordRequestResponse(
+        message="If an account matches that email, password reset instructions have been prepared."
+    )
+    if token and delivery_ready:
+        try:
+            send_password_reset_email(
+                recipient=str(payload.email).strip().lower(),
+                reset_token=token,
+                expires_minutes=settings.password_reset_token_ttl_minutes,
+            )
+        except Exception:
+            logger.exception("Password reset delivery failed")
+            raise HTTPException(status_code=503, detail="Password reset delivery is temporarily unavailable.")
+
+    if settings.debug and settings.expose_dev_reset_token and token:
+        log_dev_reset_token(str(payload.email), token)
+        response.reset_token = token
+    return response
+
+
+@app.post("/api/auth/reset-password/confirm", response_model=MessageResponse)
+async def confirm_password_reset(payload: ResetPasswordConfirmRequest):
+    if not consume_password_reset_token(payload.token, payload.new_password):
+        raise HTTPException(status_code=400, detail="This password reset link is invalid or has expired.")
     return MessageResponse(message="Password reset successfully.")
 
 
 @app.get("/api/users", response_model=list[UserProfileResponse])
 async def get_users(_: dict[str, object] = Depends(get_admin_user)):
     return [_user_response(user) for user in list_users()]
+
+
+@app.get("/api/rewards/me", response_model=RewardStateResponse)
+async def get_rewards(current_user: dict[str, object] = Depends(get_current_user)):
+    return RewardStateResponse(**get_reward_state(str(current_user["id"])))
+
+
+@app.get("/api/notifications", response_model=NotificationListResponse)
+async def get_notifications(current_user: dict[str, object] = Depends(get_current_user), limit: int = 50):
+    user_id = str(current_user["id"])
+    return NotificationListResponse(
+        items=[NotificationItemResponse(**item) for item in list_notifications(user_id, limit=limit)],
+        unread_count=get_unread_notification_count(user_id),
+    )
+
+
+@app.post("/api/notifications/read-all", response_model=MessageResponse)
+async def read_all_notifications(current_user: dict[str, object] = Depends(get_current_user)):
+    mark_all_notifications_read(str(current_user["id"]))
+    return MessageResponse(message="Notifications marked as read.")
+
+@app.post("/api/notifications/activity", response_model=NotificationItemResponse)
+async def create_activity(payload: ActivityNotificationRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    created = create_activity_notification(
+        str(current_user["id"]),
+        actor=current_user,
+        title=payload.title,
+        message=payload.message,
+        icon=payload.icon,
+        color=payload.color,
+        related_type=payload.related_type,
+        related_id=payload.related_id,
+    )
+    return NotificationItemResponse(**created)
 
 
 @app.delete("/api/users/{user_id}", response_model=MessageResponse)
@@ -655,6 +786,22 @@ async def analyze_and_store_capture(
 async def get_captures(request: Request, limit: int = 20, _: dict[str, object] = Depends(get_current_user)):
     captures = list_captures(limit=limit)
     return [_serialize_capture_list_item(request, capture) for capture in captures]
+
+
+@app.post("/support/contact", response_model=SupportContactResponse)
+@app.post("/api/support/contact", response_model=SupportContactResponse)
+async def contact_support(payload: SupportContactRequest, current_user: dict[str, object] | None = Depends(get_optional_current_user)):
+    fallback_email = str(current_user["email"]) if current_user is not None else ""
+    email = (payload.email or fallback_email).strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="An email address is required so support can reply.")
+    created = create_support_request(
+        email=email,
+        subject=payload.subject,
+        message=payload.message,
+        user_id=str(current_user["id"]) if current_user is not None else None,
+    )
+    return SupportContactResponse(**created)
 
 
 @app.websocket("/ws/detect")

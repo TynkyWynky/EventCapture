@@ -33,8 +33,17 @@ export default function NotificationsScreen() {
           mode="compact"
           rightAction={
             <TouchableOpacity style={styles.iconButton} onPress={() => {
-              markAllRead();
-              showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
+              void markAllRead()
+                .then(() => {
+                  showToast({ tone: 'success', title: t('notifToastTitle'), message: t('notifToastMsg') });
+                })
+                .catch((error) => {
+                  showToast({
+                    tone: 'error',
+                    title: t('notifTitle'),
+                    message: error instanceof Error ? error.message : 'Unable to mark notifications as read.',
+                  });
+                });
             }}>
               <Ionicons name="checkmark-done-outline" size={20} color="#1f1a17" />
             </TouchableOpacity>

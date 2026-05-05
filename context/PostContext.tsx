@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useEffect, useMemo, useState, useContext, ReactNode } from 'react';
 
 import { getActiveCrownReward, getCrownLevelProgress } from '@/constants/crowns';
-import { Post, PostComment, PostUser } from '@/constants/posts';
+import { Post, PostUser } from '@/constants/posts';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import {
@@ -17,21 +17,18 @@ interface PostContextType {
   posts: Post[];
   crowns: number;
   isLoading: boolean;
-  addPost: (post: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => void;
-  togglePostLike: (postId: string) => void;
-  addPostComment: (postId: string, user: PostUser, text: string) => { ok: boolean; error?: string };
-  deletePost: (postId: string) => void;
+  isUsingCachedData: boolean;
+  isOffline: boolean;
+  error: string | null;
+  addPost: (post: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => Promise<{ ok: boolean; error?: string; crownAwarded?: boolean }>;
+  togglePostLike: (postId: string) => Promise<void>;
+  addPostComment: (postId: string, user: PostUser, text: string) => Promise<{ ok: boolean; error?: string }>;
+  deletePost: (postId: string) => Promise<void>;
   refreshPosts: () => Promise<void>;
 }
 
-interface StoredPostState {
-  posts: Post[];
-  crowns: number;
-}
-
 const PostContext = createContext<PostContextType | undefined>(undefined);
-const STORAGE_KEY = 'eventcapture.post-state.cache';
-const DEFAULT_CROWNS = 0;
+const STORAGE_KEY = 'eventcapture.post-cache';
 
 function isValidPost(value: unknown): value is Post {
   if (!value || typeof value !== 'object') {
@@ -53,24 +50,16 @@ function isValidPost(value: unknown): value is Post {
   );
 }
 
-function parseStoredState(rawValue: string | null): StoredPostState {
+function parseStoredState(rawValue: string | null): Post[] {
   if (!rawValue) {
-    return { posts: [], crowns: DEFAULT_CROWNS };
+    return [];
   }
 
   try {
-    const parsedValue = JSON.parse(rawValue) as Partial<StoredPostState>;
-    const parsedPosts = Array.isArray(parsedValue.posts)
-      ? parsedValue.posts.filter(isValidPost)
-      : [];
-    const parsedCrowns =
-      typeof parsedValue.crowns === 'number' && Number.isFinite(parsedValue.crowns)
-        ? parsedValue.crowns
-        : DEFAULT_CROWNS;
-
-    return { posts: parsedPosts, crowns: parsedCrowns };
+    const parsedValue = JSON.parse(rawValue) as unknown;
+    return Array.isArray(parsedValue) ? parsedValue.filter(isValidPost) : [];
   } catch {
-    return { posts: [], crowns: DEFAULT_CROWNS };
+    return [];
   }
 }
 
@@ -94,24 +83,27 @@ function mergePostCollections(...collections: Post[][]): Post[] {
 
 export function PostProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
-  const { user } = useUser();
+  const { user, refreshCurrentUser } = useUser();
   const [posts, setPosts] = useState<Post[]>([]);
-  const [crowns, setCrowns] = useState(DEFAULT_CROWNS);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUsingCachedData, setIsUsingCachedData] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastAwardedEventTitle, setLastAwardedEventTitle] = useState<string | null>(null);
+  const crowns = user.crownCount;
 
   useEffect(() => {
     let isMounted = true;
     const hydrate = async () => {
       try {
         const storedState = await AsyncStorage.getItem(STORAGE_KEY);
-        const parsedState = parseStoredState(storedState);
+        const parsedPosts = parseStoredState(storedState);
         if (!isMounted) {
           return;
         }
-        setPosts(parsedState.posts);
-        setCrowns(parsedState.crowns);
+        setPosts(parsedPosts);
+        setIsUsingCachedData(parsedPosts.length > 0);
       } finally {
         if (isMounted) {
           setHasHydrated(true);
@@ -130,14 +122,21 @@ export function PostProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ posts, crowns })).catch(() => {});
-  }, [crowns, hasHydrated, posts]);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(posts)).catch(() => {});
+  }, [hasHydrated, posts]);
 
   const refreshPosts = useCallback(async () => {
     setIsLoading(true);
     try {
       const remotePosts = await fetchRemotePosts();
       setPosts(remotePosts as Post[]);
+      setIsUsingCachedData(false);
+      setIsOffline(false);
+      setError(null);
+    } catch (refreshError) {
+      setIsOffline(true);
+      setError(refreshError instanceof Error ? refreshError.message : 'Unable to load posts right now.');
+      throw refreshError;
     } finally {
       setIsLoading(false);
     }
@@ -148,9 +147,7 @@ export function PostProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void refreshPosts().catch(() => {
-      setIsLoading(false);
-    });
+    void refreshPosts().catch(() => {});
   }, [hasHydrated, refreshPosts]);
 
   useEffect(() => {
@@ -176,111 +173,96 @@ export function PostProvider({ children }: { children: ReactNode }) {
     setLastAwardedEventTitle(null);
   }, [crowns, hasHydrated, lastAwardedEventTitle, showToast]);
 
-  const addPost = useCallback((newPostData: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => {
-    const newPost: Post = {
+  const addPost = useCallback(async (newPostData: Omit<Post, 'id' | 'date' | 'likes' | 'comments'>) => {
+    const pendingPost: Post = {
       id: Date.now().toString(),
       date: new Date().toLocaleDateString('en-GB'),
       ...newPostData,
       likes: [],
       comments: [],
     };
+    try {
+      const persistedPost = await upsertRemotePost(pendingPost);
+      setPosts((prev) =>
+        mergePostCollections([persistedPost as Post], prev.filter((post) => post.id !== pendingPost.id && post.id !== persistedPost.id))
+      );
+      setIsUsingCachedData(false);
+      setIsOffline(false);
+      setError(null);
 
-    setPosts((prev) => mergePostCollections([newPost], prev));
-    void upsertRemotePost(newPost)
-      .then((persistedPost) => {
-        setPosts((prev) =>
-          mergePostCollections([persistedPost as Post], prev.filter((post) => post.id !== newPost.id && post.id !== persistedPost.id))
-        );
-      })
-      .catch(() => {
-        showToast({
-          tone: 'error',
-          title: 'Post sync failed',
-          message: 'Your post is only stored locally until the backend is reachable again.',
-        });
-      });
+      if (persistedPost.crownCount !== undefined) {
+        if (persistedPost.crownAwarded) {
+          setLastAwardedEventTitle(newPostData.eventTitle ?? 'your latest capture');
+        }
+        await refreshCurrentUser();
+      }
 
-    if (newPostData.isBeerFinished) {
-      setLastAwardedEventTitle(newPostData.eventTitle ?? 'your latest capture');
-      setCrowns((prev) => prev + 1);
+      return { ok: true, crownAwarded: Boolean(persistedPost.crownAwarded) };
+    } catch (addError) {
+      setIsOffline(true);
+      setError(addError instanceof Error ? addError.message : 'Unable to publish this post right now.');
+      return {
+        ok: false,
+        error: addError instanceof Error ? addError.message : 'Unable to publish this post right now.',
+      };
     }
-  }, [showToast]);
+  }, [refreshCurrentUser]);
 
-  const togglePostLike = useCallback((postId: string) => {
-    const previousPosts = posts;
+  const togglePostLike = useCallback(async (postId: string) => {
+    const persistedPost = await toggleRemotePostLike(postId);
     setPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              likes: post.likes.includes(user.username)
-                ? post.likes.filter((entry) => entry !== user.username)
-                : [...post.likes, user.username],
-            }
-          : post
-      )
+      mergePostCollections([persistedPost as Post], prev.filter((post) => post.id !== postId))
     );
+    setIsUsingCachedData(false);
+    setIsOffline(false);
+    setError(null);
+  }, []);
 
-    void toggleRemotePostLike(postId)
-      .then((persistedPost) => {
-        setPosts((prev) =>
-          mergePostCollections([persistedPost as Post], prev.filter((post) => post.id !== postId))
-        );
-      })
-      .catch(() => {
-        setPosts(previousPosts);
-      });
-  }, [posts, user.username]);
-
-  const addPostComment = useCallback((postId: string, user: PostUser, text: string) => {
+  const addPostComment = useCallback(async (postId: string, _user: PostUser, text: string) => {
     if (!text.trim()) {
       return { ok: false, error: 'Write a comment before sending.' };
     }
 
-    const newComment: PostComment = {
-      id: `comment-${postId}-${Date.now()}`,
-      user,
-      text: text.trim(),
-      time: 'Just now',
-    };
+    try {
+      const persistedPost = await addRemotePostComment(postId, text.trim());
+      setPosts((prev) =>
+        mergePostCollections([persistedPost as Post], prev.filter((post) => post.id !== postId))
+      );
+      setIsUsingCachedData(false);
+      setIsOffline(false);
+      setError(null);
+      return { ok: true };
+    } catch (commentError) {
+      const message = commentError instanceof Error ? commentError.message : 'The comment could not be saved.';
+      setIsOffline(true);
+      setError(message);
+      return { ok: false, error: message };
+    }
+  }, []);
 
-    setPosts((prev) =>
-      prev.map((post) => (post.id === postId ? { ...post, comments: [newComment, ...post.comments] } : post))
-    );
-
-    void addRemotePostComment(postId, text.trim())
-      .then((persistedPost) => {
-        setPosts((prev) =>
-          mergePostCollections([persistedPost as Post], prev.filter((post) => post.id !== postId))
-        );
-      })
-      .catch(() => {
-        showToast({
-          tone: 'error',
-          title: 'Comment sync failed',
-          message: 'The comment could not be saved to the backend.',
-        });
-      });
-
-    return { ok: true };
-  }, [showToast]);
-
-  const deletePost = useCallback((postId: string) => {
-    const previousPosts = posts;
+  const deletePost = useCallback(async (postId: string) => {
+    await deleteRemotePost(postId);
     setPosts((prev) => prev.filter((post) => post.id !== postId));
-    void deleteRemotePost(postId).catch(() => {
-      setPosts(previousPosts);
-      showToast({
-        tone: 'error',
-        title: 'Delete failed',
-        message: 'The backend rejected that delete request.',
-      });
-    });
-  }, [posts, showToast]);
+    setIsUsingCachedData(false);
+    setIsOffline(false);
+    setError(null);
+  }, []);
 
   const value = useMemo(
-    () => ({ posts, crowns, isLoading, addPost, togglePostLike, addPostComment, deletePost, refreshPosts }),
-    [posts, crowns, isLoading, addPost, togglePostLike, addPostComment, deletePost, refreshPosts]
+    () => ({
+      posts,
+      crowns,
+      isLoading,
+      isUsingCachedData,
+      isOffline,
+      error,
+      addPost,
+      togglePostLike,
+      addPostComment,
+      deletePost,
+      refreshPosts,
+    }),
+    [posts, crowns, isLoading, isUsingCachedData, isOffline, error, addPost, togglePostLike, addPostComment, deletePost, refreshPosts]
   );
 
   return (
