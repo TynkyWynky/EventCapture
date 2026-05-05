@@ -163,6 +163,7 @@ class EventPayload(BaseModel):
     id: str | None = None
     title: str
     short_title: str | None = None
+    source_url: str | None = None
     date: str
     full_date: str
     time: str

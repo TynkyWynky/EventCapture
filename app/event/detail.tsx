@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useLanguage } from '@/context/LanguageContext';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EventDetailScreen() {
@@ -24,6 +24,17 @@ export default function EventDetailScreen() {
   const social = getEventSocial(eventId);
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+
+  const handleOpenTickets = async () => {
+    if (!event?.sourceUrl) {
+      return;
+    }
+
+    const supported = await Linking.canOpenURL(event.sourceUrl);
+    if (supported) {
+      await Linking.openURL(event.sourceUrl);
+    }
+  };
 
   if (!event) {
     return (
@@ -260,7 +271,14 @@ export default function EventDetailScreen() {
             <Text style={styles.bottomPriceMeta}>{t('detailPerTicket')}</Text>
           </View>
 
-          <AppButton label={t('detailGetTicket')} style={styles.buyButton} />
+          <AppButton
+            label={t('detailGetTicket')}
+            style={styles.buyButton}
+            onPress={() => {
+              void handleOpenTickets();
+            }}
+            disabled={!event.sourceUrl}
+          />
         </View>
       </View>
     </SafeAreaView>

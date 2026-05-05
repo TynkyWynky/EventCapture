@@ -4,6 +4,7 @@ export interface EventRecord {
   id: string;
   title: string;
   shortTitle?: string;
+  sourceUrl?: string;
   date: string;
   fullDate: string;
   time: string;
@@ -258,6 +259,7 @@ export function areEventRecordsEqual(left: EventRecord, right: EventRecord): boo
     left.id === right.id &&
     left.title === right.title &&
     left.shortTitle === right.shortTitle &&
+    left.sourceUrl === right.sourceUrl &&
     left.date === right.date &&
     left.fullDate === right.fullDate &&
     left.time === right.time &&

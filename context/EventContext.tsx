@@ -51,6 +51,7 @@ function isValidEventRecord(value: unknown): value is EventRecord {
   return (
     typeof event.id === 'string' &&
     typeof event.title === 'string' &&
+    (typeof event.sourceUrl === 'string' || typeof event.sourceUrl === 'undefined') &&
     typeof event.date === 'string' &&
     typeof event.fullDate === 'string' &&
     typeof event.time === 'string' &&
@@ -210,6 +211,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
             .replace(/^-|-$/g, '')}-${Date.now().toString().slice(-6)}`,
           title: eventTitle,
           shortTitle: 'Freshly created event',
+          sourceUrl: undefined,
           date: input.date.trim() || 'TBD',
           fullDate: input.fullDate.trim() || input.date.trim() || 'Date to be confirmed',
           time: input.time.trim() || 'Time to be confirmed',

@@ -460,6 +460,27 @@ def find_hero_image(event: dict[str, Any]) -> str:
     return "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=1400&q=80"
 
 
+def find_source_link(event: dict[str, Any]) -> str:
+    for key in ("link", "url", "shareUrl", "canonicalUrl"):
+        value = clean_text(event.get(key))
+        if value:
+            return value
+
+    translation = get_translation(event)
+    for key in ("boxoffice_url", "agenda_url", "website", "link", "url"):
+        value = clean_text(translation.get(key))
+        if value:
+            return value
+
+    place_translation = get_place_translation(event)
+    for key in ("booking_url", "visit_url", "website"):
+        value = clean_text(place_translation.get(key))
+        if value:
+            return value
+
+    return ""
+
+
 def build_short_title(category_name: str) -> str:
     category_label = category_name.lower() if category_name else "city"
     return f"Official Brussels {category_label} pick"
@@ -649,6 +670,7 @@ def map_event_record(event: dict[str, Any], current_date: date) -> dict[str, Any
         "id": f"visit-brussels-{event_id}",
         "title": title,
         "shortTitle": build_short_title(category_name),
+        "sourceUrl": find_source_link(event),
         "date": format_short_date(start_date),
         "fullDate": format_full_date(start_date, end_date),
         "time": time_label,
@@ -681,6 +703,7 @@ def to_backend_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         "id": event["id"],
         "title": event["title"],
         "short_title": event.get("shortTitle"),
+        "source_url": event.get("sourceUrl"),
         "date": event["date"],
         "full_date": event["fullDate"],
         "time": event["time"],
