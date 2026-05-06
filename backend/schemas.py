@@ -1,4 +1,4 @@
-"""API schemas for the EventCapture backend."""
+"""API request and response models."""
 
 from __future__ import annotations
 
@@ -7,13 +7,11 @@ from pydantic import BaseModel, Field
 
 class HealthResponse(BaseModel):
     ok: bool
-    status: str
-    environment: str
-    version: str
     model_exists: bool
     custom_model_exists: bool
-    database_exists: bool
-    database_path: str
+    database_ok: bool
+    database_url: str
+    media_backend: str
 
 
 class DetectionResponse(BaseModel):
@@ -54,9 +52,10 @@ class StatusResponse(BaseModel):
     custom_model: bool
     custom_model_path: str | None = None
     drink_classes: list[str]
-    database_path: str
-    database_exists: bool
-    media_dir: str
+    database_url: str
+    media_backend: str
+    media_root: str
+    environment: str
 
 
 class DebugSnapshotResponse(BaseModel):
@@ -100,67 +99,48 @@ class UserProfileResponse(AppUserResponse):
     city: str
     email: str
     role: str
-    crown_count: int = 0
-    created_at: str
-    updated_at: str
 
 
-class AuthTokenResponse(BaseModel):
-    token: str
-    expires_at: str
+class AuthSessionResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
     user: UserProfileResponse
 
 
-class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=32)
-    full_name: str = Field(min_length=1, max_length=120)
+class AuthLoginRequest(BaseModel):
     email: str
-    password: str = Field(min_length=8, max_length=128)
-    city: str = Field(min_length=1, max_length=80)
-    bio: str = Field(default="", max_length=500)
-    avatar_uri: str = Field(default="", max_length=2048)
+    password: str
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str = Field(min_length=1, max_length=128)
+class AuthChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
-class UpdateProfileRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=32)
-    full_name: str = Field(min_length=1, max_length=120)
-    city: str = Field(min_length=1, max_length=80)
-    bio: str = Field(default="", max_length=500)
-    avatar_uri: str = Field(default="", max_length=2048)
+class PasswordResetRequest(BaseModel):
     email: str
 
 
-class ChangePasswordRequest(BaseModel):
-    current_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
-
-
-class ResetPasswordRequest(BaseModel):
-    email: str
-    new_password: str = Field(min_length=8, max_length=128)
-
-
-class ResetPasswordRequestPayload(BaseModel):
-    email: str
-
-
-class ResetPasswordRequestResponse(BaseModel):
+class PasswordResetChallengeResponse(BaseModel):
+    ok: bool = True
+    challenge_id: str | None = None
+    debug_code: str | None = None
     message: str
-    reset_token: str | None = None
 
 
-class ResetPasswordConfirmRequest(BaseModel):
-    token: str = Field(min_length=12, max_length=512)
-    new_password: str = Field(min_length=8, max_length=128)
+class PasswordResetConfirmRequest(BaseModel):
+    challenge_id: str
+    code: str
+    new_password: str
+
+
+class PasswordResetConfirmResponse(BaseModel):
+    ok: bool = True
+    message: str
 
 
 class EventPayload(BaseModel):
-    id: str | None = None
+    id: str
     title: str
     short_title: str | None = None
     date: str
@@ -180,50 +160,6 @@ class EventPayload(BaseModel):
     badge: str
     description: str
     tags: list[str] = Field(default_factory=list)
-    created_by_user_id: str | None = None
-
-
-class EventCommentResponse(BaseModel):
-    id: str
-    user: AppUserResponse
-    text: str
-    time: str
-
-
-class EventSocialStateResponse(BaseModel):
-    liked: bool = False
-    saved: bool = False
-    likes: list[AppUserResponse] = Field(default_factory=list)
-    comments: list[EventCommentResponse] = Field(default_factory=list)
-    plan_status: str | None = None
-    plan_note: str = ""
-
-
-class EventSocialMapResponse(BaseModel):
-    items: dict[str, EventSocialStateResponse] = Field(default_factory=dict)
-
-
-class EventPlanListItemResponse(BaseModel):
-    event_id: str
-    saved: bool
-    plan_status: str | None = None
-    plan_note: str = ""
-
-
-class EventPlanListResponse(BaseModel):
-    items: list[EventPlanListItemResponse] = Field(default_factory=list)
-
-
-class AddEventCommentRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=800)
-
-
-class EventPlanRequest(BaseModel):
-    status: str | None = None
-
-
-class EventPlanNoteRequest(BaseModel):
-    note: str = Field(default="", max_length=500)
 
 
 class PostCommentResponse(BaseModel):
@@ -234,8 +170,8 @@ class PostCommentResponse(BaseModel):
 
 
 class PostPayload(BaseModel):
-    id: str | None = None
-    user: AppUserResponse | None = None
+    id: str
+    user: AppUserResponse
     image_uri: str
     date: str
     is_beer_finished: bool
@@ -244,12 +180,14 @@ class PostPayload(BaseModel):
     likes: list[str] = Field(default_factory=list)
     comments: list[PostCommentResponse] = Field(default_factory=list)
     capture_id: str | None = None
-    crown_awarded: bool = False
-    crown_count: int | None = None
 
 
 class AddPostCommentRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=800)
+    text: str
+
+
+class TogglePostLikeRequest(BaseModel):
+    username: str | None = None
 
 
 class CaptureRecordResponse(BaseModel):
@@ -281,58 +219,5 @@ class AnalyzeCaptureResponse(DetectImageResponse):
     capture: CaptureRecordResponse
 
 
-class MessageResponse(BaseModel):
-    message: str
-
-
-class RewardTransactionResponse(BaseModel):
-    id: str
-    amount: int
-    reason: str
-    source_type: str
-    source_id: str
-    created_at: str
-
-
-class RewardStateResponse(BaseModel):
-    crown_count: int
-    history: list[RewardTransactionResponse] = Field(default_factory=list)
-
-
-class NotificationItemResponse(BaseModel):
-    id: str
-    actor_username: str
-    actor_avatar_uri: str
-    title: str
-    message: str
-    icon: str
-    color: str
-    related_type: str | None = None
-    related_id: str | None = None
-    is_read: bool = False
-    created_at: str
-
-
-class NotificationListResponse(BaseModel):
-    items: list[NotificationItemResponse] = Field(default_factory=list)
-    unread_count: int = 0
-
-
-class ActivityNotificationRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
-    message: str = Field(min_length=1, max_length=500)
-    icon: str = Field(min_length=1, max_length=60)
-    color: str = Field(min_length=1, max_length=20)
-    related_type: str | None = Field(default=None, max_length=60)
-    related_id: str | None = Field(default=None, max_length=120)
-
-
-class SupportContactRequest(BaseModel):
-    subject: str = Field(min_length=3, max_length=160)
-    message: str = Field(min_length=10, max_length=4000)
-    email: str | None = Field(default=None, max_length=320)
-
-
-class SupportContactResponse(BaseModel):
-    id: str
-    message: str
+class DeleteResponse(BaseModel):
+    deleted: bool = True

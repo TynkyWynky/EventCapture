@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '@/context/UserContext';
 import { useToast } from '@/context/ToastContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -15,35 +14,13 @@ import { useRouter } from 'expo-router';
 import { Colors, Layout, Radius, Typography } from '@/constants/theme';
 
 export default function SettingsScreen() {
-  const STORAGE_KEY = 'eventcapture.settings.preferences';
   const router = useRouter();
-  const { signOut, deleteAccount, isBusy } = useUser();
+  const { signOut, deleteAccount } = useUser();
   const { showToast } = useToast();
   const { language, setLanguage, t } = useLanguage();
   const [push, setPush] = useState(true);
   const [reminder, setReminder] = useState(true);
   const [likes, setLikes] = useState(true);
-
-  React.useEffect(() => {
-    void AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (!raw) {
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(raw) as { push?: boolean; reminder?: boolean; likes?: boolean };
-        setPush(typeof parsed.push === 'boolean' ? parsed.push : true);
-        setReminder(typeof parsed.reminder === 'boolean' ? parsed.reminder : true);
-        setLikes(typeof parsed.likes === 'boolean' ? parsed.likes : true);
-      } catch {
-        // Ignore invalid local preference cache.
-      }
-    });
-  }, []);
-
-  React.useEffect(() => {
-    void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ push, reminder, likes })).catch(() => {});
-  }, [likes, push, reminder]);
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -54,24 +31,22 @@ export default function SettingsScreen() {
         {
           text: t('deleteBtn'),
           style: 'destructive',
-          onPress: () => {
-            void deleteAccount().then((result) => {
-              if (!result.ok) {
-                showToast({
-                  tone: 'error',
-                  title: t('accountDeleteFailedTitle'),
-                  message: result.error ?? t('accountDeleteFailedMessage'),
-                });
-                return;
-              }
-
+          onPress: async () => {
+            const result = await deleteAccount();
+            if (!result.ok) {
               showToast({
-                  tone: 'info',
-                  title: t('accDeletedTitle'),
-                  message: t('accDeletedMsg'),
-                });
-              router.replace('/auth/login');
+                tone: 'error',
+                title: 'Delete failed',
+                message: result.error ?? 'Unable to delete your account right now.',
+              });
+              return;
+            }
+            showToast({
+              tone: 'info',
+              title: t('accDeletedTitle'),
+              message: t('accDeletedMsg'),
             });
+            router.replace('/auth/login');
           },
         },
       ]
@@ -130,7 +105,6 @@ export default function SettingsScreen() {
 
         <SurfaceCard>
           <Text style={styles.sectionTitle}>{t('notifSection')}</Text>
-          <Text style={styles.helperText}>{t('settingsNotifDeviceOnly')}</Text>
           {settingRow(t('pushLabel'), t('pushHint'), push, setPush)}
           {settingRow(t('reminderLabel'), t('reminderHint'), reminder, setReminder)}
           {settingRow(t('likesLabel'), t('likesHint'), likes, setLikes)}
@@ -148,13 +122,11 @@ export default function SettingsScreen() {
             label={t('settingsSignOutBtn')}
             variant="secondary"
             onPress={() => {
-              void signOut().then(() => {
-                router.replace('/auth/login');
-              });
+              signOut();
+              router.replace('/auth/login');
             }}
-            disabled={isBusy}
           />
-          <AppButton label={t('deleteAccBtn')} variant="danger" onPress={handleDeleteAccount} disabled={isBusy} />
+          <AppButton label={t('deleteAccBtn')} variant="danger" onPress={handleDeleteAccount} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -177,11 +149,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...Typography.sectionTitle,
     color: Colors.light.title,
-    marginBottom: 12,
-  },
-  helperText: {
-    ...Typography.caption,
-    color: Colors.light.subtitle,
     marginBottom: 12,
   },
   langRow: {

@@ -1,49 +1,59 @@
-"""Authentication helpers for password hashing and session tokens."""
+"""Authentication and security helpers."""
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
 import secrets
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import jwt
+from passlib.context import CryptContext
+
+try:
+    from .config import settings
+except ImportError:
+    from config import settings
 
 
-PBKDF2_ITERATIONS = 120_000
+password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
-    return "pbkdf2_sha256${iterations}${salt}${digest}".format(
-        iterations=PBKDF2_ITERATIONS,
-        salt=base64.b64encode(salt).decode("ascii"),
-        digest=base64.b64encode(digest).decode("ascii"),
+    return password_context.hash(password)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return password_context.verify(password, password_hash)
+
+
+def create_access_token(subject: str, role: str) -> str:
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(minutes=settings.auth_access_token_minutes)
+    payload = {
+        "sub": subject,
+        "role": role,
+        "iat": int(now.timestamp()),
+        "exp": int(expires_at.timestamp()),
+    }
+    return jwt.encode(
+        payload,
+        settings.auth_jwt_secret,
+        algorithm=settings.auth_jwt_algorithm,
     )
 
 
-def verify_password(password: str, encoded_hash: str) -> bool:
-    try:
-        algorithm, iterations_raw, salt_b64, digest_b64 = encoded_hash.split("$", 3)
-    except ValueError:
-        return False
-
-    if algorithm != "pbkdf2_sha256":
-        return False
-
-    try:
-        iterations = int(iterations_raw)
-        salt = base64.b64decode(salt_b64.encode("ascii"))
-        expected_digest = base64.b64decode(digest_b64.encode("ascii"))
-    except (ValueError, base64.binascii.Error):
-        return False
-
-    actual_digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    return hmac.compare_digest(actual_digest, expected_digest)
+def decode_access_token(token: str) -> dict[str, Any]:
+    return jwt.decode(
+        token,
+        settings.auth_jwt_secret,
+        algorithms=[settings.auth_jwt_algorithm],
+    )
 
 
-def generate_session_token() -> str:
-    return secrets.token_urlsafe(48)
+def generate_reset_code(length: int = 6) -> str:
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def hash_session_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+def password_reset_expiry() -> datetime:
+    return datetime.now(UTC) + timedelta(minutes=settings.password_reset_code_minutes)

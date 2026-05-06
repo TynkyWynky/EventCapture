@@ -2,17 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
 import {
-  changeAccountPassword,
-  deleteAccount as deleteAccountApi,
-  fetchCurrentUser,
-  loginAccount,
-  logoutAccount,
-  requestPasswordReset,
-  registerAccount,
-  resetAccountPassword,
-  updateAccountProfile,
+  changeRemotePassword,
+  confirmRemotePasswordReset,
+  deleteRemoteCurrentUser,
+  fetchRemoteCurrentUser,
+  registerRemoteUser,
+  requestRemotePasswordReset,
+  signInRemoteUser,
+  updateRemoteCurrentUser,
 } from '@/services/authApi';
-import { clearCachedBackendApiBaseUrl, configureBackendApiAuth } from '@/services/backendApi';
+import { BackendApiError, setBackendAccessToken } from '@/services/backendApi';
 
 export interface UserProfile {
   id: string;
@@ -23,139 +22,160 @@ export interface UserProfile {
   email: string;
   avatarUri: string;
   role: string;
-  crownCount: number;
 }
 
-interface AuthActionResult {
+interface AuthResult {
   ok: boolean;
   error?: string;
+}
+
+interface PasswordResetRequestResult extends AuthResult {
+  challengeId?: string | null;
+  debugCode?: string | null;
+  message?: string;
 }
 
 interface UserContextType {
   user: UserProfile;
   isAuthenticated: boolean;
   isReady: boolean;
-  isBusy: boolean;
-  isAdmin: boolean;
-  signIn: (email: string, password: string) => Promise<AuthActionResult>;
-  createProfile: (profile: Omit<UserProfile, 'id' | 'role' | 'email' | 'crownCount'> & { email?: string; password: string }) => Promise<AuthActionResult>;
-  updateProfile: (profile: Partial<UserProfile>) => Promise<AuthActionResult>;
-  requestPasswordReset: (email: string) => Promise<{ ok: boolean; error?: string; resetToken?: string }>;
-  resetPassword: (token: string, newPassword: string) => Promise<AuthActionResult>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthActionResult>;
-  deleteAccount: () => Promise<AuthActionResult>;
-  signOut: () => Promise<void>;
-  refreshCurrentUser: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  createProfile: (profile: Omit<UserProfile, 'id' | 'role'> & { password: string }) => Promise<AuthResult>;
+  updateProfile: (profile: Partial<Omit<UserProfile, 'id' | 'role'>>) => Promise<AuthResult>;
+  requestPasswordReset: (email: string) => Promise<PasswordResetRequestResult>;
+  confirmPasswordReset: (
+    challengeId: string,
+    code: string,
+    newPassword: string
+  ) => Promise<AuthResult>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>;
+  deleteAccount: () => Promise<AuthResult>;
+  signOut: () => void;
 }
 
-interface StoredSessionState {
-  token: string;
+interface StoredUserState {
+  user: UserProfile;
+  accessToken: string | null;
+  isAuthenticated: boolean;
 }
 
-const STORAGE_KEY = 'eventcapture.session';
+const STORAGE_KEY = 'eventcapture.user';
 const DEFAULT_AVATAR = 'https://i.pravatar.cc/160?img=64';
 
-const EMPTY_USER: UserProfile = {
+const DEFAULT_USER: UserProfile = {
   id: '',
-  username: '',
-  fullName: '',
-  bio: '',
+  username: 'eventfriend',
+  fullName: 'Event Friend',
+  bio: 'Capturing nights, collecting crowns and keeping the best event memories close.',
   city: 'Brussels',
-  email: '',
+  email: 'demo@eventcapture.app',
   avatarUri: DEFAULT_AVATAR,
   role: 'user',
-  crownCount: 0,
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-function mapApiUserToProfile(user: {
-  id: string;
-  username: string;
-  full_name: string;
-  bio: string;
-  city: string;
-  email: string;
-  avatar_uri: string;
-  role: string;
-  crown_count: number;
-}): UserProfile {
-  return {
-    id: user.id,
-    username: user.username,
-    fullName: user.full_name,
-    bio: user.bio,
-    city: user.city,
-    email: user.email,
-    avatarUri: user.avatar_uri || DEFAULT_AVATAR,
-    role: user.role,
-    crownCount: typeof user.crown_count === 'number' ? user.crown_count : 0,
-  };
+function isValidUserProfile(value: unknown): value is UserProfile {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const user = value as UserProfile;
+
+  return (
+    typeof user.id === 'string' &&
+    typeof user.username === 'string' &&
+    typeof user.fullName === 'string' &&
+    typeof user.bio === 'string' &&
+    typeof user.city === 'string' &&
+    typeof user.email === 'string' &&
+    typeof user.avatarUri === 'string' &&
+    typeof user.role === 'string'
+  );
 }
 
-function parseStoredSession(rawValue: string | null): StoredSessionState | null {
+function parseStoredUserState(rawValue: string | null): StoredUserState | null {
   if (!rawValue) {
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(rawValue) as Partial<StoredSessionState>;
-    if (typeof parsed.token !== 'string' || !parsed.token.trim()) {
-      return null;
-    }
-    return { token: parsed.token };
-  } catch {
+  const parsedValue = JSON.parse(rawValue) as Partial<StoredUserState>;
+
+  if (!isValidUserProfile(parsedValue.user)) {
     return null;
   }
+
+  const accessToken =
+    typeof parsedValue.accessToken === 'string' && parsedValue.accessToken.trim()
+      ? parsedValue.accessToken
+      : null;
+
+  return {
+    user: parsedValue.user,
+    accessToken,
+    isAuthenticated: Boolean(parsedValue.isAuthenticated && accessToken),
+  };
+}
+
+function normalizeError(error: unknown, fallback: string): string {
+  if (error instanceof BackendApiError || error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile>(EMPTY_USER);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isReady, setIsReady] = useState(false);
-  const [isBusy, setIsBusy] = useState(false);
-
-  useEffect(() => {
-    configureBackendApiAuth(() => token);
-  }, [token]);
+  const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const hydrate = async () => {
       try {
-        const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
-        const session = parseStoredSession(storedValue);
+        const storedUser = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsedState = parseStoredUserState(storedUser);
 
-        if (!session?.token) {
+        if (!parsedState || !isMounted) {
           return;
         }
 
-        if (!isMounted) {
-          return;
+        setUser(parsedState.user);
+        setAccessToken(parsedState.accessToken);
+        setBackendAccessToken(parsedState.accessToken);
+        setIsAuthenticated(parsedState.isAuthenticated);
+
+        if (parsedState.isAuthenticated && parsedState.accessToken) {
+          try {
+            const remoteUser = await fetchRemoteCurrentUser();
+            if (!isMounted) {
+              return;
+            }
+            setUser(remoteUser);
+          } catch (error) {
+            if (!isMounted) {
+              return;
+            }
+
+            if (error instanceof BackendApiError && error.status === 401) {
+              setBackendAccessToken(null);
+              setAccessToken(null);
+              setUser(DEFAULT_USER);
+              setIsAuthenticated(false);
+            }
+          }
         }
-
-        setToken(session.token);
-        configureBackendApiAuth(() => session.token);
-        const currentUser = await fetchCurrentUser();
-
-        if (!isMounted) {
-          return;
-        }
-
-        setUser(mapApiUserToProfile(currentUser));
-        setIsAuthenticated(true);
       } catch {
-        if (isMounted) {
-          setToken(null);
-          setUser(EMPTY_USER);
-          setIsAuthenticated(false);
+        try {
+          await AsyncStorage.removeItem(STORAGE_KEY);
+        } catch {
+          // Ignore cleanup failures and keep default user state in memory.
         }
-        await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
       } finally {
         if (isMounted) {
-          setIsReady(true);
+          setHasHydrated(true);
         }
       }
     };
@@ -168,87 +188,79 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isReady) {
+    if (!hasHydrated) {
       return;
     }
 
-    if (!token) {
-      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-      return;
-    }
-
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ token })).catch(() => {});
-  }, [isReady, token]);
+    AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        user,
+        accessToken,
+        isAuthenticated,
+      })
+    ).catch(() => {
+      // Keep the app usable even if persistence is unavailable.
+    });
+  }, [accessToken, hasHydrated, isAuthenticated, user]);
 
   const value = useMemo<UserContextType>(
     () => ({
       user,
       isAuthenticated,
-      isReady,
-      isBusy,
-      isAdmin: user.role === 'admin',
-      refreshCurrentUser: async () => {
-        if (!token) {
-          return;
-        }
-
-        const currentUser = await fetchCurrentUser();
-        setUser(mapApiUserToProfile(currentUser));
-        setIsAuthenticated(true);
-      },
+      isReady: hasHydrated,
       signIn: async (email, password) => {
-        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedEmail = email.trim();
         const normalizedPassword = password.trim();
 
         if (!normalizedEmail || !normalizedPassword) {
           return { ok: false, error: 'Enter both email and password.' };
         }
 
-        setIsBusy(true);
         try {
-          const response = await loginAccount(normalizedEmail, normalizedPassword);
-          setToken(response.token);
-          setUser(mapApiUserToProfile(response.user));
+          const session = await signInRemoteUser(normalizedEmail, normalizedPassword);
+          setBackendAccessToken(session.accessToken);
+          setAccessToken(session.accessToken);
+          setUser(session.user);
           setIsAuthenticated(true);
           return { ok: true };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Sign in failed.',
+            error: normalizeError(error, 'Email or password is incorrect.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
       createProfile: async (profile) => {
-        const email = profile.email?.trim() ?? '';
+        const email = profile.email.trim();
         const password = profile.password.trim();
-        if (!email || !password || !profile.username.trim() || !profile.fullName.trim()) {
-          return { ok: false, error: 'Complete all required fields.' };
+        const username = profile.username.trim();
+        const fullName = profile.fullName.trim();
+
+        if (!email || !password || !username || !fullName) {
+          return { ok: false, error: 'Username, full name, email, and password are required.' };
         }
 
-        setIsBusy(true);
         try {
-          const response = await registerAccount({
-            username: profile.username.trim(),
-            full_name: profile.fullName.trim(),
+          const session = await registerRemoteUser({
+            username,
+            fullName,
+            bio: profile.bio.trim(),
+            city: profile.city.trim(),
             email,
             password,
-            city: profile.city.trim() || 'Brussels',
-            bio: profile.bio.trim(),
-            avatar_uri: profile.avatarUri.trim() || DEFAULT_AVATAR,
+            avatarUri: profile.avatarUri.trim(),
           });
-          setToken(response.token);
-          setUser(mapApiUserToProfile(response.user));
+          setBackendAccessToken(session.accessToken);
+          setAccessToken(session.accessToken);
+          setUser(session.user);
           setIsAuthenticated(true);
           return { ok: true };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Unable to create account.',
+            error: normalizeError(error, 'Unable to create your account right now.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
       updateProfile: async (profile) => {
@@ -256,107 +268,116 @@ export function UserProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: 'Sign in to update your profile.' };
         }
 
-        setIsBusy(true);
         try {
-          const updated = await updateAccountProfile({
-            username: profile.username?.trim() || user.username,
-            full_name: profile.fullName?.trim() || user.fullName,
-            city: profile.city?.trim() || user.city,
-            bio: profile.bio?.trim() || user.bio,
-            avatar_uri: profile.avatarUri?.trim() || user.avatarUri,
-            email: profile.email?.trim() || user.email,
+          const updatedUser = await updateRemoteCurrentUser({
+            username: profile.username?.trim(),
+            fullName: profile.fullName?.trim(),
+            bio: profile.bio?.trim(),
+            city: profile.city?.trim(),
+            email: profile.email?.trim(),
+            avatarUri: profile.avatarUri?.trim(),
           });
-          setUser(mapApiUserToProfile(updated));
+          setUser(updatedUser);
           return { ok: true };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Unable to update profile.',
+            error: normalizeError(error, 'Unable to update your profile right now.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
       requestPasswordReset: async (email) => {
-        setIsBusy(true);
+        const normalizedEmail = email.trim();
+        if (!normalizedEmail) {
+          return { ok: false, error: 'Enter your email address.' };
+        }
+
         try {
-          const response = await requestPasswordReset(email.trim());
-          return { ok: true, resetToken: response.reset_token ?? undefined };
+          const response = await requestRemotePasswordReset(normalizedEmail);
+          return {
+            ok: true,
+            challengeId: response.challengeId,
+            debugCode: response.debugCode,
+            message: response.message,
+          };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Unable to start password reset.',
+            error: normalizeError(error, 'Unable to request a password reset right now.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
-      resetPassword: async (tokenValue, newPassword) => {
-        setIsBusy(true);
+      confirmPasswordReset: async (challengeId, code, newPassword) => {
+        const trimmedChallengeId = challengeId.trim();
+        const trimmedCode = code.trim();
+        const trimmedPassword = newPassword.trim();
+
+        if (!trimmedChallengeId || !trimmedCode || !trimmedPassword) {
+          return { ok: false, error: 'Reset code, challenge ID, and new password are required.' };
+        }
+
         try {
-          await resetAccountPassword(tokenValue.trim(), newPassword.trim());
+          await confirmRemotePasswordReset(trimmedChallengeId, trimmedCode, trimmedPassword);
           return { ok: true };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Unable to reset password.',
+            error: normalizeError(error, 'Unable to reset your password right now.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
       changePassword: async (currentPassword, newPassword) => {
-        if (!currentPassword.trim() || !newPassword.trim()) {
+        const trimmedCurrent = currentPassword.trim();
+        const trimmedNext = newPassword.trim();
+
+        if (!trimmedCurrent || !trimmedNext) {
           return { ok: false, error: 'Enter your current and new password.' };
         }
 
-        setIsBusy(true);
+        if (trimmedNext.length < 6) {
+          return { ok: false, error: 'New password must be at least 6 characters.' };
+        }
+
         try {
-          await changeAccountPassword(currentPassword.trim(), newPassword.trim());
+          await changeRemotePassword(trimmedCurrent, trimmedNext);
           return { ok: true };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Unable to change password.',
+            error: normalizeError(error, 'Unable to change your password right now.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
       deleteAccount: async () => {
-        setIsBusy(true);
+        if (!isAuthenticated) {
+          return { ok: false, error: 'Sign in to delete your account.' };
+        }
+
         try {
-          await deleteAccountApi();
-          setToken(null);
-          setUser(EMPTY_USER);
+          await deleteRemoteCurrentUser();
+          setBackendAccessToken(null);
+          setAccessToken(null);
+          setUser(DEFAULT_USER);
           setIsAuthenticated(false);
-          clearCachedBackendApiBaseUrl();
-          await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
           return { ok: true };
         } catch (error) {
           return {
             ok: false,
-            error: error instanceof Error ? error.message : 'Unable to delete account.',
+            error: normalizeError(error, 'Unable to delete your account right now.'),
           };
-        } finally {
-          setIsBusy(false);
         }
       },
-      signOut: async () => {
-        try {
-          await logoutAccount();
-        } catch {
-          // Still clear the local session if the backend cannot be reached.
-        } finally {
-          setToken(null);
-          setUser(EMPTY_USER);
-          setIsAuthenticated(false);
-          clearCachedBackendApiBaseUrl();
-          await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-        }
+      signOut: () => {
+        setBackendAccessToken(null);
+        setAccessToken(null);
+        setUser(DEFAULT_USER);
+        setIsAuthenticated(false);
+        void AsyncStorage.removeItem(STORAGE_KEY).catch(() => {
+          // Ignore cleanup failures.
+        });
       },
     }),
-    [isAuthenticated, isBusy, isReady, token, user]
+    [accessToken, hasHydrated, isAuthenticated, user]
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

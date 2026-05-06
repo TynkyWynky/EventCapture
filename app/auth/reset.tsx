@@ -2,7 +2,6 @@ import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
 import { Colors, Radius, Typography } from '@/constants/theme';
-import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,17 +13,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ResetScreen() {
   const router = useRouter();
-  const { user, requestPasswordReset, resetPassword, isBusy } = useUser();
+  const { user, requestPasswordReset, confirmPasswordReset } = useUser();
   const { showToast } = useToast();
-  const { t } = useLanguage();
   const [email, setEmail] = useState(user.email);
-  const [resetToken, setResetToken] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [debugCode, setDebugCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isRequesting, setIsRequesting] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const handleRequestReset = async () => {
     setIsRequesting(true);
@@ -33,51 +33,49 @@ export default function ResetScreen() {
 
     if (!result.ok) {
       setSuccess('');
-      setError(result.error ?? t('resetRequestFailedMessage'));
+      setError(result.error ?? 'Unable to request a reset code.');
       return;
     }
 
-    if (result.resetToken) {
-      setResetToken(result.resetToken);
-      setSuccess(t('resetDevTokenSuccess'));
-    } else {
-      setSuccess(t('resetEmailSentSuccess'));
-    }
     setError('');
+    setChallengeId(result.challengeId ?? '');
+    setDebugCode(result.debugCode ?? '');
+    setResetCode(result.debugCode ?? '');
+    setSuccess(result.message ?? 'Reset instructions were sent.');
   };
 
   const handleReset = async () => {
     if (newPassword !== confirmPassword) {
       setSuccess('');
-      setError(t('resetMismatchError'));
+      setError('New password and confirmation do not match.');
       return;
     }
 
-    if (!resetToken.trim()) {
+    if (!challengeId.trim()) {
       setSuccess('');
-      setError(t('resetTokenRequiredError'));
+      setError('Request a reset code first.');
       return;
     }
 
-    setIsResetting(true);
-    const result = await resetPassword(resetToken, newPassword);
-    setIsResetting(false);
+    setIsConfirming(true);
+    const result = await confirmPasswordReset(challengeId, resetCode, newPassword);
+    setIsConfirming(false);
 
     if (!result.ok) {
       setSuccess('');
-      setError(result.error ?? t('resetConfirmFailedMessage'));
+      setError(result.error ?? 'Unable to reset password.');
       return;
     }
 
     setError('');
-    setSuccess(t('resetSuccessMessage'));
-    setResetToken('');
+    setSuccess('Password reset successfully. You can now sign in.');
     setNewPassword('');
     setConfirmPassword('');
+    setResetCode('');
     showToast({
       tone: 'success',
-      title: t('resetSuccessTitle'),
-      message: t('resetSuccessMessage'),
+      title: 'Password reset',
+      message: 'You can sign in again with the new password.',
     });
   };
 
@@ -92,16 +90,16 @@ export default function ResetScreen() {
               </View>
 
               <View style={styles.copy}>
-                <Text style={styles.title}>{t('resetTitle')}</Text>
+                <Text style={styles.title}>Reset password</Text>
                 <Text style={styles.subtitle}>
-                  {t('resetSubtitle')}
+                  Enter your email and choose a new password to get back into your account.
                 </Text>
               </View>
 
               <View style={styles.inputRow}>
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder={t('resetEmailPlaceholder')}
+                  placeholder="demo@eventcapture.app"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={email}
@@ -111,28 +109,39 @@ export default function ResetScreen() {
               </View>
 
               <AppButton
-                label={isRequesting ? t('resetRequestBusy') : t('resetRequestButton')}
+                label={isRequesting ? 'Sending reset code...' : 'Send reset code'}
                 onPress={() => void handleRequestReset()}
                 size="lg"
-                disabled={isRequesting || isResetting || isBusy}
+                disabled={isRequesting}
               />
+
+              {challengeId ? (
+                <View style={styles.challengeCard}>
+                  <Text style={styles.challengeTitle}>Reset challenge ready</Text>
+                  <Text style={styles.challengeText}>
+                    {debugCode
+                      ? `Use code ${debugCode} for local testing or enter the code sent to email.`
+                      : 'Enter the code from your email to confirm the password reset.'}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.inputRow}>
                 <Ionicons name="key-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder={t('resetTokenPlaceholder')}
+                  placeholder="Reset code"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
-                  value={resetToken}
-                  onChangeText={setResetToken}
-                  autoCapitalize="none"
+                  value={resetCode}
+                  onChangeText={setResetCode}
+                  autoCapitalize="characters"
                 />
               </View>
 
               <View style={styles.inputRow}>
                 <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder={t('resetNewPasswordPlaceholder')}
+                  placeholder="New password"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={newPassword}
@@ -144,7 +153,7 @@ export default function ResetScreen() {
               <View style={styles.inputRow}>
                 <Ionicons name="shield-checkmark-outline" size={18} color="#81776f" />
                 <TextInput
-                  placeholder={t('resetConfirmPasswordPlaceholder')}
+                  placeholder="Confirm new password"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   value={confirmPassword}
@@ -157,16 +166,16 @@ export default function ResetScreen() {
               {success ? <Text style={styles.successText}>{success}</Text> : null}
 
               <AppButton
-                label={isResetting ? t('resetConfirmBusy') : t('resetConfirmButton')}
+                label={isConfirming ? 'Resetting password...' : 'Reset password'}
                 onPress={() => void handleReset()}
                 size="lg"
-                disabled={isRequesting || isResetting || isBusy}
+                disabled={isConfirming || !challengeId.trim()}
               />
               <AppButton
-                label={t('resetBackButton')}
+                label="Back to login"
                 variant="secondary"
                 onPress={() => router.back()}
-                disabled={isRequesting || isResetting || isBusy}
+                disabled={isConfirming || isRequesting}
               />
             </SurfaceCard>
           </ScrollView>
@@ -212,6 +221,16 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
   },
   input: { flex: 1, color: '#1f1a17', fontWeight: '600' },
+  challengeCard: {
+    backgroundColor: '#fff5ea',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#eed7bd',
+    padding: 14,
+    gap: 6,
+  },
+  challengeTitle: { color: '#7b4b22', fontWeight: '800' },
+  challengeText: { color: '#7b5f48', lineHeight: 20 },
   errorText: { color: '#c64d3a', fontWeight: '700', textAlign: 'center' },
   successText: { color: '#0f766e', fontWeight: '700', textAlign: 'center' },
 });

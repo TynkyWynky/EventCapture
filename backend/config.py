@@ -2,120 +2,234 @@
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
+import json
 from pathlib import Path
+from typing import Literal
 
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _env_int(name: str, default: int) -> int:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-    try:
-        return int(raw_value)
-    except ValueError:
-        return default
-
-
-def _env_float(name: str, default: float) -> float:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-    try:
-        return float(raw_value)
-    except ValueError:
-        return default
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
-CUSTOM_MODEL_PATH = BACKEND_DIR / "models" / "drink_detector.pt"
 DEFAULT_MODEL_PATH = BACKEND_DIR / "yolov8n.pt"
-DEBUG_DIR = BACKEND_DIR / "debug"
-STORAGE_DIR = BACKEND_DIR / "storage"
-MEDIA_DIR = STORAGE_DIR / "media"
-DATABASE_PATH = Path(os.getenv("EVENTCAPTURE_DATABASE_PATH", str(BACKEND_DIR / "eventcapture.db")))
+CUSTOM_MODEL_PATH = BACKEND_DIR / "models" / "drink_detector.pt"
+DEFAULT_DEBUG_DIR = BACKEND_DIR / "debug"
+DEFAULT_STORAGE_DIR = BACKEND_DIR / "storage"
+DEFAULT_MEDIA_DIR = DEFAULT_STORAGE_DIR / "media"
+DEFAULT_SQLITE_PATH = BACKEND_DIR / "eventcapture.db"
+DEFAULT_LOCAL_CORS_ORIGIN_REGEX = (
+    r"^https?://("
+    r"localhost|127\.0\.0\.1|"
+    r"10\.\d+\.\d+\.\d+|"
+    r"192\.168\.\d+\.\d+|"
+    r"172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+"
+    r")(:\d+)?$"
+)
 
 
-@dataclass(frozen=True)
-class BackendSettings:
-    title: str
-    version: str
-    environment: str
-    debug: bool
-    model_name: str
-    host: str
-    port: int
-    max_upload_bytes: int
-    upload_jpeg_quality: int
-    websocket_jpeg_quality: int
-    websocket_latest_frame_timeout_s: float
-    secret_key: str
-    session_ttl_hours: int
-    allowed_origins: tuple[str, ...]
-    allow_insecure_password_reset: bool
-    expose_dev_reset_token: bool
-    password_reset_token_ttl_minutes: int
-    support_email_to: str | None
-    reset_email_from: str | None
-    smtp_host: str | None
-    smtp_port: int
-    smtp_username: str | None
-    smtp_password: str | None
-    smtp_use_tls: bool
-    smtp_use_ssl: bool
-    supported_drinks: tuple[str, ...]
+def _default_cors_origins() -> list[str]:
+    return [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8081",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8081",
+    ]
 
 
-def _load_settings() -> BackendSettings:
-    default_allowed_origins = "http://localhost:8081,http://localhost:19006,http://127.0.0.1:8081,http://127.0.0.1:19006"
-    configured_origins = os.getenv("EVENTCAPTURE_ALLOWED_ORIGINS", default_allowed_origins)
+def _default_database_url() -> str:
+    return f"sqlite+pysqlite:///{DEFAULT_SQLITE_PATH}"
 
-    return BackendSettings(
-        title="EventCapture API",
-        version=os.getenv("EVENTCAPTURE_VERSION", "2.0.0"),
-        environment=os.getenv("EVENTCAPTURE_ENV", "development"),
-        debug=_env_bool("EVENTCAPTURE_DEBUG", True),
-        model_name="YOLOv8n",
-        host=os.getenv("EVENTCAPTURE_HOST", "0.0.0.0"),
-        port=_env_int("EVENTCAPTURE_PORT", 8000),
-        max_upload_bytes=_env_int("EVENTCAPTURE_MAX_UPLOAD_BYTES", 10 * 1024 * 1024),
-        upload_jpeg_quality=_env_int("EVENTCAPTURE_UPLOAD_JPEG_QUALITY", 85),
-        websocket_jpeg_quality=_env_int("EVENTCAPTURE_WEBSOCKET_JPEG_QUALITY", 75),
-        websocket_latest_frame_timeout_s=_env_float("EVENTCAPTURE_WS_LATEST_FRAME_TIMEOUT_S", 0.001),
-        secret_key=os.getenv("EVENTCAPTURE_SECRET_KEY", "change-me-for-production"),
-        session_ttl_hours=_env_int("EVENTCAPTURE_SESSION_TTL_HOURS", 24 * 14),
-        allowed_origins=tuple(origin.strip() for origin in configured_origins.split(",") if origin.strip()),
-        allow_insecure_password_reset=_env_bool("EVENTCAPTURE_ALLOW_INSECURE_PASSWORD_RESET", True),
-        expose_dev_reset_token=_env_bool("EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN", True),
-        password_reset_token_ttl_minutes=_env_int("EVENTCAPTURE_PASSWORD_RESET_TOKEN_TTL_MINUTES", 30),
-        support_email_to=os.getenv("EVENTCAPTURE_SUPPORT_EMAIL_TO"),
-        reset_email_from=os.getenv("EVENTCAPTURE_RESET_EMAIL_FROM"),
-        smtp_host=os.getenv("EVENTCAPTURE_SMTP_HOST"),
-        smtp_port=_env_int("EVENTCAPTURE_SMTP_PORT", 587),
-        smtp_username=os.getenv("EVENTCAPTURE_SMTP_USERNAME"),
-        smtp_password=os.getenv("EVENTCAPTURE_SMTP_PASSWORD"),
-        smtp_use_tls=_env_bool("EVENTCAPTURE_SMTP_USE_TLS", True),
-        smtp_use_ssl=_env_bool("EVENTCAPTURE_SMTP_USE_SSL", False),
-        supported_drinks=(
-            "Water",
-            "Coffee",
-            "Tea",
-            "Soda",
-            "Beer",
-            "Wine",
-            "Juice",
-            "Energy Drink",
-        ),
+
+class BackendSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="EVENTCAPTURE_",
+        env_file=(".env", ".env.local", "backend/.env", "backend/.env.local"),
+        extra="ignore",
     )
 
+    environment: Literal["development", "staging", "production"] = "development"
+    title: str = "EventCapture API"
+    version: str = "2.0.0"
+    host: str = "0.0.0.0"
+    port: int = 8000
 
-settings = _load_settings()
+    database_url: str = Field(default_factory=_default_database_url)
+    database_echo: bool = False
+
+    auth_jwt_secret: str = "change-me-before-production"
+    auth_jwt_algorithm: str = "HS256"
+    auth_access_token_minutes: int = 60 * 24 * 7
+    password_reset_code_minutes: int = 15
+
+    cors_allowed_origins: list[str] = Field(default_factory=_default_cors_origins)
+    cors_allow_origin_regex: str | None = None
+
+    max_upload_bytes: int = 10 * 1024 * 1024
+    upload_jpeg_quality: int = 85
+    websocket_jpeg_quality: int = 75
+    websocket_latest_frame_timeout_s: float = 0.001
+    websocket_max_frame_edge: int = 1280
+    inference_workers: int = 2
+    max_concurrent_inference: int = 2
+    require_inference_auth: bool | None = None
+
+    media_backend: Literal["local", "s3"] = "local"
+    media_root: Path = DEFAULT_MEDIA_DIR
+    debug_dir: Path = DEFAULT_DEBUG_DIR
+    media_url_base: str | None = None
+    public_backend_url: str | None = None
+
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
+    s3_public_base_url: str | None = None
+
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
+    smtp_from_email: str | None = None
+    app_public_url: str | None = None
+
+    bootstrap_users_enabled: bool = True
+    bootstrap_admin_email: str = "admin"
+    bootstrap_admin_password: str = "admin"
+    bootstrap_admin_username: str = "admin"
+    bootstrap_admin_full_name: str = "Admin User"
+    bootstrap_admin_city: str = "Brussels"
+    bootstrap_admin_bio: str = "Platform administrator."
+    bootstrap_admin_avatar_uri: str = "https://i.pravatar.cc/160?img=68"
+
+    bootstrap_demo_email: str = "demo@eventcapture.app"
+    bootstrap_demo_password: str = "eventcapture123"
+    bootstrap_demo_username: str = "eventfriend"
+    bootstrap_demo_full_name: str = "Event Friend"
+    bootstrap_demo_city: str = "Brussels"
+    bootstrap_demo_bio: str = (
+        "Capturing nights, collecting crowns and keeping the best event memories close."
+    )
+    bootstrap_demo_avatar_uri: str = "https://i.pravatar.cc/160?img=64"
+
+    supported_drinks: tuple[str, ...] = (
+        "Water",
+        "Coffee",
+        "Tea",
+        "Soda",
+        "Beer",
+        "Wine",
+        "Juice",
+        "Energy Drink",
+    )
+
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def _parse_cors_allowed_origins(cls, value: object) -> object:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed:
+                return []
+            if trimmed.startswith("["):
+                parsed = json.loads(trimmed)
+                if not isinstance(parsed, list):
+                    raise ValueError("cors_allowed_origins JSON must be an array.")
+                return parsed
+            return [item.strip() for item in trimmed.split(",") if item.strip()]
+        return value
+
+    @field_validator("cors_allow_origin_regex", mode="before")
+    @classmethod
+    def _normalize_optional_regex(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed or None
+        return value
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
+    @property
+    def is_local_media(self) -> bool:
+        return self.media_backend == "local"
+
+    @property
+    def normalized_media_url_base(self) -> str | None:
+        return self.media_url_base.rstrip("/") if self.media_url_base else None
+
+    @property
+    def effective_cors_allow_origin_regex(self) -> str | None:
+        if self.cors_allow_origin_regex is not None:
+            return self.cors_allow_origin_regex
+        return None if self.is_production else DEFAULT_LOCAL_CORS_ORIGIN_REGEX
+
+    @property
+    def inference_auth_enabled(self) -> bool:
+        if self.require_inference_auth is not None:
+            return self.require_inference_auth
+        return self.is_production
+
+    @property
+    def effective_inference_concurrency(self) -> int:
+        return max(1, min(self.max_concurrent_inference, self.inference_workers))
+
+    @property
+    def sqlite_fallback_url(self) -> str:
+        return f"sqlite+pysqlite:///{DEFAULT_SQLITE_PATH}"
+
+    def redacted_database_url(self) -> str:
+        if "@" not in self.database_url:
+            return self.database_url
+
+        scheme, remainder = self.database_url.split("://", 1)
+        if "@" not in remainder:
+            return self.database_url
+
+        credentials, host_part = remainder.split("@", 1)
+        if ":" not in credentials:
+            return self.database_url
+
+        username, _password = credentials.split(":", 1)
+        return f"{scheme}://{username}:***@{host_part}"
+
+    def validate_runtime(self) -> None:
+        issues: list[str] = []
+
+        if self.inference_workers < 1:
+            issues.append("EVENTCAPTURE_INFERENCE_WORKERS must be at least 1.")
+        if self.max_concurrent_inference < 1:
+            issues.append("EVENTCAPTURE_MAX_CONCURRENT_INFERENCE must be at least 1.")
+        if self.max_upload_bytes < 1:
+            issues.append("EVENTCAPTURE_MAX_UPLOAD_BYTES must be at least 1.")
+
+        if self.is_production:
+            if self.auth_jwt_secret == "change-me-before-production":
+                issues.append("EVENTCAPTURE_AUTH_JWT_SECRET must be set in production.")
+            if not self.cors_allowed_origins and not self.effective_cors_allow_origin_regex:
+                issues.append(
+                    "Production requires EVENTCAPTURE_CORS_ALLOWED_ORIGINS or EVENTCAPTURE_CORS_ALLOW_ORIGIN_REGEX."
+                )
+            if self.bootstrap_users_enabled and self.bootstrap_admin_password == "admin":
+                issues.append(
+                    "Disable bootstrap users or override EVENTCAPTURE_BOOTSTRAP_ADMIN_PASSWORD in production."
+                )
+            if self.bootstrap_users_enabled and self.bootstrap_demo_password == "eventcapture123":
+                issues.append(
+                    "Disable bootstrap users or override EVENTCAPTURE_BOOTSTRAP_DEMO_PASSWORD in production."
+                )
+
+        if issues:
+            raise ValueError("Invalid backend configuration:\n- " + "\n- ".join(issues))
+
+
+settings = BackendSettings()

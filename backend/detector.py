@@ -1,13 +1,14 @@
 """
-Drink Detection Engine using YOLOv8.
+Drink detection engine using YOLOv8.
 
-Supports:
-- Drink object detection (bottle, cup, wine glass, etc.)
-- Drink type classification
-- Drinking action detection (person + drink proximity)
+The model weights are shared across requests, but request/session state is kept
+outside the detector instance so concurrent server traffic does not bleed
+between users.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -15,33 +16,53 @@ import numpy as np
 from ultralytics import YOLO
 
 
+BBox = tuple[int, int, int, int]
+
+
 @dataclass
 class Detection:
     label: str
     confidence: float
-    bbox: tuple  # (x1, y1, x2, y2)
+    bbox: BBox
     drink_type: str = ""
     is_drinking: bool = False
-    head_bbox: tuple | None = None
+    head_bbox: BBox | None = None
     rotation_degrees: float = 90.0
     rotated_bbox: tuple[tuple[int, int], ...] | None = None
 
 
-# COCO classes relevant to drinks
+@dataclass
+class DebugRegions:
+    persons: list[BBox] = field(default_factory=list)
+    head_zones: list[BBox] = field(default_factory=list)
+    faces: list[BBox] = field(default_factory=list)
+
+
+@dataclass
+class DetectorSessionState:
+    drinking_tracks: list[dict[str, object]] = field(default_factory=list)
+    smoothed_head_bbox: BBox | None = None
+
+
+@dataclass
+class DetectionBatchResult:
+    detections: list[Detection]
+    debug_regions: DebugRegions
+    session_state: DetectorSessionState
+
+
 DRINK_COCO_CLASSES = {
     39: "bottle",
     40: "wine glass",
     41: "cup",
-    42: "fork",  # sometimes misdetected, we'll filter
+    42: "fork",
     43: "knife",
     44: "spoon",
     45: "bowl",
 }
-
-DRINK_CLASS_IDS = {39, 40, 41}  # bottle, wine glass, cup
+DRINK_CLASS_IDS = {39, 40, 41}
 PERSON_CLASS_ID = 0
 
-# Drink type inference based on visual cues and COCO class
 DRINK_TYPE_MAP = {
     "bottle": ["Water", "Soda", "Beer", "Juice", "Energy Drink"],
     "wine glass": ["Wine", "Cocktail", "Juice"],
@@ -63,23 +84,23 @@ class DrinkDetector:
             else None
         )
 
-        self.drink_history: list[Detection] = []
-        self._drinking_tracks: list[dict[str, object]] = []
-        self._person_bboxes: list[tuple] = []
-        self._person_head_zones: list[tuple] = []
-        self._face_bboxes: list[tuple] = []
-        self._active_head_bbox: tuple | None = None
-        self._smoothed_head_bbox: tuple | None = None
+    def create_session(self) -> DetectorSessionState:
+        return DetectorSessionState()
 
-    def detect(self, frame: np.ndarray, conf_threshold: float = 0.35) -> list[Detection]:
+    def analyze(
+        self,
+        frame: np.ndarray,
+        *,
+        conf_threshold: float = 0.35,
+        session_state: DetectorSessionState | None = None,
+    ) -> DetectionBatchResult:
+        state = session_state or self.create_session()
         detections: list[Detection] = []
-        persons: list[tuple] = []
+        persons: list[BBox] = []
+        face_bboxes: list[BBox] = []
         person_conf_threshold = min(conf_threshold, 0.15)
-        self._face_bboxes = []
 
-        # Run COCO model detection
         results = self.model(frame, conf=person_conf_threshold, verbose=False)
-
         for result in results:
             boxes = result.boxes
             if boxes is None:
@@ -91,9 +112,8 @@ class DrinkDetector:
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 bbox = (int(x1), int(y1), int(x2), int(y2))
 
-                if cls_id == PERSON_CLASS_ID:
-                    if confidence >= person_conf_threshold:
-                        persons.append(bbox)
+                if cls_id == PERSON_CLASS_ID and confidence >= person_conf_threshold:
+                    persons.append(bbox)
 
                 if cls_id in DRINK_CLASS_IDS:
                     if confidence < conf_threshold:
@@ -101,18 +121,17 @@ class DrinkDetector:
                     label = DRINK_COCO_CLASSES[cls_id]
                     drink_type = self._infer_drink_type(frame, bbox, label)
                     rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
-                    detections.append(Detection(
-                        label=label,
-                        confidence=confidence,
-                        bbox=bbox,
-                        drink_type=drink_type,
-                        rotation_degrees=rotation_degrees,
-                        rotated_bbox=rotated_bbox,
-                    ))
+                    detections.append(
+                        Detection(
+                            label=label,
+                            confidence=confidence,
+                            bbox=bbox,
+                            drink_type=drink_type,
+                            rotation_degrees=rotation_degrees,
+                            rotated_bbox=rotated_bbox,
+                        )
+                    )
 
-        # Extra drink-only passes recover bottles/glasses that YOLO misses when they
-        # are heavily tilted. Rotating the frame makes a sideways bottle look upright
-        # to the detector, then we map the result back into the original image.
         fallback_detections = self._detect_drinks_multi_orientation(
             frame,
             conf_threshold=max(0.14, conf_threshold - 0.18),
@@ -123,10 +142,9 @@ class DrinkDetector:
         if not persons:
             persons = self._detect_persons(frame, person_conf_threshold=0.08)
         if not persons:
-            persons = self._detect_persons_from_faces(frame)
+            persons, face_bboxes = self._detect_persons_from_faces(frame)
         persons = self._select_primary_person(frame, persons)
 
-        # Run custom model if available
         if self.custom_model is not None:
             custom_results = self.custom_model(frame, conf=conf_threshold, verbose=False)
             for result in custom_results:
@@ -138,32 +156,123 @@ class DrinkDetector:
                     confidence = float(box.conf[0])
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     bbox = (int(x1), int(y1), int(x2), int(y2))
-                    label = result.names[cls_id]
-                    detections.append(Detection(
-                        label=label,
-                        confidence=confidence,
-                        bbox=bbox,
-                        drink_type=label.title(),
-                    ))
+                    detections.append(
+                        Detection(
+                            label=result.names[cls_id],
+                            confidence=confidence,
+                            bbox=bbox,
+                            drink_type=result.names[cls_id].title(),
+                        )
+                    )
 
-        # Detect drinking action
-        self._person_bboxes = persons
-        self._person_head_zones = self._get_stabilized_head_zones(persons)
-        self._active_head_bbox = self._person_head_zones[0] if self._person_head_zones else None
-        self._detect_drinking_action(detections, persons)
-        self.drink_history = detections
-        return detections
+        head_zones, smoothed_head_bbox = self._get_stabilized_head_zones(
+            persons,
+            face_bboxes,
+            state.smoothed_head_bbox,
+        )
+        active_head_bbox = head_zones[0] if head_zones else None
+        updated_tracks = self._detect_drinking_action(
+            detections,
+            persons,
+            active_head_bbox,
+            face_bboxes,
+            state.drinking_tracks,
+        )
 
-    def get_debug_regions(self) -> dict[str, list[list[int]]]:
-        return {
-            "persons": [list(bbox) for bbox in self._person_bboxes],
-            "head_zones": [list(bbox) for bbox in self._person_head_zones],
-            "faces": [list(bbox) for bbox in self._face_bboxes],
-        }
+        return DetectionBatchResult(
+            detections=detections,
+            debug_regions=DebugRegions(
+                persons=persons,
+                head_zones=head_zones,
+                faces=face_bboxes,
+            ),
+            session_state=DetectorSessionState(
+                drinking_tracks=updated_tracks,
+                smoothed_head_bbox=smoothed_head_bbox,
+            ),
+        )
 
-    def _detect_persons(self, frame: np.ndarray, person_conf_threshold: float = 0.08) -> list[tuple]:
-        """Fallback person-only pass with a larger image size for webcam/selfie frames."""
-        person_bboxes: list[tuple] = []
+    def annotate_frame(
+        self,
+        frame: np.ndarray,
+        detections: list[Detection],
+        debug_regions: DebugRegions,
+    ) -> np.ndarray:
+        annotated = frame.copy()
+
+        for head_bbox in debug_regions.head_zones:
+            hx1, hy1, hx2, hy2 = head_bbox
+            cv2.rectangle(annotated, (hx1, hy1), (hx2, hy2), (255, 200, 0), 1)
+            cv2.putText(
+                annotated,
+                "Head zone",
+                (hx1, max(15, hy1 - 4)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (255, 200, 0),
+                1,
+            )
+
+        for det in detections:
+            x1, y1, x2, y2 = det.bbox
+            color = (0, 165, 255) if det.is_drinking else (0, 255, 0)
+
+            if det.head_bbox is not None:
+                hx1, hy1, hx2, hy2 = det.head_bbox
+                head_color = (255, 255, 0) if det.is_drinking else (255, 200, 0)
+                cv2.rectangle(annotated, (hx1, hy1), (hx2, hy2), head_color, 1)
+                cv2.putText(
+                    annotated,
+                    "Head zone",
+                    (hx1, max(15, hy1 - 4)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    head_color,
+                    1,
+                )
+
+            if det.rotated_bbox is not None and len(det.rotated_bbox) == 4:
+                points = np.array(det.rotated_bbox, dtype=np.int32).reshape((-1, 1, 2))
+                cv2.polylines(annotated, [points], isClosed=True, color=color, thickness=2)
+            else:
+                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+
+            angle_label = self._normalize_rotation_angle(det.rotation_degrees)
+            angle_text = "" if angle_label is None else f" {angle_label:+.0f}deg"
+            label = f"{det.drink_type} ({det.confidence:.0%}){angle_text}"
+            if det.is_drinking:
+                label += " - DRINKING!"
+
+            (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(annotated, (x1, y1 - text_h - 10), (x1 + text_w, y1), color, -1)
+            cv2.putText(
+                annotated,
+                label,
+                (x1, y1 - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 0, 0),
+                2,
+            )
+
+        drink_count = len(detections)
+        drinking = any(detection.is_drinking for detection in detections)
+        status = f"Drinks: {drink_count}"
+        if drinking:
+            status += " | STATUS: Drinking detected!"
+        cv2.putText(
+            annotated,
+            status,
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 255, 255),
+            2,
+        )
+        return annotated
+
+    def _detect_persons(self, frame: np.ndarray, person_conf_threshold: float = 0.08) -> list[BBox]:
+        person_bboxes: list[BBox] = []
         results = self.model(
             frame,
             conf=person_conf_threshold,
@@ -176,12 +285,10 @@ class DrinkDetector:
             boxes = result.boxes
             if boxes is None:
                 continue
-
             for box in boxes:
                 confidence = float(box.conf[0])
                 if confidence < person_conf_threshold:
                     continue
-
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 bbox = (int(x1), int(y1), int(x2), int(y2))
                 if self._is_reasonable_person_bbox(frame, bbox):
@@ -189,14 +296,14 @@ class DrinkDetector:
 
         return self._dedupe_boxes(person_bboxes)
 
-    def _select_primary_person(self, frame: np.ndarray, persons: list[tuple]) -> list[tuple]:
+    def _select_primary_person(self, frame: np.ndarray, persons: list[BBox]) -> list[BBox]:
         if not persons:
             return []
 
         frame_h, frame_w = frame.shape[:2]
         frame_center_x = frame_w / 2
 
-        def person_score(person_bbox: tuple) -> float:
+        def person_score(person_bbox: BBox) -> float:
             px1, py1, px2, py2 = person_bbox
             width = max(1, px2 - px1)
             height = max(1, py2 - py1)
@@ -205,8 +312,7 @@ class DrinkDetector:
             center_penalty = abs(center_x - frame_center_x) / max(1, frame_w)
             return area_ratio * 2.2 - center_penalty * 0.7 - max(0, py1) / max(1, frame_h) * 0.12
 
-        primary_person = max(persons, key=person_score)
-        return [primary_person]
+        return [max(persons, key=person_score)]
 
     def _detect_drinks(
         self,
@@ -214,7 +320,6 @@ class DrinkDetector:
         conf_threshold: float = 0.18,
         imgsz: int = 960,
     ) -> list[Detection]:
-        """Fallback drink-only pass for harder object poses like tilted bottles/glasses."""
         drink_detections: list[Detection] = []
         results = self.model(
             frame,
@@ -228,28 +333,27 @@ class DrinkDetector:
             boxes = result.boxes
             if boxes is None:
                 continue
-
             for box in boxes:
                 cls_id = int(box.cls[0])
                 confidence = float(box.conf[0])
                 if cls_id not in DRINK_CLASS_IDS or confidence < conf_threshold:
                     continue
-
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 bbox = (int(x1), int(y1), int(x2), int(y2))
                 if not self._is_reasonable_drink_bbox(frame, bbox):
                     continue
-
                 label = DRINK_COCO_CLASSES[cls_id]
                 rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
-                drink_detections.append(Detection(
-                    label=label,
-                    confidence=confidence,
-                    bbox=bbox,
-                    drink_type=self._infer_drink_type(frame, bbox, label),
-                    rotation_degrees=rotation_degrees,
-                    rotated_bbox=rotated_bbox,
-                ))
+                drink_detections.append(
+                    Detection(
+                        label=label,
+                        confidence=confidence,
+                        bbox=bbox,
+                        drink_type=self._infer_drink_type(frame, bbox, label),
+                        rotation_degrees=rotation_degrees,
+                        rotated_bbox=rotated_bbox,
+                    )
+                )
 
         return self._merge_drink_detections([], drink_detections)
 
@@ -340,17 +444,15 @@ class DrinkDetector:
         self,
         points: tuple[tuple[int, int], ...],
         original_shape: tuple[int, int],
-    ) -> tuple:
+    ) -> BBox:
         original_h, original_w = original_shape
         xs = [min(max(0, point[0]), original_w - 1) for point in points]
         ys = [min(max(0, point[1]), original_h - 1) for point in points]
         return (min(xs), min(ys), max(xs), max(ys))
 
-    def _detect_persons_from_faces(self, frame: np.ndarray) -> list[tuple]:
-        """Fallback for webcam framing: detect a face and expand it to an approximate upper-body box."""
+    def _detect_persons_from_faces(self, frame: np.ndarray) -> tuple[list[BBox], list[BBox]]:
         if self.face_cascade is None or self.face_cascade.empty():
-            self._face_bboxes = []
-            return []
+            return [], []
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
@@ -362,11 +464,11 @@ class DrinkDetector:
         )
 
         frame_h, frame_w = frame.shape[:2]
-        person_bboxes: list[tuple] = []
-        self._face_bboxes = []
+        person_bboxes: list[BBox] = []
+        face_bboxes: list[BBox] = []
 
         for fx, fy, fw, fh in faces:
-            self._face_bboxes.append((int(fx), int(fy), int(fx + fw), int(fy + fh)))
+            face_bboxes.append((int(fx), int(fy), int(fx + fw), int(fy + fh)))
             px1 = max(0, int(fx - fw * 1.0))
             py1 = max(0, int(fy - fh * 0.55))
             px2 = min(frame_w, int(fx + fw * 2.0))
@@ -376,12 +478,12 @@ class DrinkDetector:
             if self._is_reasonable_person_bbox(frame, bbox, allow_upper_body=True):
                 person_bboxes.append(bbox)
 
-        return self._dedupe_boxes(person_bboxes)
+        return self._dedupe_boxes(person_bboxes), face_bboxes
 
     def _is_reasonable_person_bbox(
         self,
         frame: np.ndarray,
-        bbox: tuple,
+        bbox: BBox,
         allow_upper_body: bool = False,
     ) -> bool:
         x1, y1, x2, y2 = bbox
@@ -392,21 +494,19 @@ class DrinkDetector:
 
         min_height_ratio = 0.18 if allow_upper_body else 0.25
         min_area_ratio = 0.035 if allow_upper_body else 0.06
-
         return (
             width >= frame_w * 0.12
             and height >= frame_h * min_height_ratio
             and area_ratio >= min_area_ratio
         )
 
-    def _is_reasonable_drink_bbox(self, frame: np.ndarray, bbox: tuple) -> bool:
+    def _is_reasonable_drink_bbox(self, frame: np.ndarray, bbox: BBox) -> bool:
         x1, y1, x2, y2 = bbox
         frame_h, frame_w = frame.shape[:2]
         width = max(1, x2 - x1)
         height = max(1, y2 - y1)
         area_ratio = (width * height) / max(1, frame_w * frame_h)
         aspect_ratio = max(width, height) / max(1, min(width, height))
-
         return (
             width >= frame_w * 0.02
             and height >= frame_h * 0.04
@@ -414,14 +514,16 @@ class DrinkDetector:
             and aspect_ratio <= 8.0
         )
 
-    def _dedupe_boxes(self, boxes: list[tuple]) -> list[tuple]:
-        deduped: list[tuple] = []
-
-        for bbox in sorted(boxes, key=lambda box: (box[2] - box[0]) * (box[3] - box[1]), reverse=True):
+    def _dedupe_boxes(self, boxes: list[BBox]) -> list[BBox]:
+        deduped: list[BBox] = []
+        for bbox in sorted(
+            boxes,
+            key=lambda box: (box[2] - box[0]) * (box[3] - box[1]),
+            reverse=True,
+        ):
             if any(self._bbox_iou(bbox, existing) >= 0.5 for existing in deduped):
                 continue
             deduped.append(bbox)
-
         return deduped
 
     def _merge_drink_detections(
@@ -449,7 +551,7 @@ class DrinkDetector:
 
         return merged
 
-    def _get_head_bbox(self, person_bbox: tuple) -> tuple:
+    def _get_head_bbox(self, person_bbox: BBox) -> BBox:
         px1, py1, px2, py2 = person_bbox
         person_width = max(1, px2 - px1)
         person_height = max(1, py2 - py1)
@@ -460,12 +562,12 @@ class DrinkDetector:
             int(py1 + person_height * 0.69),
         )
 
-    def _get_best_head_bbox(self, person_bbox: tuple) -> tuple:
+    def _get_best_head_bbox(self, person_bbox: BBox, face_bboxes: list[BBox]) -> BBox:
         person_center_x = (person_bbox[0] + person_bbox[2]) / 2
         best_face = None
         best_distance = None
 
-        for face_bbox in self._face_bboxes:
+        for face_bbox in face_bboxes:
             face_center_x = (face_bbox[0] + face_bbox[2]) / 2
             distance = abs(face_center_x - person_center_x)
             if best_distance is None or distance < best_distance:
@@ -474,27 +576,28 @@ class DrinkDetector:
 
         if best_face is not None:
             return best_face
-
         return self._get_head_bbox(person_bbox)
 
-    def _get_stabilized_head_zones(self, persons: list[tuple]) -> list[tuple]:
+    def _get_stabilized_head_zones(
+        self,
+        persons: list[BBox],
+        face_bboxes: list[BBox],
+        previous_smoothed_bbox: BBox | None,
+    ) -> tuple[list[BBox], BBox | None]:
         if not persons:
-            self._smoothed_head_bbox = None
-            return []
+            return [], None
 
-        raw_head_zones = [self._get_best_head_bbox(person_bbox) for person_bbox in persons]
-        stabilized_primary = self._smooth_bbox(self._smoothed_head_bbox, raw_head_zones[0])
-        self._smoothed_head_bbox = stabilized_primary
+        raw_head_zones = [self._get_best_head_bbox(person_bbox, face_bboxes) for person_bbox in persons]
+        stabilized_primary = self._smooth_bbox(previous_smoothed_bbox, raw_head_zones[0])
         raw_head_zones[0] = stabilized_primary
-        return raw_head_zones
+        return raw_head_zones, stabilized_primary
 
-    def _smooth_bbox(self, previous_bbox: tuple | None, current_bbox: tuple) -> tuple:
+    def _smooth_bbox(self, previous_bbox: BBox | None, current_bbox: BBox) -> BBox:
         if previous_bbox is None:
             return current_bbox
 
         px1, py1, px2, py2 = previous_bbox
         cx1, cy1, cx2, cy2 = current_bbox
-
         prev_width = max(1.0, px2 - px1)
         prev_height = max(1.0, py2 - py1)
         curr_width = max(1.0, cx2 - cx1)
@@ -510,24 +613,21 @@ class DrinkDetector:
             abs(curr_height - prev_height) / prev_height,
         )
 
-        # Hold nearly identical detections steady so face-box noise does not show up as shake.
         if shift_ratio < 0.045 and size_delta < 0.12:
             return previous_bbox
 
-        # Follow real movement faster once the detector meaningfully relocates the head.
         alpha = 0.22
         if shift_ratio > 0.1 or size_delta > 0.18:
             alpha = 0.38
         if shift_ratio > 0.2:
             alpha = 0.6
 
-        smoothed = tuple(
+        return tuple(
             int(round(prev + (curr - prev) * alpha))
             for prev, curr in zip(previous_bbox, current_bbox)
-        )
-        return smoothed
+        )  # type: ignore[return-value]
 
-    def _expand_bbox(self, bbox: tuple, x_pad: float, y_pad: float) -> tuple:
+    def _expand_bbox(self, bbox: BBox, x_pad: float, y_pad: float) -> BBox:
         x1, y1, x2, y2 = bbox
         width = max(1, x2 - x1)
         height = max(1, y2 - y1)
@@ -538,7 +638,7 @@ class DrinkDetector:
             int(y2 + height * y_pad),
         )
 
-    def _distance_point_to_bbox(self, point: tuple[float, float], bbox: tuple) -> float:
+    def _distance_point_to_bbox(self, point: tuple[float, float], bbox: BBox) -> float:
         px, py = point
         x1, y1, x2, y2 = bbox
         dx = max(x1 - px, 0.0, px - x2)
@@ -551,7 +651,10 @@ class DrinkDetector:
             center_x = sum(point[0] for point in points) / 4
             center_y = sum(point[1] for point in points) / 4
             midpoints = [
-                ((points[idx][0] + points[(idx + 1) % 4][0]) / 2, (points[idx][1] + points[(idx + 1) % 4][1]) / 2)
+                (
+                    (points[idx][0] + points[(idx + 1) % 4][0]) / 2,
+                    (points[idx][1] + points[(idx + 1) % 4][1]) / 2,
+                )
                 for idx in range(4)
             ]
             return [*points, *midpoints, (center_x, center_y)]
@@ -560,7 +663,6 @@ class DrinkDetector:
         width = max(1, dx2 - dx1)
         height = max(1, dy2 - dy1)
         center_x = (dx1 + dx2) / 2
-
         return [
             (center_x, dy1),
             (dx1 + width * 0.2, dy1 + height * 0.12),
@@ -576,7 +678,6 @@ class DrinkDetector:
         normalized_rotation = self._normalize_rotation_angle(det.rotation_degrees)
         if normalized_rotation is not None:
             return abs(normalized_rotation) <= 32
-
         dx1, dy1, dx2, dy2 = det.bbox
         width = max(1, dx2 - dx1)
         height = max(1, dy2 - dy1)
@@ -585,7 +686,7 @@ class DrinkDetector:
     def _estimate_drink_pose(
         self,
         frame: np.ndarray,
-        bbox: tuple,
+        bbox: BBox,
     ) -> tuple[float, tuple[tuple[int, int], ...] | None]:
         x1, y1, x2, y2 = bbox
         frame_h, frame_w = frame.shape[:2]
@@ -612,7 +713,6 @@ class DrinkDetector:
             area = cv2.contourArea(contour)
             if area < max(20.0, crop.shape[0] * crop.shape[1] * 0.04):
                 continue
-
             moments = cv2.moments(contour)
             if moments["m00"] == 0:
                 continue
@@ -644,7 +744,7 @@ class DrinkDetector:
             contour_angle = raw_angle + 90 if rect_w < rect_h else raw_angle
         return float(contour_angle), rotated_bbox
 
-    def _default_rotation_from_bbox(self, bbox: tuple) -> float:
+    def _default_rotation_from_bbox(self, bbox: BBox) -> float:
         x1, y1, x2, y2 = bbox
         width = max(1, x2 - x1)
         height = max(1, y2 - y1)
@@ -653,7 +753,6 @@ class DrinkDetector:
     def _estimate_contour_angle(self, contour: np.ndarray) -> float | None:
         if contour is None or len(contour) < 5:
             return None
-
         try:
             line = cv2.fitLine(contour, cv2.DIST_L2, 0, 0.01, 0.01)
         except cv2.error:
@@ -693,34 +792,29 @@ class DrinkDetector:
     def _normalize_rotation_angle(self, angle: float | None) -> float | None:
         if angle is None:
             return None
-        normalized = ((angle + 90.0) % 180.0) - 90.0
-        return normalized
+        return ((angle + 90.0) % 180.0) - 90.0
 
-    def _infer_drink_type(self, frame: np.ndarray, bbox: tuple, base_label: str) -> str:
+    def _infer_drink_type(self, frame: np.ndarray, bbox: BBox, base_label: str) -> str:
         x1, y1, x2, y2 = bbox
         h, w = frame.shape[:2]
-
-        # Clamp to frame bounds
         x1 = max(0, x1)
         y1 = max(0, y1)
         x2 = min(w, x2)
         y2 = min(h, y2)
-
         crop = frame[y1:y2, x1:x2]
         if crop.size == 0:
             return DRINK_TYPE_MAP.get(base_label, ["Unknown"])[0]
 
-        # Analyze color distribution for drink type hints
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        mean_hue = np.mean(hsv[:, :, 0])
-        mean_sat = np.mean(hsv[:, :, 1])
-        mean_val = np.mean(hsv[:, :, 2])
+        mean_hue = float(np.mean(hsv[:, :, 0]))
+        mean_sat = float(np.mean(hsv[:, :, 1]))
+        mean_val = float(np.mean(hsv[:, :, 2]))
 
         if base_label == "bottle":
             return self._classify_bottle(mean_hue, mean_sat, mean_val)
-        elif base_label == "wine glass":
+        if base_label == "wine glass":
             return self._classify_wine_glass(mean_hue, mean_sat, mean_val)
-        elif base_label == "cup":
+        if base_label == "cup":
             return self._classify_cup(mean_hue, mean_sat, mean_val)
         return "Drink"
 
@@ -755,22 +849,33 @@ class DrinkDetector:
             return "Water"
         return "Hot Beverage"
 
-    def _detect_drinking_action(self, detections: list[Detection], persons: list[tuple]) -> None:
-        """Detect active drinking using a single head-zone heuristic plus short streak smoothing."""
+    def _detect_drinking_action(
+        self,
+        detections: list[Detection],
+        persons: list[BBox],
+        active_head_bbox: BBox | None,
+        face_bboxes: list[BBox],
+        previous_tracks: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
         if not detections:
-            self._drinking_tracks = []
-            return
+            return []
 
         raw_candidates: list[Detection] = []
         for det in detections:
             det.is_drinking = False
-            det.head_bbox = self._active_head_bbox
-            if persons and self._is_drink_near_head(det, persons):
+            det.head_bbox = active_head_bbox
+            if persons and self._is_drink_near_head(det, persons, active_head_bbox, face_bboxes):
                 raw_candidates.append(det)
 
-        self._update_drinking_tracks(raw_candidates)
+        return self._update_drinking_tracks(raw_candidates, previous_tracks)
 
-    def _is_drink_near_head(self, det: Detection, persons: list[tuple]) -> bool:
+    def _is_drink_near_head(
+        self,
+        det: Detection,
+        persons: list[BBox],
+        active_head_bbox: BBox | None,
+        face_bboxes: list[BBox],
+    ) -> bool:
         dx1, dy1, dx2, dy2 = det.bbox
         drink_width = max(1, dx2 - dx1)
         drink_height = max(1, dy2 - dy1)
@@ -783,7 +888,7 @@ class DrinkDetector:
             px1, py1, px2, py2 = person_bbox
             person_width = max(1, px2 - px1)
             person_height = max(1, py2 - py1)
-            head_bbox = self._active_head_bbox or self._get_best_head_bbox(person_bbox)
+            head_bbox = active_head_bbox or self._get_best_head_bbox(person_bbox, face_bboxes)
             expanded_head_bbox = self._expand_bbox(
                 head_bbox,
                 x_pad=0.45 if self._is_sideways_drink(det) else 0.3,
@@ -799,7 +904,10 @@ class DrinkDetector:
                 self._distance_point_to_bbox(point, expanded_head_bbox)
                 for point in contact_points
             )
-            head_distance_score = 1.0 - min(head_distance / max(head_width, head_height, drink_width), 1.4)
+            head_distance_score = 1.0 - min(
+                head_distance / max(head_width, head_height, drink_width),
+                1.4,
+            )
             contact_y = dy1 + drink_height * 0.24
             vertical_gap = abs(contact_y - head_center_y) / head_height
             horizontal_gap = abs(drink_center_x - head_center_x) / person_width
@@ -850,25 +958,25 @@ class DrinkDetector:
                 best_head_bbox = head_bbox
 
         det.head_bbox = best_head_bbox
-
         return best_score >= 0.34
 
-    def _update_drinking_tracks(self, raw_candidates: list[Detection]) -> None:
+    def _update_drinking_tracks(
+        self,
+        raw_candidates: list[Detection],
+        previous_tracks: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
         updated_tracks: list[dict[str, object]] = []
 
         for det in raw_candidates:
             matched_track = None
             matched_score = 0.0
-
-            for track in self._drinking_tracks:
+            for track in previous_tracks:
                 if track["label"] != det.label:
                     continue
-
-                iou = self._bbox_iou(det.bbox, track["bbox"])
-                center_distance = self._bbox_center_distance_ratio(det.bbox, track["bbox"])
+                iou = self._bbox_iou(det.bbox, track["bbox"])  # type: ignore[arg-type]
+                center_distance = self._bbox_center_distance_ratio(det.bbox, track["bbox"])  # type: ignore[arg-type]
                 if iou < 0.1 and center_distance > 0.65:
                     continue
-
                 match_score = iou + max(0.0, 0.65 - center_distance)
                 if match_score > matched_score:
                     matched_score = match_score
@@ -885,12 +993,11 @@ class DrinkDetector:
                 "streak": streak,
             })
 
-        self._drinking_tracks = updated_tracks
+        return updated_tracks
 
-    def _bbox_center_distance_ratio(self, box_a: tuple, box_b: tuple) -> float:
+    def _bbox_center_distance_ratio(self, box_a: BBox, box_b: BBox) -> float:
         ax1, ay1, ax2, ay2 = box_a
         bx1, by1, bx2, by2 = box_b
-
         center_a = ((ax1 + ax2) / 2, (ay1 + ay2) / 2)
         center_b = ((bx1 + bx2) / 2, (by1 + by2) / 2)
         distance = float(np.hypot(center_a[0] - center_b[0], center_a[1] - center_b[1]))
@@ -901,10 +1008,9 @@ class DrinkDetector:
         )
         return distance / scale
 
-    def _bbox_iou(self, box_a: tuple, box_b: tuple) -> float:
+    def _bbox_iou(self, box_a: BBox, box_b: BBox) -> float:
         ax1, ay1, ax2, ay2 = box_a
         bx1, by1, bx2, by2 = box_b
-
         inter_x1 = max(ax1, bx1)
         inter_y1 = max(ay1, by1)
         inter_x2 = min(ax2, bx2)
@@ -920,74 +1026,3 @@ class DrinkDetector:
         area_b = max(1, (bx2 - bx1) * (by2 - by1))
         union = area_a + area_b - intersection
         return intersection / union if union > 0 else 0.0
-
-    def annotate_frame(self, frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
-        annotated = frame.copy()
-
-        for person_bbox, head_bbox in zip(self._person_bboxes, self._person_head_zones):
-            hx1, hy1, hx2, hy2 = head_bbox
-            cv2.rectangle(annotated, (hx1, hy1), (hx2, hy2), (255, 200, 0), 1)
-            cv2.putText(
-                annotated,
-                "Head zone",
-                (hx1, max(15, hy1 - 4)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                (255, 200, 0),
-                1,
-            )
-
-        for det in detections:
-            x1, y1, x2, y2 = det.bbox
-            color = (0, 255, 0)  # Green for drink detected
-
-            if det.is_drinking:
-                color = (0, 165, 255)  # Orange for drinking action
-
-            if det.head_bbox is not None:
-                hx1, hy1, hx2, hy2 = det.head_bbox
-                head_color = (255, 255, 0) if det.is_drinking else (255, 200, 0)
-                cv2.rectangle(annotated, (hx1, hy1), (hx2, hy2), head_color, 1)
-                cv2.putText(
-                    annotated,
-                    "Head zone",
-                    (hx1, max(15, hy1 - 4)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    head_color,
-                    1,
-                )
-
-            # Draw bounding box or rotated pose overlay when available.
-            if det.rotated_bbox is not None and len(det.rotated_bbox) == 4:
-                points = np.array(det.rotated_bbox, dtype=np.int32).reshape((-1, 1, 2))
-                cv2.polylines(annotated, [points], isClosed=True, color=color, thickness=2)
-            else:
-                cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-
-            # Label
-            angle_label = self._normalize_rotation_angle(det.rotation_degrees)
-            if angle_label is None:
-                angle_text = ""
-            else:
-                angle_text = f" {angle_label:+.0f}deg"
-            label = f"{det.drink_type} ({det.confidence:.0%}){angle_text}"
-            if det.is_drinking:
-                label += " - DRINKING!"
-
-            # Background for text
-            (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-            cv2.rectangle(annotated, (x1, y1 - text_h - 10), (x1 + text_w, y1), color, -1)
-            cv2.putText(annotated, label, (x1, y1 - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-
-        # Status bar
-        drink_count = len(detections)
-        drinking = any(d.is_drinking for d in detections)
-        status = f"Drinks: {drink_count}"
-        if drinking:
-            status += " | STATUS: Drinking detected!"
-        cv2.putText(annotated, status, (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-        return annotated

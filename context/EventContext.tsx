@@ -1,14 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-import {
-  areEventCollectionsEqual,
-  EVENT_RECORDS,
-  EventRecord,
-  filterEventRecordsForDiscovery,
-  isRemovedSeedEventId,
-} from '@/constants/events';
-import { useUser } from '@/context/UserContext';
+import { EVENT_RECORDS, EventRecord } from '@/constants/events';
 import { deleteRemoteEvent, fetchRemoteEvents, upsertRemoteEvent } from '@/services/appDataApi';
 
 interface CreateEventInput {
@@ -28,18 +21,13 @@ interface CreateEventInput {
 interface EventContextType {
   events: EventRecord[];
   featuredEventId: string;
-  isLoading: boolean;
-  isUsingCachedData: boolean;
-  isOffline: boolean;
-  error: string | null;
-  createEvent: (input: CreateEventInput) => Promise<EventRecord>;
-  updateEvent: (eventId: string, updates: Partial<EventRecord>) => Promise<EventRecord | undefined>;
-  deleteEvent: (eventId: string) => Promise<void>;
+  createEvent: (input: CreateEventInput) => EventRecord;
+  updateEvent: (eventId: string, updates: Partial<EventRecord>) => EventRecord | undefined;
+  deleteEvent: (eventId: string) => void;
   getEventById: (eventId?: string | string[]) => EventRecord | undefined;
-  refreshEvents: () => Promise<void>;
 }
 
-const STORAGE_KEY = 'eventcapture.events.cache';
+const STORAGE_KEY = 'eventcapture.events';
 const EventContext = createContext<EventContextType | undefined>(undefined);
 
 function isValidEventRecord(value: unknown): value is EventRecord {
@@ -48,6 +36,7 @@ function isValidEventRecord(value: unknown): value is EventRecord {
   }
 
   const event = value as EventRecord;
+
   return (
     typeof event.id === 'string' &&
     typeof event.title === 'string' &&
@@ -71,22 +60,18 @@ function isValidEventRecord(value: unknown): value is EventRecord {
   );
 }
 
-function parseStoredEvents(rawValue: string | null): EventRecord[] {
+function parseStoredEvents(rawValue: string | null): EventRecord[] | null {
   if (!rawValue) {
-    return [];
+    return null;
   }
 
-  try {
-    const parsedValue = JSON.parse(rawValue) as unknown;
-    return Array.isArray(parsedValue)
-      ? parsedValue.filter(
-          (event): event is EventRecord =>
-            isValidEventRecord(event) && !isRemovedSeedEventId(event.id)
-        )
-      : [];
-  } catch {
-    return [];
+  const parsedValue = JSON.parse(rawValue) as unknown;
+
+  if (!Array.isArray(parsedValue)) {
+    return null;
   }
+
+  return parsedValue.filter(isValidEventRecord);
 }
 
 function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
@@ -98,6 +83,7 @@ function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
       if (!isValidEventRecord(event) || seenIds.has(event.id)) {
         continue;
       }
+
       seenIds.add(event.id);
       merged.push(event);
     }
@@ -107,30 +93,28 @@ function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
 }
 
 export function EventProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated, user } = useUser();
-  const [allEvents, setAllEvents] = useState<EventRecord[]>(EVENT_RECORDS);
+  const [events, setEvents] = useState<EventRecord[]>(EVENT_RECORDS);
   const [hasHydrated, setHasHydrated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isUsingCachedData, setIsUsingCachedData] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const events = useMemo(() => filterEventRecordsForDiscovery(allEvents), [allEvents]);
 
   useEffect(() => {
     let isMounted = true;
+
     const hydrate = async () => {
       try {
         const storedEvents = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!isMounted) {
+        const parsedEvents = parseStoredEvents(storedEvents);
+
+        if (!parsedEvents || !parsedEvents.length || !isMounted) {
           return;
         }
 
-        const cachedEvents = parseStoredEvents(storedEvents);
-        const mergedEvents = mergeEventCollections(cachedEvents, EVENT_RECORDS);
-        setAllEvents(mergedEvents);
-        setIsUsingCachedData(
-          cachedEvents.length > 0 && !areEventCollectionsEqual(mergedEvents, EVENT_RECORDS)
-        );
+        setEvents(mergeEventCollections(parsedEvents, EVENT_RECORDS));
+      } catch {
+        try {
+          await AsyncStorage.removeItem(STORAGE_KEY);
+        } catch {
+          // Ignore cleanup failures and keep seed events in memory.
+        }
       } finally {
         if (isMounted) {
           setHasHydrated(true);
@@ -138,7 +122,8 @@ export function EventProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    void hydrate();
+    hydrate();
+
     return () => {
       isMounted = false;
     };
@@ -149,41 +134,33 @@ export function EventProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (areEventCollectionsEqual(allEvents, EVENT_RECORDS)) {
-      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
-      return;
-    }
-
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allEvents)).catch(() => {});
-  }, [allEvents, hasHydrated]);
-
-  const refreshEvents = async () => {
-    setIsLoading(true);
-    try {
-      const remoteEvents = await fetchRemoteEvents();
-      setAllEvents(
-        remoteEvents.length > 0
-          ? mergeEventCollections(remoteEvents, EVENT_RECORDS)
-          : EVENT_RECORDS
-      );
-      setIsUsingCachedData(false);
-      setIsOffline(false);
-      setError(null);
-    } catch (refreshError) {
-      setIsOffline(true);
-      setError(refreshError instanceof Error ? refreshError.message : 'Unable to load events right now.');
-      throw refreshError;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(() => {
+      // Keep the app usable even if persistence is unavailable.
+    });
+  }, [events, hasHydrated]);
 
   useEffect(() => {
     if (!hasHydrated) {
       return;
     }
 
-    void refreshEvents().catch(() => {});
+    let isMounted = true;
+
+    fetchRemoteEvents()
+      .then((remoteEvents) => {
+        if (!isMounted || !remoteEvents.length) {
+          return;
+        }
+
+        setEvents((prev) => mergeEventCollections(remoteEvents, prev, EVENT_RECORDS));
+      })
+      .catch(() => {
+        // Keep the app responsive even when the backend is offline.
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [hasHydrated]);
 
   const value = useMemo<EventContextType>(() => {
@@ -192,28 +169,22 @@ export function EventProvider({ children }: { children: ReactNode }) {
     return {
       events,
       featuredEventId,
-      isLoading,
-      isUsingCachedData,
-      isOffline,
-      error,
-      createEvent: async (input) => {
-        if (!isAuthenticated) {
-          throw new Error('Sign in to create an event.');
-        }
-
+      createEvent: (input) => {
         const trimmedTitle = input.title.trim();
         const eventTitle = trimmedTitle || 'Untitled Event';
-        const draftEvent: EventRecord = {
-          id: `${eventTitle
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '')}-${Date.now().toString().slice(-6)}`,
+        const eventId = `${eventTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')}-${Date.now().toString().slice(-6)}`;
+
+        const newEvent: EventRecord = {
+          id: eventId,
           title: eventTitle,
           shortTitle: 'Freshly created event',
           date: input.date.trim() || 'TBD',
           fullDate: input.fullDate.trim() || input.date.trim() || 'Date to be confirmed',
           time: input.time.trim() || 'Time to be confirmed',
-          place: input.place.trim() || user.city || 'Brussels',
+          place: input.place.trim() || 'Brussels',
           address: input.address.trim() || input.place.trim() || 'Location to be confirmed',
           attendees: '0 going',
           attendeeCount: 0,
@@ -221,10 +192,9 @@ export function EventProvider({ children }: { children: ReactNode }) {
           priceLabel: input.priceLabel.trim() || input.price.trim() || 'Free entry',
           vibe: input.vibe.trim() || 'Atmosphere to be announced',
           experience: 'Hosted event',
-          heroImage:
-            input.heroImage.trim() || allEvents[0]?.heroImage || EVENT_RECORDS[0]?.heroImage || '',
-          hostName: user.fullName || user.username,
-          hostAvatar: user.avatarUri,
+          heroImage: input.heroImage.trim() || EVENT_RECORDS[0]?.heroImage || '',
+          hostName: 'You',
+          hostAvatar: 'https://i.pravatar.cc/120?img=52',
           badge: 'JUST ADDED',
           description:
             input.description.trim() ||
@@ -236,58 +206,59 @@ export function EventProvider({ children }: { children: ReactNode }) {
             .slice(0, 4),
         };
 
-        if (!draftEvent.tags.length) {
-          draftEvent.tags = ['New event', 'Community', 'Live now'];
+        if (!newEvent.tags.length) {
+          newEvent.tags = ['New event', 'Community', 'Live now'];
         }
 
-        const persistedEvent = await upsertRemoteEvent(draftEvent);
-        setAllEvents((prev) =>
-          mergeEventCollections(
-            [persistedEvent],
-            prev.filter((item) => item.id !== persistedEvent.id)
-          )
-        );
-        setIsUsingCachedData(false);
-        setIsOffline(false);
-        setError(null);
-        return persistedEvent;
+        setEvents((prev) => mergeEventCollections([newEvent], prev));
+        void upsertRemoteEvent(newEvent)
+          .then((persistedEvent) => {
+            setEvents((prev) =>
+              mergeEventCollections(
+                [persistedEvent],
+                prev.filter((event) => event.id !== persistedEvent.id),
+                EVENT_RECORDS
+              )
+            );
+          })
+          .catch(() => {
+            // Local persistence remains the fallback when the backend is unavailable.
+          });
+        return newEvent;
       },
-      updateEvent: async (eventId, updates) => {
-        const current = allEvents.find((event) => event.id === eventId);
-        if (!current) {
-          return undefined;
+      updateEvent: (eventId, updates) => {
+        let updatedEvent: EventRecord | undefined;
+        setEvents((prev) =>
+          prev.map((event) => {
+            if (event.id === eventId) {
+              updatedEvent = { ...event, ...updates };
+              return updatedEvent;
+            }
+            return event;
+          })
+        );
+        if (updatedEvent) {
+          void upsertRemoteEvent(updatedEvent).catch(() => {
+            // Local state stays editable even if the remote save fails.
+          });
         }
-
-        const nextEvent = { ...current, ...updates };
-        const persistedEvent = await upsertRemoteEvent(nextEvent);
-        setAllEvents((prev) =>
-          mergeEventCollections(
-            [persistedEvent],
-            prev.filter((event) => event.id !== eventId)
-          )
-        );
-        setIsUsingCachedData(false);
-        setIsOffline(false);
-        setError(null);
-        return persistedEvent;
+        return updatedEvent;
       },
-      deleteEvent: async (eventId) => {
-        await deleteRemoteEvent(eventId);
-        setAllEvents((prev) => prev.filter((event) => event.id !== eventId));
-        setIsUsingCachedData(false);
-        setIsOffline(false);
-        setError(null);
+      deleteEvent: (eventId) => {
+        setEvents((prev) => prev.filter((event) => event.id !== eventId));
+        void deleteRemoteEvent(eventId).catch(() => {
+          // Local deletion remains applied when the backend is unavailable.
+        });
       },
       getEventById: (eventId) => {
         if (!eventId || Array.isArray(eventId)) {
           return undefined;
         }
 
-        return allEvents.find((event) => event.id === eventId);
+        return events.find((event) => event.id === eventId);
       },
-      refreshEvents,
     };
-  }, [allEvents, error, events, isAuthenticated, isLoading, isOffline, isUsingCachedData, user]);
+  }, [events]);
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 }
