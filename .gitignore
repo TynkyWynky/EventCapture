@@ -7,7 +7,7 @@ backend/.venv/
 .codex
 
 # Expo
-.expo/
+*.expo/
 dist/
 web-build/
 expo-env.d.ts
@@ -43,8 +43,12 @@ backend/eventcapture.db*
 # typescript
 *.tsbuildinfo
 *.pyc
-backend/__pycache__/
+*.pyo
+*.pyd
+*.py[cod]
 __pycache__/
+**/__pycache__/
+backend/__pycache__/
 
 app-example
 

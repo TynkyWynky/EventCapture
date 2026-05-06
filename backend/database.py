@@ -103,6 +103,7 @@ def init_database() -> None:
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 short_title TEXT,
+                source_url TEXT,
                 date TEXT NOT NULL,
                 full_date TEXT NOT NULL,
                 time TEXT NOT NULL,
@@ -319,6 +320,7 @@ def init_database() -> None:
         )
 
         _ensure_column(connection, "events", "created_by_user_id", "TEXT")
+        _ensure_column(connection, "events", "source_url", "TEXT")
         _ensure_column(connection, "post_likes", "user_id", "TEXT")
         _ensure_column(connection, "users", "crown_count", "INTEGER NOT NULL DEFAULT 0")
         connection.commit()
@@ -1589,6 +1591,7 @@ def _event_from_row(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[st
         "id": row["id"],
         "title": row["title"],
         "short_title": row["short_title"],
+        "source_url": row["source_url"] if "source_url" in row.keys() else None,
         "date": row["date"],
         "full_date": row["full_date"],
         "time": row["time"],
@@ -1639,6 +1642,7 @@ def upsert_event(event: dict[str, object], actor: dict[str, object]) -> dict[str
             "id": event_id,
             "title": str(event["title"]).strip(),
             "short_title": event.get("short_title"),
+            "source_url": str(event.get("source_url") or "").strip() or None,
             "date": str(event["date"]).strip(),
             "full_date": str(event["full_date"]).strip(),
             "time": str(event["time"]).strip(),
@@ -1664,18 +1668,19 @@ def upsert_event(event: dict[str, object], actor: dict[str, object]) -> dict[str
         connection.execute(
             """
             INSERT INTO events (
-                id, title, short_title, date, full_date, time, place, address, attendees,
+                id, title, short_title, source_url, date, full_date, time, place, address, attendees,
                 attendee_count, price, price_label, vibe, experience, hero_image, host_name,
                 host_avatar, badge, description, tags_json, created_by_user_id, created_at, updated_at
             )
             VALUES (
-                :id, :title, :short_title, :date, :full_date, :time, :place, :address, :attendees,
+                :id, :title, :short_title, :source_url, :date, :full_date, :time, :place, :address, :attendees,
                 :attendee_count, :price, :price_label, :vibe, :experience, :hero_image, :host_name,
                 :host_avatar, :badge, :description, :tags_json, :created_by_user_id, :created_at, :updated_at
             )
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 short_title = excluded.short_title,
+                source_url = excluded.source_url,
                 date = excluded.date,
                 full_date = excluded.full_date,
                 time = excluded.time,

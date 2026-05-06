@@ -1,9 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-import { EventRecord } from '@/constants/events';
-import { deleteRemoteEvent, fetchRemoteEvents, upsertRemoteEvent } from '@/services/appDataApi';
+import {
+  areEventCollectionsEqual,
+  EVENT_RECORDS,
+  EventRecord,
+  filterEventRecordsForDiscovery,
+  isRemovedSeedEventId,
+} from '@/constants/events';
 import { useUser } from '@/context/UserContext';
+import { deleteRemoteEvent, fetchRemoteEvents, upsertRemoteEvent } from '@/services/appDataApi';
 
 interface CreateEventInput {
   title: string;
@@ -45,6 +51,7 @@ function isValidEventRecord(value: unknown): value is EventRecord {
   return (
     typeof event.id === 'string' &&
     typeof event.title === 'string' &&
+    (typeof event.sourceUrl === 'string' || typeof event.sourceUrl === 'undefined') &&
     typeof event.date === 'string' &&
     typeof event.fullDate === 'string' &&
     typeof event.time === 'string' &&
@@ -72,7 +79,12 @@ function parseStoredEvents(rawValue: string | null): EventRecord[] {
 
   try {
     const parsedValue = JSON.parse(rawValue) as unknown;
-    return Array.isArray(parsedValue) ? parsedValue.filter(isValidEventRecord) : [];
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter(
+          (event): event is EventRecord =>
+            isValidEventRecord(event) && !isRemovedSeedEventId(event.id)
+        )
+      : [];
   } catch {
     return [];
   }
@@ -97,12 +109,13 @@ function mergeEventCollections(...collections: EventRecord[][]): EventRecord[] {
 
 export function EventProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, user } = useUser();
-  const [events, setEvents] = useState<EventRecord[]>([]);
+  const [allEvents, setAllEvents] = useState<EventRecord[]>(EVENT_RECORDS);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUsingCachedData, setIsUsingCachedData] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const events = useMemo(() => filterEventRecordsForDiscovery(allEvents), [allEvents]);
 
   useEffect(() => {
     let isMounted = true;
@@ -112,9 +125,13 @@ export function EventProvider({ children }: { children: ReactNode }) {
         if (!isMounted) {
           return;
         }
+
         const cachedEvents = parseStoredEvents(storedEvents);
-        setEvents(cachedEvents);
-        setIsUsingCachedData(cachedEvents.length > 0);
+        const mergedEvents = mergeEventCollections(cachedEvents, EVENT_RECORDS);
+        setAllEvents(mergedEvents);
+        setIsUsingCachedData(
+          cachedEvents.length > 0 && !areEventCollectionsEqual(mergedEvents, EVENT_RECORDS)
+        );
       } finally {
         if (isMounted) {
           setHasHydrated(true);
@@ -133,14 +150,23 @@ export function EventProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(events)).catch(() => {});
-  }, [events, hasHydrated]);
+    if (areEventCollectionsEqual(allEvents, EVENT_RECORDS)) {
+      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+      return;
+    }
+
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(allEvents)).catch(() => {});
+  }, [allEvents, hasHydrated]);
 
   const refreshEvents = async () => {
     setIsLoading(true);
     try {
       const remoteEvents = await fetchRemoteEvents();
-      setEvents(remoteEvents);
+      setAllEvents(
+        remoteEvents.length > 0
+          ? mergeEventCollections(remoteEvents, EVENT_RECORDS)
+          : EVENT_RECORDS
+      );
       setIsUsingCachedData(false);
       setIsOffline(false);
       setError(null);
@@ -157,6 +183,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
     if (!hasHydrated) {
       return;
     }
+
     void refreshEvents().catch(() => {});
   }, [hasHydrated]);
 
@@ -184,6 +211,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
             .replace(/^-|-$/g, '')}-${Date.now().toString().slice(-6)}`,
           title: eventTitle,
           shortTitle: 'Freshly created event',
+          sourceUrl: undefined,
           date: input.date.trim() || 'TBD',
           fullDate: input.fullDate.trim() || input.date.trim() || 'Date to be confirmed',
           time: input.time.trim() || 'Time to be confirmed',
@@ -195,7 +223,8 @@ export function EventProvider({ children }: { children: ReactNode }) {
           priceLabel: input.priceLabel.trim() || input.price.trim() || 'Free entry',
           vibe: input.vibe.trim() || 'Atmosphere to be announced',
           experience: 'Hosted event',
-          heroImage: input.heroImage.trim() || '',
+          heroImage:
+            input.heroImage.trim() || allEvents[0]?.heroImage || EVENT_RECORDS[0]?.heroImage || '',
           hostName: user.fullName || user.username,
           hostAvatar: user.avatarUri,
           badge: 'JUST ADDED',
@@ -214,21 +243,31 @@ export function EventProvider({ children }: { children: ReactNode }) {
         }
 
         const persistedEvent = await upsertRemoteEvent(draftEvent);
-        setEvents((prev) => mergeEventCollections([persistedEvent], prev.filter((item) => item.id !== persistedEvent.id)));
+        setAllEvents((prev) =>
+          mergeEventCollections(
+            [persistedEvent],
+            prev.filter((item) => item.id !== persistedEvent.id)
+          )
+        );
         setIsUsingCachedData(false);
         setIsOffline(false);
         setError(null);
         return persistedEvent;
       },
       updateEvent: async (eventId, updates) => {
-        const current = events.find((event) => event.id === eventId);
+        const current = allEvents.find((event) => event.id === eventId);
         if (!current) {
           return undefined;
         }
 
         const nextEvent = { ...current, ...updates };
         const persistedEvent = await upsertRemoteEvent(nextEvent);
-        setEvents((prev) => mergeEventCollections([persistedEvent], prev.filter((event) => event.id !== eventId)));
+        setAllEvents((prev) =>
+          mergeEventCollections(
+            [persistedEvent],
+            prev.filter((event) => event.id !== eventId)
+          )
+        );
         setIsUsingCachedData(false);
         setIsOffline(false);
         setError(null);
@@ -236,7 +275,7 @@ export function EventProvider({ children }: { children: ReactNode }) {
       },
       deleteEvent: async (eventId) => {
         await deleteRemoteEvent(eventId);
-        setEvents((prev) => prev.filter((event) => event.id !== eventId));
+        setAllEvents((prev) => prev.filter((event) => event.id !== eventId));
         setIsUsingCachedData(false);
         setIsOffline(false);
         setError(null);
@@ -246,11 +285,11 @@ export function EventProvider({ children }: { children: ReactNode }) {
           return undefined;
         }
 
-        return events.find((event) => event.id === eventId);
+        return allEvents.find((event) => event.id === eventId);
       },
       refreshEvents,
     };
-  }, [error, events, isAuthenticated, isLoading, isOffline, isUsingCachedData, user]);
+  }, [allEvents, error, events, isAuthenticated, isLoading, isOffline, isUsingCachedData, user]);
 
   return <EventContext.Provider value={value}>{children}</EventContext.Provider>;
 }

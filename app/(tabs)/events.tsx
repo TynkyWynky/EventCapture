@@ -59,7 +59,16 @@ export default function EventsScreen() {
                 accessibilityLabel={t('notifTitle')}
                 onPress={() => router.push('/notifications')}
               />
-              <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
+              <IconActionButton
+                icon="add"
+                accessibilityLabel={t('createTitle')}
+                onPress={() => router.push('/event/create')}
+              />
+              <IconActionButton
+                icon="menu"
+                accessibilityLabel={t('menuTitle')}
+                onPress={() => router.push('/menu')}
+              />
             </View>
           }
         />

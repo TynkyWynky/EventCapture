@@ -33,6 +33,7 @@ interface ApiEvent {
   id?: string | null;
   title: string;
   short_title?: string | null;
+  source_url?: string | null;
   date: string;
   full_date: string;
   time: string;
@@ -86,6 +87,7 @@ function mapApiEventToEventRecord(event: ApiEvent): EventRecord {
     id: String(event.id ?? ''),
     title: event.title,
     shortTitle: event.short_title ?? undefined,
+    sourceUrl: event.source_url ?? undefined,
     date: event.date,
     fullDate: event.full_date,
     time: event.time,
@@ -111,6 +113,7 @@ function mapEventRecordToApiEvent(event: EventRecord): ApiEvent {
     id: event.id,
     title: event.title,
     short_title: event.shortTitle ?? null,
+    source_url: event.sourceUrl ?? null,
     date: event.date,
     full_date: event.fullDate,
     time: event.time,
