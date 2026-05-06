@@ -28,6 +28,86 @@ EventCapture is an Expo Router nightlife app backed by a FastAPI + YOLOv8 drink 
 - Posting a crown-eligible capture increments backend-backed crown rewards and reward progression
 - Admin and support screens use the same backend APIs as the rest of the app, but admin moderation is still intentionally lightweight
 
+## Friends, groups, and leaderboards
+
+### Friends overview
+
+- Authenticated users can search other active users by username, full name, and email match without exposing private email data in the response
+- Friend relationships are backend-backed in SQLite and use a single unique user-pair constraint to prevent duplicate requests
+- Supported friend states are `pending`, `accepted`, `declined`, `blocked`, and `cancelled`
+- The mobile app now supports searching users, sending requests, accepting or declining them, viewing accepted friends, and removing existing friendships
+
+### Groups overview
+
+- Authenticated users can create private or invite-only groups on top of the existing backend auth and user model
+- Group owners are automatically added as accepted `owner` members
+- Group members are stored separately with roles and membership status so invites, acceptance, decline, and removals remain auditable
+- The app currently supports group creation, friend-only invites, invite acceptance or decline, member management, leaving groups, and owner archive actions
+
+### Leaderboard rules
+
+- Group leaderboards are calculated on the backend and never derived from local frontend cache
+- Only accepted group members are ranked
+- `all_time` uses backend `users.crown_count`
+- `weekly` and `monthly` use timestamped `reward_transactions`
+- Rank order is:
+  - all time: `crown_count DESC`, then earlier `joined_at`, then display name
+  - weekly or monthly: `period_crowns DESC`, then `crown_count DESC`, then earlier `joined_at`, then display name
+- The current user is explicitly marked in the response so the UI can highlight them without recomputing standings locally
+
+### Notifications
+
+- Friend requests create notifications for the addressee
+- Accepted friend requests create notifications for the original requester
+- Group invites create notifications for invited users
+- Accepted group invites create notifications for the inviter when available
+- Group removals create notifications for removed members
+
+### Privacy and security notes
+
+- All friends, groups, and leaderboard endpoints require authentication
+- Search results and leaderboard entries return only safe public user fields
+- Private group details and leaderboards return `403` for non-members
+- Only the request addressee can accept or decline a friend request
+- Only owners and admins can invite or remove members, and only owners can change member roles or archive a group
+
+### API endpoints
+
+- `GET /api/users/search?q=`
+- `GET /api/friends`
+- `GET /api/friends/requests`
+- `POST /api/friends/requests`
+- `POST /api/friends/requests/{request_id}/accept`
+- `POST /api/friends/requests/{request_id}/decline`
+- `DELETE /api/friends/{user_id}`
+- `GET /api/groups`
+- `POST /api/groups`
+- `GET /api/groups/{group_id}`
+- `PATCH /api/groups/{group_id}`
+- `DELETE /api/groups/{group_id}`
+- `GET /api/groups/{group_id}/members`
+- `POST /api/groups/{group_id}/invitations`
+- `POST /api/groups/{group_id}/invitations/accept`
+- `POST /api/groups/{group_id}/invitations/decline`
+- `DELETE /api/groups/{group_id}/members/{user_id}`
+- `PATCH /api/groups/{group_id}/members/{user_id}`
+- `GET /api/groups/{group_id}/leaderboard`
+
+### Known limitations
+
+- There is no realtime push or websocket sync for friend or group activity yet
+- Group visibility is intentionally conservative and invite-link flows are not implemented
+- Search currently relies on existing app auth and does not yet include extra rate limiting middleware
+- Ownership transfer is not yet implemented, so owners must archive a group instead of leaving it directly
+
+### Future improvements
+
+- Realtime notifications and badge updates
+- Invite links and QR-based group joins
+- Group challenges and challenge-specific rewards
+- Seasonal or event-scoped leaderboards
+- Moderation and abuse tooling for friend and group reports
+
 ## Tech stack
 
 - Expo 54 with Expo Router and React Native 0.81
@@ -148,6 +228,13 @@ This creates explicit sample users/events/posts for local development:
 - `admin@eventcapture.app` / `AdminPass123!`
 - `organizer@eventcapture.app` / `Organizer123!`
 - `guest@eventcapture.app` / `GuestPass123!`
+
+The seeder also now creates:
+
+- additional sample people like `lena`, `marco`, `nina`, `sam`, and `tom`
+- accepted and pending friendships
+- private groups with accepted members and pending invites
+- qualifying capture posts so rewards and group leaderboards have useful data immediately
 
 ### Windows one-click launcher
 

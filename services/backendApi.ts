@@ -263,7 +263,7 @@ export async function apiGet<T>(path: string, includeAuth = true): Promise<T> {
 export async function apiPostJson<T>(
   path: string,
   body: unknown,
-  method: 'POST' | 'PUT' = 'POST',
+  method: 'POST' | 'PUT' | 'PATCH' = 'POST',
   includeAuth = true
 ): Promise<T> {
   return apiRequest<T>(
@@ -277,6 +277,10 @@ export async function apiPostJson<T>(
     },
     includeAuth
   );
+}
+
+export async function apiPatchJson<T>(path: string, body: unknown, includeAuth = true): Promise<T> {
+  return apiPostJson<T>(path, body, 'PATCH', includeAuth);
 }
 
 export async function apiPostFormData<T>(path: string, body: FormData, includeAuth = true): Promise<T> {

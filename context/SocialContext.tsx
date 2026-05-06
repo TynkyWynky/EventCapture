@@ -24,11 +24,14 @@ export interface ActivityItem {
   id: string;
   user: string;
   text: string;
+  title?: string;
   time: string;
   icon: string;
   color: string;
   createdAt: string;
   avatarUri?: string;
+  relatedType?: string | null;
+  relatedId?: string | null;
 }
 
 interface SocialContextType {
@@ -163,11 +166,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         id: item.id,
         user: item.actor_username,
         avatarUri: item.actor_avatar_uri,
+        title: item.title,
         text: item.message,
         time: timeAgo(item.created_at),
         icon: item.icon,
         color: item.color,
         createdAt: item.created_at,
+        relatedType: item.related_type,
+        relatedId: item.related_id,
       }))
     );
     setUnreadCount(remoteNotifications.unread_count);

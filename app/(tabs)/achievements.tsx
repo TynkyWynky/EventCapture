@@ -212,6 +212,7 @@ export default function AchievementsScreen() {
           <EmptyState icon="beer-outline" title={t('rewardsEmptyTitle')} message={t('rewardsEmptyMsg')} />
         )}
 
+        <AppButton label={t('rewardsGroupsCta')} variant="secondary" onPress={() => router.push('/groups')} />
         <AppButton label={t('achvCaptureAnother')} onPress={() => router.push('/camera')} />
       </ScrollView>
     </SafeAreaView>

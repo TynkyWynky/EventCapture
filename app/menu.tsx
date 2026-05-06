@@ -34,6 +34,18 @@ const getMenuItems = (
     route: '/notifications',
   },
   {
+    label: t('menuFriendsLabel'),
+    subtitle: t('menuFriendsHint'),
+    icon: 'people-outline',
+    route: '/friends',
+  },
+  {
+    label: t('menuGroupsLabel'),
+    subtitle: t('menuGroupsHint'),
+    icon: 'people-circle-outline',
+    route: '/groups',
+  },
+  {
     label: t('menuSettingsLabel'),
     subtitle: t('menuSettingsHint'),
     icon: 'settings-outline',

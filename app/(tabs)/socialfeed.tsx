@@ -210,6 +210,22 @@ export default function SocialFeedScreen() {
                 <View style={styles.emptyActions}>
                   <AppButton label={t('socialActionCapture')} onPress={() => router.push('/camera')} />
                   <AppButton label={t('socialActionEvents')} variant="secondary" onPress={() => router.push('/events')} />
+                  <AppButton label={t('socialActionFriends')} variant="ghost" onPress={() => router.push('/friends')} />
+                </View>
+              </View>
+            ) : null}
+
+            {posts.length ? (
+              <View style={styles.bannerWrap}>
+                <View style={styles.utilityCard}>
+                  <View style={styles.utilityCopy}>
+                    <Text style={styles.utilityTitle}>{t('socialUtilityTitle')}</Text>
+                    <Text style={styles.utilityText}>{t('socialUtilityText')}</Text>
+                  </View>
+                  <View style={styles.utilityActions}>
+                    <AppButton label={t('socialActionFriends')} variant="secondary" onPress={() => router.push('/friends')} />
+                    <AppButton label={t('socialActionGroups')} variant="ghost" onPress={() => router.push('/groups')} />
+                  </View>
                 </View>
               </View>
             ) : null}
@@ -260,6 +276,30 @@ const styles = StyleSheet.create({
   },
   emptyActions: {
     gap: 10,
+  },
+  utilityCard: {
+    backgroundColor: '#fff9f3',
+    borderWidth: 1,
+    borderColor: '#f1dfca',
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    gap: 12,
+  },
+  utilityCopy: { gap: 4 },
+  utilityTitle: {
+    color: '#1f1a17',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  utilityText: {
+    color: '#7c6b61',
+    lineHeight: 20,
+    fontSize: 13,
+  },
+  utilityActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   separator: {
     height: 18,

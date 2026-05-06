@@ -94,6 +94,11 @@ class AppUserResponse(BaseModel):
     avatar_uri: str
 
 
+class PublicUserResponse(AppUserResponse):
+    full_name: str
+    crown_count: int = 0
+
+
 class UserProfileResponse(AppUserResponse):
     full_name: str
     bio: str
@@ -157,6 +162,109 @@ class ResetPasswordRequestResponse(BaseModel):
 class ResetPasswordConfirmRequest(BaseModel):
     token: str = Field(min_length=12, max_length=512)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class UserSearchResultResponse(PublicUserResponse):
+    friendship_status: str = "none"
+
+
+class FriendRequestCreateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=120)
+
+
+class FriendRequestResponse(BaseModel):
+    id: str
+    status: str
+    direction: str
+    requester_user: PublicUserResponse
+    addressee_user: PublicUserResponse
+    created_at: str
+    updated_at: str
+    responded_at: str | None = None
+
+
+class FriendRequestListResponse(BaseModel):
+    incoming: list[FriendRequestResponse] = Field(default_factory=list)
+    outgoing: list[FriendRequestResponse] = Field(default_factory=list)
+
+
+class FriendListItemResponse(BaseModel):
+    friendship_id: str
+    friend: PublicUserResponse
+    created_at: str
+    updated_at: str
+
+
+class GroupCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default="", max_length=500)
+    invited_user_ids: list[str] = Field(default_factory=list)
+
+
+class GroupUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class GroupInvitationRequest(BaseModel):
+    user_ids: list[str] = Field(default_factory=list)
+
+
+class GroupMemberUpdateRequest(BaseModel):
+    role: str = Field(min_length=1, max_length=20)
+
+
+class GroupSummaryResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    visibility: str
+    owner_user_id: str
+    created_at: str
+    updated_at: str
+    archived_at: str | None = None
+    membership_role: str
+    membership_status: str
+    member_count: int = 0
+
+
+class GroupMemberResponse(BaseModel):
+    id: str
+    user: PublicUserResponse
+    role: str
+    status: str
+    invited_by_user_id: str | None = None
+    joined_at: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class GroupDetailResponse(GroupSummaryResponse):
+    current_user_role: str
+    current_user_status: str
+    members: list[GroupMemberResponse] = Field(default_factory=list)
+
+
+class GroupListResponse(BaseModel):
+    items: list[GroupSummaryResponse] = Field(default_factory=list)
+    pending_invites: list[GroupSummaryResponse] = Field(default_factory=list)
+
+
+class GroupLeaderboardEntryResponse(BaseModel):
+    rank: int
+    user_id: str
+    display_name: str
+    avatar_url: str
+    crown_count: int
+    period_crowns: int
+    is_current_user: bool = False
+
+
+class GroupLeaderboardResponse(BaseModel):
+    group_id: str
+    period: str
+    generated_at: str
+    entries: list[GroupLeaderboardEntryResponse] = Field(default_factory=list)
 
 
 class EventPayload(BaseModel):

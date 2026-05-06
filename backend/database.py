@@ -17,6 +17,11 @@ except ImportError:
 
 
 EVENT_PLAN_STATUSES = {"going", "maybe", "skip"}
+FRIENDSHIP_STATUSES = {"pending", "accepted", "declined", "blocked", "cancelled"}
+GROUP_VISIBILITIES = {"private", "invite_only"}
+GROUP_MEMBER_ROLES = {"owner", "admin", "member"}
+GROUP_MEMBER_STATUSES = {"invited", "accepted", "declined", "removed"}
+LEADERBOARD_PERIODS = {"all_time", "weekly", "monthly"}
 _UNSET = object()
 
 
@@ -247,6 +252,48 @@ def init_database() -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS friendships (
+                id TEXT PRIMARY KEY,
+                requester_user_id TEXT NOT NULL,
+                addressee_user_id TEXT NOT NULL,
+                pair_key TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                responded_at TEXT,
+                CHECK (requester_user_id != addressee_user_id),
+                FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (addressee_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS groups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                owner_user_id TEXT NOT NULL,
+                visibility TEXT NOT NULL DEFAULT 'invite_only',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                archived_at TEXT,
+                FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS group_members (
+                id TEXT PRIMARY KEY,
+                group_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                status TEXT NOT NULL DEFAULT 'invited',
+                invited_by_user_id TEXT,
+                joined_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (invited_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+
             CREATE TABLE IF NOT EXISTS support_requests (
                 id TEXT PRIMARY KEY,
                 user_id TEXT,
@@ -303,6 +350,30 @@ def _user_profile_from_row(row: sqlite3.Row) -> dict[str, object]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def _public_user_from_row(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": row["id"],
+        "username": row["username"],
+        "full_name": row["full_name"],
+        "avatar_uri": row["avatar_uri"],
+        "crown_count": int(row["crown_count"]) if "crown_count" in row.keys() else 0,
+    }
+
+
+def _friend_pair_key(user_a_id: str, user_b_id: str) -> str:
+    left, right = sorted((user_a_id, user_b_id))
+    return f"{left}:{right}"
+
+
+def _friendship_status_for_user(row: sqlite3.Row, current_user_id: str) -> str:
+    status = str(row["status"])
+    if status == "accepted":
+        return "accepted"
+    if status == "pending":
+        return "outgoing_pending" if str(row["requester_user_id"]) == current_user_id else "incoming_pending"
+    return status
 
 
 def get_user_by_email(email: str) -> dict[str, object] | None:
@@ -494,6 +565,765 @@ def deactivate_user(user_id: str) -> bool:
         connection.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         connection.commit()
         return cursor.rowcount > 0
+
+
+def _get_existing_friendship(connection: sqlite3.Connection, user_a_id: str, user_b_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM friendships WHERE pair_key = ?",
+        (_friend_pair_key(user_a_id, user_b_id),),
+    ).fetchone()
+
+
+def _friend_request_from_row(connection: sqlite3.Connection, row: sqlite3.Row, current_user_id: str) -> dict[str, object]:
+    requester_row = connection.execute("SELECT * FROM users WHERE id = ?", (row["requester_user_id"],)).fetchone()
+    addressee_row = connection.execute("SELECT * FROM users WHERE id = ?", (row["addressee_user_id"],)).fetchone()
+    if requester_row is None or addressee_row is None:
+        raise KeyError("Friendship references missing user.")
+    direction = "outgoing" if str(row["requester_user_id"]) == current_user_id else "incoming"
+    return {
+        "id": row["id"],
+        "status": row["status"],
+        "direction": direction,
+        "requester_user": _public_user_from_row(requester_row),
+        "addressee_user": _public_user_from_row(addressee_row),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "responded_at": row["responded_at"],
+    }
+
+
+def search_users(query: str, current_user_id: str, limit: int = 20) -> list[dict[str, object]]:
+    normalized_query = query.strip()
+    if len(normalized_query) < 2:
+        return []
+    pattern = f"%{normalized_query.lower()}%"
+    safe_limit = max(1, min(limit, 50))
+    with closing(_get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT id, username, full_name, avatar_uri, crown_count
+            FROM users
+            WHERE is_active = 1
+              AND id != ?
+              AND (
+                    LOWER(username) LIKE ?
+                 OR LOWER(full_name) LIKE ?
+                 OR LOWER(email) LIKE ?
+              )
+            ORDER BY
+                CASE
+                    WHEN LOWER(username) = ? THEN 0
+                    WHEN LOWER(full_name) = ? THEN 1
+                    WHEN LOWER(username) LIKE ? THEN 2
+                    ELSE 3
+                END,
+                crown_count DESC,
+                username COLLATE NOCASE ASC
+            LIMIT ?
+            """,
+            (
+                current_user_id,
+                pattern,
+                pattern,
+                pattern,
+                normalized_query.lower(),
+                normalized_query.lower(),
+                pattern,
+                safe_limit,
+            ),
+        ).fetchall()
+        results: list[dict[str, object]] = []
+        for row in rows:
+            friendship = _get_existing_friendship(connection, current_user_id, str(row["id"]))
+            results.append(
+                {
+                    **_public_user_from_row(row),
+                    "friendship_status": _friendship_status_for_user(friendship, current_user_id)
+                    if friendship is not None
+                    else "none",
+                }
+            )
+        return results
+
+
+def list_friends(user_id: str) -> list[dict[str, object]]:
+    with closing(_get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                friendships.id AS friendship_id,
+                friendships.created_at,
+                friendships.updated_at,
+                users.id,
+                users.username,
+                users.full_name,
+                users.avatar_uri,
+                users.crown_count
+            FROM friendships
+            JOIN users
+              ON users.id = CASE
+                    WHEN friendships.requester_user_id = ? THEN friendships.addressee_user_id
+                    ELSE friendships.requester_user_id
+                END
+            WHERE friendships.status = 'accepted'
+              AND (friendships.requester_user_id = ? OR friendships.addressee_user_id = ?)
+              AND users.is_active = 1
+            ORDER BY users.username COLLATE NOCASE ASC
+            """,
+            (user_id, user_id, user_id),
+        ).fetchall()
+        return [
+            {
+                "friendship_id": row["friendship_id"],
+                "friend": _public_user_from_row(row),
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
+
+
+def list_friend_requests(user_id: str) -> dict[str, list[dict[str, object]]]:
+    with closing(_get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT *
+            FROM friendships
+            WHERE status = 'pending' AND (requester_user_id = ? OR addressee_user_id = ?)
+            ORDER BY created_at DESC, id DESC
+            """,
+            (user_id, user_id),
+        ).fetchall()
+        incoming: list[dict[str, object]] = []
+        outgoing: list[dict[str, object]] = []
+        for row in rows:
+            item = _friend_request_from_row(connection, row, user_id)
+            if item["direction"] == "incoming":
+                incoming.append(item)
+            else:
+                outgoing.append(item)
+        return {"incoming": incoming, "outgoing": outgoing}
+
+
+def send_friend_request(current_user_id: str, target_user_id: str) -> dict[str, object]:
+    if current_user_id == target_user_id:
+        raise ValueError("You cannot send a friend request to yourself.")
+    with closing(_get_connection()) as connection:
+        target_row = connection.execute(
+            "SELECT * FROM users WHERE id = ? AND is_active = 1",
+            (target_user_id,),
+        ).fetchone()
+        actor_row = connection.execute("SELECT * FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if target_row is None or actor_row is None:
+            raise KeyError(target_user_id)
+        existing = _get_existing_friendship(connection, current_user_id, target_user_id)
+        now = _utc_now()
+        if existing is not None:
+            status = str(existing["status"])
+            if status == "accepted":
+                raise ValueError("You are already friends.")
+            if status == "pending":
+                if str(existing["requester_user_id"]) == current_user_id:
+                    raise ValueError("A friend request is already pending.")
+                connection.execute(
+                    "UPDATE friendships SET status = 'accepted', updated_at = ?, responded_at = ? WHERE id = ?",
+                    (now, now, existing["id"]),
+                )
+                _create_notification(
+                    connection,
+                    user_id=str(existing["requester_user_id"]),
+                    actor=_public_user_from_row(actor_row),
+                    title="Friend request accepted",
+                    message=f"{actor_row['username']} accepted your friend request.",
+                    icon="people-outline",
+                    color="#0f766e",
+                    related_type="friendship",
+                    related_id=str(existing["id"]),
+                )
+                connection.commit()
+                row = connection.execute("SELECT * FROM friendships WHERE id = ?", (existing["id"],)).fetchone()
+                if row is None:
+                    raise RuntimeError("Failed to load friendship after auto-accept.")
+                return _friend_request_from_row(connection, row, current_user_id)
+            connection.execute(
+                """
+                UPDATE friendships
+                SET requester_user_id = ?, addressee_user_id = ?, status = 'pending', updated_at = ?, responded_at = NULL
+                WHERE id = ?
+                """,
+                (current_user_id, target_user_id, now, existing["id"]),
+            )
+            friendship_id = str(existing["id"])
+        else:
+            friendship_id = _new_id("friend")
+            connection.execute(
+                """
+                INSERT INTO friendships (
+                    id, requester_user_id, addressee_user_id, pair_key, status, created_at, updated_at, responded_at
+                )
+                VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL)
+                """,
+                (
+                    friendship_id,
+                    current_user_id,
+                    target_user_id,
+                    _friend_pair_key(current_user_id, target_user_id),
+                    now,
+                    now,
+                ),
+            )
+
+        _create_notification(
+            connection,
+            user_id=target_user_id,
+            actor=_public_user_from_row(actor_row),
+            title="New friend request",
+            message=f"{actor_row['username']} wants to compare crowns with you.",
+            icon="person-add-outline",
+            color="#d97706",
+            related_type="friendship",
+            related_id=friendship_id,
+        )
+        connection.commit()
+        row = connection.execute("SELECT * FROM friendships WHERE id = ?", (friendship_id,)).fetchone()
+        if row is None:
+            raise RuntimeError("Failed to load created friendship.")
+        return _friend_request_from_row(connection, row, current_user_id)
+
+
+def accept_friend_request(request_id: str, current_user_id: str) -> dict[str, object]:
+    with closing(_get_connection()) as connection:
+        row = connection.execute("SELECT * FROM friendships WHERE id = ?", (request_id,)).fetchone()
+        actor_row = connection.execute("SELECT * FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if row is None or actor_row is None:
+            raise KeyError(request_id)
+        if str(row["addressee_user_id"]) != current_user_id:
+            raise PermissionError("You cannot accept this request.")
+        if str(row["status"]) != "pending":
+            raise ValueError("This friend request is no longer pending.")
+        now = _utc_now()
+        connection.execute(
+            "UPDATE friendships SET status = 'accepted', updated_at = ?, responded_at = ? WHERE id = ?",
+            (now, now, request_id),
+        )
+        _create_notification(
+            connection,
+            user_id=str(row["requester_user_id"]),
+            actor=_public_user_from_row(actor_row),
+            title="Friend request accepted",
+            message=f"{actor_row['username']} accepted your friend request.",
+            icon="people-outline",
+            color="#0f766e",
+            related_type="friendship",
+            related_id=request_id,
+        )
+        connection.commit()
+        updated = connection.execute("SELECT * FROM friendships WHERE id = ?", (request_id,)).fetchone()
+        if updated is None:
+            raise RuntimeError("Failed to load accepted request.")
+        return _friend_request_from_row(connection, updated, current_user_id)
+
+
+def decline_friend_request(request_id: str, current_user_id: str) -> dict[str, object]:
+    with closing(_get_connection()) as connection:
+        row = connection.execute("SELECT * FROM friendships WHERE id = ?", (request_id,)).fetchone()
+        if row is None:
+            raise KeyError(request_id)
+        if str(row["addressee_user_id"]) != current_user_id:
+            raise PermissionError("You cannot decline this request.")
+        if str(row["status"]) != "pending":
+            raise ValueError("This friend request is no longer pending.")
+        now = _utc_now()
+        connection.execute(
+            "UPDATE friendships SET status = 'declined', updated_at = ?, responded_at = ? WHERE id = ?",
+            (now, now, request_id),
+        )
+        connection.commit()
+        updated = connection.execute("SELECT * FROM friendships WHERE id = ?", (request_id,)).fetchone()
+        if updated is None:
+            raise RuntimeError("Failed to load declined request.")
+        return _friend_request_from_row(connection, updated, current_user_id)
+
+
+def remove_friend(current_user_id: str, other_user_id: str) -> bool:
+    with closing(_get_connection()) as connection:
+        row = _get_existing_friendship(connection, current_user_id, other_user_id)
+        if row is None:
+            return False
+        if str(row["status"]) == "pending" and str(row["requester_user_id"]) != current_user_id:
+            raise PermissionError("You cannot cancel someone else's request.")
+        cursor = connection.execute("DELETE FROM friendships WHERE id = ?", (row["id"],))
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def _is_accepted_friend(connection: sqlite3.Connection, user_a_id: str, user_b_id: str) -> bool:
+    row = _get_existing_friendship(connection, user_a_id, user_b_id)
+    return row is not None and str(row["status"]) == "accepted"
+
+
+def _group_summary_from_row(connection: sqlite3.Connection, row: sqlite3.Row) -> dict[str, object]:
+    member_count_row = connection.execute(
+        "SELECT COUNT(*) AS count FROM group_members WHERE group_id = ? AND status = 'accepted'",
+        (row["id"],),
+    ).fetchone()
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"],
+        "visibility": row["visibility"],
+        "owner_user_id": row["owner_user_id"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "archived_at": row["archived_at"],
+        "membership_role": row["membership_role"],
+        "membership_status": row["membership_status"],
+        "member_count": int(member_count_row["count"]) if member_count_row is not None else 0,
+    }
+
+
+def _group_member_from_row(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": row["membership_id"],
+        "user": _public_user_from_row(row),
+        "role": row["role"],
+        "status": row["status"],
+        "invited_by_user_id": row["invited_by_user_id"],
+        "joined_at": row["joined_at"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _group_membership_row(connection: sqlite3.Connection, group_id: str, user_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        "SELECT * FROM group_members WHERE group_id = ? AND user_id = ?",
+        (group_id, user_id),
+    ).fetchone()
+
+
+def list_groups(user_id: str) -> dict[str, list[dict[str, object]]]:
+    with closing(_get_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT groups.*, group_members.role AS membership_role, group_members.status AS membership_status
+            FROM group_members
+            JOIN groups ON groups.id = group_members.group_id
+            WHERE group_members.user_id = ? AND groups.archived_at IS NULL
+            ORDER BY
+                CASE WHEN group_members.status = 'accepted' THEN 0 ELSE 1 END,
+                groups.updated_at DESC,
+                groups.name COLLATE NOCASE ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        accepted: list[dict[str, object]] = []
+        pending_invites: list[dict[str, object]] = []
+        for row in rows:
+            item = _group_summary_from_row(connection, row)
+            if item["membership_status"] == "accepted":
+                accepted.append(item)
+            elif item["membership_status"] == "invited":
+                pending_invites.append(item)
+        return {"items": accepted, "pending_invites": pending_invites}
+
+
+def create_group(
+    current_user_id: str,
+    *,
+    name: str,
+    description: str,
+    invited_user_ids: list[str] | None = None,
+    visibility: str = "invite_only",
+) -> dict[str, object]:
+    if visibility not in GROUP_VISIBILITIES:
+        raise ValueError("Unsupported group visibility.")
+    invited_ids = list(dict.fromkeys(invited_user_ids or []))
+    now = _utc_now()
+    group_id = _new_id("group")
+    owner_member_id = _new_id("group-member")
+    with closing(_get_connection()) as connection:
+        owner_row = connection.execute("SELECT * FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        if owner_row is None:
+            raise KeyError(current_user_id)
+        connection.execute(
+            """
+            INSERT INTO groups (id, name, description, owner_user_id, visibility, created_at, updated_at, archived_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+            """,
+            (group_id, name.strip(), description.strip(), current_user_id, visibility, now, now),
+        )
+        connection.execute(
+            """
+            INSERT INTO group_members (
+                id, group_id, user_id, role, status, invited_by_user_id, joined_at, created_at, updated_at
+            )
+            VALUES (?, ?, ?, 'owner', 'accepted', ?, ?, ?, ?)
+            """,
+            (owner_member_id, group_id, current_user_id, current_user_id, now, now, now),
+        )
+        for invited_user_id in invited_ids:
+            if invited_user_id == current_user_id or not _is_accepted_friend(connection, current_user_id, invited_user_id):
+                continue
+            invite_row = connection.execute(
+                "SELECT * FROM users WHERE id = ? AND is_active = 1",
+                (invited_user_id,),
+            ).fetchone()
+            if invite_row is None:
+                continue
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO group_members (
+                    id, group_id, user_id, role, status, invited_by_user_id, joined_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'member', 'invited', ?, NULL, ?, ?)
+                """,
+                (_new_id("group-member"), group_id, invited_user_id, current_user_id, now, now),
+            )
+            _create_notification(
+                connection,
+                user_id=invited_user_id,
+                actor=_public_user_from_row(owner_row),
+                title="Group invitation",
+                message=f"{owner_row['username']} invited you to join {name.strip()}.",
+                icon="people-circle-outline",
+                color="#7c3aed",
+                related_type="group",
+                related_id=group_id,
+            )
+        connection.commit()
+    return get_group(group_id, current_user_id)
+
+
+def get_group(group_id: str, current_user_id: str) -> dict[str, object]:
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        if membership is None or str(membership["status"]) not in {"accepted", "invited"}:
+            raise PermissionError("You do not have access to this group.")
+        row = connection.execute(
+            """
+            SELECT groups.*, group_members.role AS membership_role, group_members.status AS membership_status
+            FROM groups
+            JOIN group_members ON group_members.group_id = groups.id
+            WHERE groups.id = ? AND group_members.user_id = ? AND groups.archived_at IS NULL
+            """,
+            (group_id, current_user_id),
+        ).fetchone()
+        if row is None:
+            raise KeyError(group_id)
+        member_rows = connection.execute(
+            """
+            SELECT
+                group_members.id AS membership_id,
+                group_members.role,
+                group_members.status,
+                group_members.invited_by_user_id,
+                group_members.joined_at,
+                group_members.created_at,
+                group_members.updated_at,
+                users.id,
+                users.username,
+                users.full_name,
+                users.avatar_uri,
+                users.crown_count
+            FROM group_members
+            JOIN users ON users.id = group_members.user_id
+            WHERE group_members.group_id = ? AND users.is_active = 1
+            ORDER BY
+                CASE group_members.role
+                    WHEN 'owner' THEN 0
+                    WHEN 'admin' THEN 1
+                    ELSE 2
+                END,
+                users.username COLLATE NOCASE ASC
+            """,
+            (group_id,),
+        ).fetchall()
+        summary = _group_summary_from_row(connection, row)
+        return {
+            **summary,
+            "current_user_role": summary["membership_role"],
+            "current_user_status": summary["membership_status"],
+            "members": [_group_member_from_row(member_row) for member_row in member_rows],
+        }
+
+
+def update_group(group_id: str, current_user_id: str, *, name: str | None = None, description: str | None = None) -> dict[str, object]:
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        if membership is None or str(membership["status"]) != "accepted" or str(membership["role"]) not in {"owner", "admin"}:
+            raise PermissionError("You cannot update this group.")
+        group_row = connection.execute("SELECT * FROM groups WHERE id = ? AND archived_at IS NULL", (group_id,)).fetchone()
+        if group_row is None:
+            raise KeyError(group_id)
+        next_name = str(name).strip() if name is not None else str(group_row["name"])
+        next_description = str(description).strip() if description is not None else str(group_row["description"])
+        connection.execute(
+            "UPDATE groups SET name = ?, description = ?, updated_at = ? WHERE id = ?",
+            (next_name, next_description, _utc_now(), group_id),
+        )
+        connection.commit()
+    return get_group(group_id, current_user_id)
+
+
+def archive_group(group_id: str, current_user_id: str) -> bool:
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        if membership is None or str(membership["role"]) != "owner" or str(membership["status"]) != "accepted":
+            raise PermissionError("Only the owner can archive this group.")
+        cursor = connection.execute(
+            "UPDATE groups SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL",
+            (_utc_now(), _utc_now(), group_id),
+        )
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def list_group_members(group_id: str, current_user_id: str) -> list[dict[str, object]]:
+    return get_group(group_id, current_user_id)["members"]
+
+
+def invite_group_members(group_id: str, current_user_id: str, user_ids: list[str]) -> dict[str, object]:
+    candidate_ids = list(dict.fromkeys(user_ids))
+    if not candidate_ids:
+        return get_group(group_id, current_user_id)
+    now = _utc_now()
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        actor_row = connection.execute("SELECT * FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        group_row = connection.execute("SELECT * FROM groups WHERE id = ? AND archived_at IS NULL", (group_id,)).fetchone()
+        if membership is None or str(membership["status"]) != "accepted" or str(membership["role"]) not in {"owner", "admin"}:
+            raise PermissionError("You cannot invite members to this group.")
+        if actor_row is None or group_row is None:
+            raise KeyError(group_id)
+        for invited_user_id in candidate_ids:
+            if invited_user_id == current_user_id or not _is_accepted_friend(connection, current_user_id, invited_user_id):
+                continue
+            user_row = connection.execute(
+                "SELECT * FROM users WHERE id = ? AND is_active = 1",
+                (invited_user_id,),
+            ).fetchone()
+            if user_row is None:
+                continue
+            existing = _group_membership_row(connection, group_id, invited_user_id)
+            if existing is not None and str(existing["status"]) in {"accepted", "invited"}:
+                continue
+            if existing is None:
+                connection.execute(
+                    """
+                    INSERT INTO group_members (
+                        id, group_id, user_id, role, status, invited_by_user_id, joined_at, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, 'member', 'invited', ?, NULL, ?, ?)
+                    """,
+                    (_new_id("group-member"), group_id, invited_user_id, current_user_id, now, now),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE group_members
+                    SET role = 'member', status = 'invited', invited_by_user_id = ?, joined_at = NULL, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (current_user_id, now, existing["id"]),
+                )
+            _create_notification(
+                connection,
+                user_id=invited_user_id,
+                actor=_public_user_from_row(actor_row),
+                title="Group invitation",
+                message=f"{actor_row['username']} invited you to join {group_row['name']}.",
+                icon="people-circle-outline",
+                color="#7c3aed",
+                related_type="group",
+                related_id=group_id,
+            )
+        connection.commit()
+    return get_group(group_id, current_user_id)
+
+
+def accept_group_invite(group_id: str, current_user_id: str) -> dict[str, object]:
+    now = _utc_now()
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        actor_row = connection.execute("SELECT * FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        group_row = connection.execute("SELECT * FROM groups WHERE id = ? AND archived_at IS NULL", (group_id,)).fetchone()
+        if membership is None or group_row is None or actor_row is None:
+            raise KeyError(group_id)
+        if str(membership["status"]) != "invited":
+            raise ValueError("This group invitation is no longer pending.")
+        connection.execute(
+            "UPDATE group_members SET status = 'accepted', joined_at = ?, updated_at = ? WHERE id = ?",
+            (now, now, membership["id"]),
+        )
+        inviter_id = membership["invited_by_user_id"]
+        if inviter_id:
+            _create_notification(
+                connection,
+                user_id=str(inviter_id),
+                actor=_public_user_from_row(actor_row),
+                title="Group invite accepted",
+                message=f"{actor_row['username']} joined {group_row['name']}.",
+                icon="people-outline",
+                color="#0f766e",
+                related_type="group",
+                related_id=group_id,
+            )
+        connection.commit()
+    return get_group(group_id, current_user_id)
+
+
+def decline_group_invite(group_id: str, current_user_id: str) -> dict[str, object]:
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        if membership is None:
+            raise KeyError(group_id)
+        if str(membership["status"]) != "invited":
+            raise ValueError("This group invitation is no longer pending.")
+        connection.execute(
+            "UPDATE group_members SET status = 'declined', updated_at = ? WHERE id = ?",
+            (_utc_now(), membership["id"]),
+        )
+        connection.commit()
+    return {"group_id": group_id, "status": "declined"}
+
+
+def remove_group_member(group_id: str, current_user_id: str, target_user_id: str) -> bool:
+    with closing(_get_connection()) as connection:
+        actor_membership = _group_membership_row(connection, group_id, current_user_id)
+        target_membership = _group_membership_row(connection, group_id, target_user_id)
+        if target_membership is None:
+            return False
+        if actor_membership is None:
+            raise PermissionError("You do not have access to this group.")
+        actor_role = str(actor_membership["role"])
+        actor_status = str(actor_membership["status"])
+        target_role = str(target_membership["role"])
+        if actor_status != "accepted":
+            raise PermissionError("You do not have access to this group.")
+        if target_user_id == current_user_id:
+            if target_role == "owner":
+                raise ValueError("Transfer ownership or archive the group before leaving.")
+            cursor = connection.execute("DELETE FROM group_members WHERE id = ?", (target_membership["id"],))
+            connection.commit()
+            return cursor.rowcount > 0
+        if actor_role not in {"owner", "admin"}:
+            raise PermissionError("You cannot remove this member.")
+        if actor_role == "admin" and target_role in {"owner", "admin"}:
+            raise PermissionError("Admins cannot remove owners or other admins.")
+        cursor = connection.execute("DELETE FROM group_members WHERE id = ?", (target_membership["id"],))
+        target_user = connection.execute("SELECT * FROM users WHERE id = ?", (target_user_id,)).fetchone()
+        actor_user = connection.execute("SELECT * FROM users WHERE id = ?", (current_user_id,)).fetchone()
+        group_row = connection.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
+        if cursor.rowcount > 0 and target_user is not None and actor_user is not None and group_row is not None:
+            _create_notification(
+                connection,
+                user_id=target_user_id,
+                actor=_public_user_from_row(actor_user),
+                title="Removed from group",
+                message=f"{actor_user['username']} removed you from {group_row['name']}.",
+                icon="person-remove-outline",
+                color="#b91c1c",
+                related_type="group",
+                related_id=group_id,
+            )
+        connection.commit()
+        return cursor.rowcount > 0
+
+
+def update_group_member_role(group_id: str, current_user_id: str, target_user_id: str, role: str) -> dict[str, object]:
+    if role not in {"admin", "member"}:
+        raise ValueError("Unsupported group member role.")
+    with closing(_get_connection()) as connection:
+        actor_membership = _group_membership_row(connection, group_id, current_user_id)
+        target_membership = _group_membership_row(connection, group_id, target_user_id)
+        if actor_membership is None or target_membership is None:
+            raise KeyError(group_id)
+        if str(actor_membership["role"]) != "owner" or str(actor_membership["status"]) != "accepted":
+            raise PermissionError("Only the owner can change member roles.")
+        if str(target_membership["role"]) == "owner":
+            raise ValueError("The owner role cannot be reassigned here.")
+        connection.execute(
+            "UPDATE group_members SET role = ?, updated_at = ? WHERE id = ?",
+            (role, _utc_now(), target_membership["id"]),
+        )
+        connection.commit()
+    return get_group(group_id, current_user_id)
+
+
+def get_group_leaderboard(group_id: str, current_user_id: str, period: str = "all_time", limit: int = 50) -> dict[str, object]:
+    normalized_period = period if period in LEADERBOARD_PERIODS else "all_time"
+    safe_limit = max(1, min(limit, 50))
+    with closing(_get_connection()) as connection:
+        membership = _group_membership_row(connection, group_id, current_user_id)
+        if membership is None or str(membership["status"]) != "accepted":
+            raise PermissionError("You cannot view this leaderboard.")
+        if normalized_period == "weekly":
+            window_start = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(timespec="seconds")
+        elif normalized_period == "monthly":
+            window_start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat(timespec="seconds")
+        else:
+            window_start = None
+        order_by = (
+            "period_crowns DESC, users.crown_count DESC, COALESCE(group_members.joined_at, users.created_at) ASC, users.username COLLATE NOCASE ASC"
+            if normalized_period in {"weekly", "monthly"}
+            else "users.crown_count DESC, COALESCE(group_members.joined_at, users.created_at) ASC, users.username COLLATE NOCASE ASC"
+        )
+        rows = connection.execute(
+            f"""
+            SELECT
+                users.id,
+                users.username,
+                users.full_name,
+                users.avatar_uri,
+                users.crown_count,
+                users.created_at,
+                group_members.joined_at,
+                COALESCE(SUM(
+                    CASE
+                        WHEN ? IS NULL OR reward_transactions.created_at >= ? THEN reward_transactions.amount
+                        ELSE 0
+                    END
+                ), 0) AS period_crowns
+            FROM group_members
+            JOIN users ON users.id = group_members.user_id
+            LEFT JOIN reward_transactions ON reward_transactions.user_id = users.id
+            WHERE group_members.group_id = ?
+              AND group_members.status = 'accepted'
+              AND users.is_active = 1
+            GROUP BY users.id, users.username, users.full_name, users.avatar_uri, users.crown_count, users.created_at, group_members.joined_at
+            ORDER BY {order_by}
+            LIMIT ?
+            """,
+            (window_start, window_start, group_id, safe_limit),
+        ).fetchall()
+        entries: list[dict[str, object]] = []
+        last_score: tuple[int, int] | None = None
+        current_rank = 0
+        for index, row in enumerate(rows, start=1):
+            crown_count = int(row["crown_count"])
+            period_crowns = crown_count if normalized_period == "all_time" else int(row["period_crowns"])
+            score = (period_crowns, crown_count) if normalized_period in {"weekly", "monthly"} else (crown_count, period_crowns)
+            if score != last_score:
+                current_rank = index
+                last_score = score
+            entries.append(
+                {
+                    "rank": current_rank,
+                    "user_id": row["id"],
+                    "display_name": row["full_name"] or row["username"],
+                    "avatar_url": row["avatar_uri"],
+                    "crown_count": crown_count,
+                    "period_crowns": period_crowns,
+                    "is_current_user": str(row["id"]) == current_user_id,
+                }
+            )
+        return {
+            "group_id": group_id,
+            "period": normalized_period,
+            "generated_at": _utc_now(),
+            "entries": entries,
+        }
 
 
 def _create_notification(

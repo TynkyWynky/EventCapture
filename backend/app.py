@@ -34,25 +34,38 @@ try:
     from .database import (
         add_event_comment,
         add_post_comment,
+        accept_friend_request,
+        accept_group_invite,
+        archive_group,
         authenticate_user,
         change_user_password,
         create_capture,
         create_activity_notification,
+        create_group,
         create_password_reset_token,
         create_support_request,
         create_session,
         create_user,
         deactivate_user,
+        decline_friend_request,
+        decline_group_invite,
         delete_event,
         delete_post,
         delete_session,
         get_event_social_map,
+        get_group,
+        get_group_leaderboard,
         get_reward_state,
         get_unread_notification_count,
         get_user_by_email,
         get_user_by_id,
         get_user_by_session_token,
         init_database,
+        invite_group_members,
+        list_friend_requests,
+        list_friends,
+        list_group_members,
+        list_groups,
         list_notifications,
         list_captures,
         list_events,
@@ -60,13 +73,19 @@ try:
         list_posts,
         list_users,
         mark_all_notifications_read,
+        remove_friend,
+        remove_group_member,
         reset_user_password,
         consume_password_reset_token,
+        search_users,
+        send_friend_request,
         set_event_plan_note,
         set_event_plan_status,
         toggle_event_like,
         toggle_event_save,
         toggle_post_like,
+        update_group,
+        update_group_member_role,
         update_user_profile,
         upsert_event,
         upsert_post,
@@ -92,6 +111,18 @@ try:
         EventPlanRequest,
         EventSocialMapResponse,
         EventSocialStateResponse,
+        FriendListItemResponse,
+        FriendRequestCreateRequest,
+        FriendRequestListResponse,
+        FriendRequestResponse,
+        GroupCreateRequest,
+        GroupDetailResponse,
+        GroupInvitationRequest,
+        GroupLeaderboardResponse,
+        GroupListResponse,
+        GroupMemberResponse,
+        GroupMemberUpdateRequest,
+        GroupUpdateRequest,
         HealthResponse,
         LoginRequest,
         MessageResponse,
@@ -108,6 +139,7 @@ try:
         SupportContactRequest,
         SupportContactResponse,
         UpdateProfileRequest,
+        UserSearchResultResponse,
         UserProfileResponse,
     )
 except ImportError:
@@ -116,25 +148,38 @@ except ImportError:
     from database import (
         add_event_comment,
         add_post_comment,
+        accept_friend_request,
+        accept_group_invite,
+        archive_group,
         authenticate_user,
         change_user_password,
         create_capture,
         create_activity_notification,
+        create_group,
         create_password_reset_token,
         create_support_request,
         create_session,
         create_user,
         deactivate_user,
+        decline_friend_request,
+        decline_group_invite,
         delete_event,
         delete_post,
         delete_session,
         get_event_social_map,
+        get_group,
+        get_group_leaderboard,
         get_reward_state,
         get_unread_notification_count,
         get_user_by_email,
         get_user_by_id,
         get_user_by_session_token,
         init_database,
+        invite_group_members,
+        list_friend_requests,
+        list_friends,
+        list_group_members,
+        list_groups,
         list_notifications,
         list_captures,
         list_events,
@@ -142,13 +187,19 @@ except ImportError:
         list_posts,
         list_users,
         mark_all_notifications_read,
+        remove_friend,
+        remove_group_member,
         reset_user_password,
         consume_password_reset_token,
+        search_users,
+        send_friend_request,
         set_event_plan_note,
         set_event_plan_status,
         toggle_event_like,
         toggle_event_save,
         toggle_post_like,
+        update_group,
+        update_group_member_role,
         update_user_profile,
         upsert_event,
         upsert_post,
@@ -174,6 +225,18 @@ except ImportError:
         EventPlanRequest,
         EventSocialMapResponse,
         EventSocialStateResponse,
+        FriendListItemResponse,
+        FriendRequestCreateRequest,
+        FriendRequestListResponse,
+        FriendRequestResponse,
+        GroupCreateRequest,
+        GroupDetailResponse,
+        GroupInvitationRequest,
+        GroupLeaderboardResponse,
+        GroupListResponse,
+        GroupMemberResponse,
+        GroupMemberUpdateRequest,
+        GroupUpdateRequest,
         HealthResponse,
         LoginRequest,
         MessageResponse,
@@ -190,6 +253,7 @@ except ImportError:
         SupportContactRequest,
         SupportContactResponse,
         UpdateProfileRequest,
+        UserSearchResultResponse,
         UserProfileResponse,
     )
 
@@ -596,6 +660,152 @@ async def confirm_password_reset(payload: ResetPasswordConfirmRequest):
 @app.get("/api/users", response_model=list[UserProfileResponse])
 async def get_users(_: dict[str, object] = Depends(get_admin_user)):
     return [_user_response(user) for user in list_users()]
+
+
+@app.get("/api/users/search", response_model=list[UserSearchResultResponse])
+async def search_app_users(q: str, current_user: dict[str, object] = Depends(get_current_user)):
+    return search_users(q, str(current_user["id"]))
+
+
+@app.get("/api/friends", response_model=list[FriendListItemResponse])
+async def get_friends(current_user: dict[str, object] = Depends(get_current_user)):
+    return list_friends(str(current_user["id"]))
+
+
+@app.get("/api/friends/requests", response_model=FriendRequestListResponse)
+async def get_friend_requests(current_user: dict[str, object] = Depends(get_current_user)):
+    return FriendRequestListResponse(**list_friend_requests(str(current_user["id"])))
+
+
+@app.post("/api/friends/requests", response_model=FriendRequestResponse, status_code=201)
+async def create_friend_request(
+    payload: FriendRequestCreateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    created = send_friend_request(str(current_user["id"]), payload.user_id)
+    return FriendRequestResponse(**created)
+
+
+@app.post("/api/friends/requests/{request_id}/accept", response_model=FriendRequestResponse)
+async def accept_friend_request_route(request_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    accepted = accept_friend_request(request_id, str(current_user["id"]))
+    return FriendRequestResponse(**accepted)
+
+
+@app.post("/api/friends/requests/{request_id}/decline", response_model=FriendRequestResponse)
+async def decline_friend_request_route(request_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    declined = decline_friend_request(request_id, str(current_user["id"]))
+    return FriendRequestResponse(**declined)
+
+
+@app.delete("/api/friends/{user_id}", response_model=MessageResponse)
+async def remove_friend_route(user_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    if not remove_friend(str(current_user["id"]), user_id):
+        raise HTTPException(status_code=404, detail="Friendship not found.")
+    return MessageResponse(message="Friendship updated successfully.")
+
+
+@app.get("/api/groups", response_model=GroupListResponse)
+async def get_groups(current_user: dict[str, object] = Depends(get_current_user)):
+    return GroupListResponse(**list_groups(str(current_user["id"])))
+
+
+@app.post("/api/groups", response_model=GroupDetailResponse, status_code=201)
+async def create_group_route(payload: GroupCreateRequest, current_user: dict[str, object] = Depends(get_current_user)):
+    group = create_group(
+        str(current_user["id"]),
+        name=payload.name,
+        description=payload.description,
+        invited_user_ids=payload.invited_user_ids,
+    )
+    return GroupDetailResponse(**group)
+
+
+@app.get("/api/groups/{group_id}", response_model=GroupDetailResponse)
+async def get_group_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    return GroupDetailResponse(**get_group(group_id, str(current_user["id"])))
+
+
+@app.patch("/api/groups/{group_id}", response_model=GroupDetailResponse)
+async def update_group_route(
+    group_id: str,
+    payload: GroupUpdateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    updated = update_group(
+        group_id,
+        str(current_user["id"]),
+        name=payload.name,
+        description=payload.description,
+    )
+    return GroupDetailResponse(**updated)
+
+
+@app.delete("/api/groups/{group_id}", response_model=MessageResponse)
+async def delete_group_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    if not archive_group(group_id, str(current_user["id"])):
+        raise HTTPException(status_code=404, detail="Group not found.")
+    return MessageResponse(message="Group archived successfully.")
+
+
+@app.get("/api/groups/{group_id}/members", response_model=list[GroupMemberResponse])
+async def get_group_members_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    return list_group_members(group_id, str(current_user["id"]))
+
+
+@app.post("/api/groups/{group_id}/invitations", response_model=GroupDetailResponse)
+async def invite_group_members_route(
+    group_id: str,
+    payload: GroupInvitationRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    updated = invite_group_members(group_id, str(current_user["id"]), payload.user_ids)
+    return GroupDetailResponse(**updated)
+
+
+@app.post("/api/groups/{group_id}/invitations/accept", response_model=GroupDetailResponse)
+async def accept_group_invite_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    accepted = accept_group_invite(group_id, str(current_user["id"]))
+    return GroupDetailResponse(**accepted)
+
+
+@app.post("/api/groups/{group_id}/invitations/decline", response_model=MessageResponse)
+async def decline_group_invite_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    decline_group_invite(group_id, str(current_user["id"]))
+    return MessageResponse(message="Group invitation declined.")
+
+
+@app.delete("/api/groups/{group_id}/members/{user_id}", response_model=MessageResponse)
+async def remove_group_member_route(
+    group_id: str,
+    user_id: str,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    if not remove_group_member(group_id, str(current_user["id"]), user_id):
+        raise HTTPException(status_code=404, detail="Group member not found.")
+    return MessageResponse(message="Group membership updated successfully.")
+
+
+@app.patch("/api/groups/{group_id}/members/{user_id}", response_model=GroupDetailResponse)
+async def update_group_member_route(
+    group_id: str,
+    user_id: str,
+    payload: GroupMemberUpdateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    updated = update_group_member_role(group_id, str(current_user["id"]), user_id, payload.role)
+    return GroupDetailResponse(**updated)
+
+
+@app.get("/api/groups/{group_id}/leaderboard", response_model=GroupLeaderboardResponse)
+async def get_group_leaderboard_route(
+    group_id: str,
+    period: str = "all_time",
+    limit: int = 50,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    leaderboard = get_group_leaderboard(group_id, str(current_user["id"]), period=period, limit=limit)
+    return GroupLeaderboardResponse(**leaderboard)
 
 
 @app.get("/api/rewards/me", response_model=RewardStateResponse)

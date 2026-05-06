@@ -25,6 +25,17 @@ export default function NotificationsScreen() {
   }));
   const sections = [t('notifSectionNew'), t('notifSectionEarlier')];
 
+  const handleNotificationPress = (relatedType?: string | null, relatedId?: string | null) => {
+    if (relatedType === 'friendship') {
+      router.push('/friends');
+      return;
+    }
+    if (relatedType === 'group' && relatedId) {
+      router.push({ pathname: '/group/[id]', params: { id: relatedId } });
+      return;
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
@@ -85,12 +96,19 @@ export default function NotificationsScreen() {
               <Text style={styles.sectionTitle}>{section}</Text>
 
               {entries.map((item, idx) => (
-                <SurfaceCard key={`${section}-${idx}`} style={styles.card}>
+                <TouchableOpacity
+                  key={`${section}-${idx}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.title || item.user}
+                  activeOpacity={item.relatedType || item.relatedId ? 0.9 : 1}
+                  onPress={() => handleNotificationPress(item.relatedType, item.relatedId)}>
+                  <SurfaceCard style={styles.card}>
                   <View style={[styles.avatar, { backgroundColor: item.color }]}>
                     <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>
                   </View>
 
                   <View style={styles.copy}>
+                    {item.title ? <Text style={styles.cardTitle}>{item.title}</Text> : null}
                     <Text style={styles.text}>
                       <Text style={styles.user}>{item.user}</Text>
                       <Text> {item.text}</Text>
@@ -101,7 +119,8 @@ export default function NotificationsScreen() {
                   <View style={[styles.iconBadge, { backgroundColor: `${item.color}18` }]}>
                     <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={18} color={item.color} />
                   </View>
-                </SurfaceCard>
+                  </SurfaceCard>
+                </TouchableOpacity>
               ))}
             </View>
           );
@@ -147,6 +166,11 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   copy: {
     flex: 1,
+  },
+  cardTitle: {
+    ...Typography.caption,
+    color: Colors.light.subtitle,
+    marginBottom: 4,
   },
   text: { ...Typography.bodySm, color: '#3a322d' },
   user: {

@@ -344,6 +344,267 @@ class EventCaptureApiTests(unittest.TestCase):
         self.assertEqual(status, 200, posts_payload)
         self.assertFalse(any(post["id"] == post_id for post in posts_payload))
 
+    def test_friendship_search_requests_accept_decline_and_remove(self):
+        alice = self.register_and_login("friends-alice@example.com", "friendsalice")
+        bob = self.register_and_login("friends-bob@example.com", "friendsbob")
+        charlie = self.register_and_login("friends-charlie@example.com", "friendscharlie")
+
+        status, payload = self.api_request("GET", "/api/users/search?q=friends")
+        self.assertEqual(status, 401, payload)
+
+        status, payload = self.api_request("GET", "/api/users/search?q=friendsbob", token=alice["token"])
+        self.assertEqual(status, 200, payload)
+        self.assertTrue(any(entry["id"] == bob["user_id"] for entry in payload))
+        self.assertFalse(any("email" in entry for entry in payload))
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/friends/requests",
+            {"user_id": bob["user_id"]},
+            token=alice["token"],
+        )
+        self.assertEqual(status, 201, payload)
+        request_id = payload["id"]
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/friends/requests",
+            {"user_id": bob["user_id"]},
+            token=alice["token"],
+        )
+        self.assertEqual(status, 400, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/friends/requests",
+            {"user_id": alice["user_id"]},
+            token=alice["token"],
+        )
+        self.assertEqual(status, 400, payload)
+
+        status, payload = self.api_request("GET", "/api/friends/requests", token=bob["token"])
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(len(payload["incoming"]), 1)
+        self.assertEqual(payload["incoming"][0]["requester_user"]["id"], alice["user_id"])
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/friends/requests/{request_id}/accept",
+            {},
+            token=charlie["token"],
+        )
+        self.assertEqual(status, 403, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/friends/requests/{request_id}/accept",
+            {},
+            token=bob["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["status"], "accepted")
+
+        status, payload = self.api_request("GET", "/api/friends", token=alice["token"])
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["friend"]["id"], bob["user_id"])
+
+        status, payload = self.api_request("GET", "/api/notifications", token=bob["token"])
+        self.assertEqual(status, 200, payload)
+        self.assertTrue(any(item["related_type"] == "friendship" for item in payload["items"]))
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/friends/requests",
+            {"user_id": charlie["user_id"]},
+            token=alice["token"],
+        )
+        self.assertEqual(status, 201, payload)
+        decline_request_id = payload["id"]
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/friends/requests/{decline_request_id}/decline",
+            {},
+            token=charlie["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["status"], "declined")
+
+        status, payload = self.api_request("DELETE", f"/api/friends/{bob['user_id']}", token=alice["token"])
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request("GET", "/api/friends", token=alice["token"])
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload, [])
+
+    def test_groups_leaderboard_permissions_and_notifications(self):
+        owner = self.register_and_login("group-owner@example.com", "groupowner")
+        member = self.register_and_login("group-member@example.com", "groupmember")
+        outsider = self.register_and_login("group-outsider@example.com", "groupoutsider")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/friends/requests",
+            {"user_id": member["user_id"]},
+            token=owner["token"],
+        )
+        self.assertEqual(status, 201, payload)
+        request_id = payload["id"]
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/friends/requests/{request_id}/accept",
+            {},
+            token=member["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/groups",
+            {
+                "name": "Test Crew",
+                "description": "Compare crowns with trusted friends.",
+                "invited_user_ids": [member["user_id"]],
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 201, payload)
+        group_id = payload["id"]
+        self.assertEqual(payload["current_user_role"], "owner")
+        self.assertEqual(payload["current_user_status"], "accepted")
+        self.assertTrue(any(group_member["user"]["id"] == owner["user_id"] and group_member["role"] == "owner" for group_member in payload["members"]))
+        self.assertTrue(any(group_member["user"]["id"] == member["user_id"] and group_member["status"] == "invited" for group_member in payload["members"]))
+
+        status, notifications_payload = self.api_request("GET", "/api/notifications", token=member["token"])
+        self.assertEqual(status, 200, notifications_payload)
+        self.assertTrue(any(item["related_type"] == "group" and item["related_id"] == group_id for item in notifications_payload["items"]))
+
+        status, payload = self.api_request("GET", f"/api/groups/{group_id}", token=outsider["token"])
+        self.assertEqual(status, 403, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/groups/{group_id}/invitations/accept",
+            {},
+            token=member["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["current_user_status"], "accepted")
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/groups/{group_id}/invitations",
+            {"user_ids": [outsider["user_id"]]},
+            token=member["token"],
+        )
+        self.assertEqual(status, 403, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "id": "group-owner-post-1",
+                "image_uri": "https://example.com/group-owner-post-1.jpg",
+                "date": "05/05/2026",
+                "is_beer_finished": True,
+                "event_title": "Crew Night",
+                "likes": [],
+                "comments": [],
+                "capture_id": "group-capture-owner-1",
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "id": "group-owner-post-2",
+                "image_uri": "https://example.com/group-owner-post-2.jpg",
+                "date": "05/05/2026",
+                "is_beer_finished": True,
+                "event_title": "Crew Night",
+                "likes": [],
+                "comments": [],
+                "capture_id": "group-capture-owner-2",
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "id": "group-member-post-1",
+                "image_uri": "https://example.com/group-member-post-1.jpg",
+                "date": "05/05/2026",
+                "is_beer_finished": True,
+                "event_title": "Crew Night",
+                "likes": [],
+                "comments": [],
+                "capture_id": "group-capture-member-1",
+            },
+            token=member["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request(
+            "GET",
+            f"/api/groups/{group_id}/leaderboard?period=all_time",
+            token=member["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["group_id"], group_id)
+        self.assertEqual(payload["entries"][0]["user_id"], owner["user_id"])
+        self.assertEqual(payload["entries"][0]["crown_count"], 2)
+        self.assertTrue(any(entry["user_id"] == member["user_id"] and entry["is_current_user"] for entry in payload["entries"]))
+
+        status, payload = self.api_request(
+            "GET",
+            f"/api/groups/{group_id}/leaderboard",
+            token=outsider["token"],
+        )
+        self.assertEqual(status, 403, payload)
+
+        status, payload = self.api_request(
+            "DELETE",
+            f"/api/groups/{group_id}/members/{member['user_id']}",
+            token=owner["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request("GET", f"/api/groups/{group_id}", token=member["token"])
+        self.assertEqual(status, 403, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/groups",
+            {
+                "name": "Decline Crew",
+                "description": "Invite flow validation",
+                "invited_user_ids": [member["user_id"]],
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 201, payload)
+        second_group_id = payload["id"]
+
+        status, payload = self.api_request(
+            "POST",
+            f"/api/groups/{second_group_id}/invitations/decline",
+            {},
+            token=member["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, payload = self.api_request("GET", "/api/groups", token=member["token"])
+        self.assertEqual(status, 200, payload)
+        self.assertFalse(any(item["id"] == second_group_id for item in payload["pending_invites"]))
+
 
 if __name__ == "__main__":
     unittest.main()
