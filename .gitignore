@@ -38,6 +38,8 @@ backend/eventcapture.db*
 *.pem
 
 # local env files
+.env
+backend/.env
 .env*.local
 
 # typescript

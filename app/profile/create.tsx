@@ -9,19 +9,19 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/theme';
-import { useLanguage } from '@/context/LanguageContext';
 
 export default function CreateProfileScreen() {
   const router = useRouter();
-  const { createProfile, user, isBusy } = useUser();
-  const { t } = useLanguage();
+  const { createProfile, user } = useUser();
   const [avatarUri, setAvatarUri] = useState(user.avatarUri);
   const [username, setUsername] = useState(user.username);
   const [fullName, setFullName] = useState(user.fullName === 'Event Friend' ? '' : user.fullName);
   const [city, setCity] = useState(user.city);
   const [email, setEmail] = useState(user.email);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('eventcapture123');
   const [bio, setBio] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isCompleteDisabled = !username.trim() || !fullName.trim() || !email.trim() || !password.trim();
 
   const pickAvatar = async () => {
@@ -29,8 +29,8 @@ export default function CreateProfileScreen() {
 
     if (!permission.granted) {
       Alert.alert(
-        t('createProfilePhotoAccessTitle'),
-        t('createProfilePhotoAccessMessage')
+        'Photo access needed',
+        'Allow photo library access to choose a profile picture on your device.'
       );
       return;
     }
@@ -62,12 +62,12 @@ export default function CreateProfileScreen() {
                   <Ionicons name="chevron-back" size={20} color="#1f1a17" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.eyebrow}>{t('createProfileEyebrow')}</Text>
-                  <Text style={styles.title}>{t('createProfileTitle')}</Text>
+                  <Text style={styles.eyebrow}>PROFILE</Text>
+                  <Text style={styles.title}>Create your profile</Text>
                 </View>
               </View>
 
-              <Text style={styles.subtitle}>{t('createProfileSubtitle')}</Text>
+              <Text style={styles.subtitle}>Set up the basics so your account already feels personal from the start.</Text>
 
               <View style={styles.avatarWrap}>
                 <View style={styles.avatar}>
@@ -83,9 +83,9 @@ export default function CreateProfileScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('createProfileUsernameLabel')}</Text>
+                <Text style={styles.fieldLabel}>Username</Text>
                 <TextInput
-                  placeholder={t('createProfileUsernamePlaceholder')}
+                  placeholder="Choose a username"
                   placeholderTextColor="#91867f"
                   style={styles.input}
                   value={username}
@@ -94,9 +94,9 @@ export default function CreateProfileScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('createProfileEmailLabel')}</Text>
+                <Text style={styles.fieldLabel}>Email</Text>
                 <TextInput
-                  placeholder={t('createProfileEmailPlaceholder')}
+                  placeholder="Add your email"
                   placeholderTextColor="#91867f"
                   style={styles.input}
                   value={email}
@@ -107,9 +107,9 @@ export default function CreateProfileScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('createProfilePasswordLabel')}</Text>
+                <Text style={styles.fieldLabel}>Password</Text>
                 <TextInput
-                  placeholder={t('createProfilePasswordPlaceholder')}
+                  placeholder="Create a password"
                   placeholderTextColor="#91867f"
                   style={styles.input}
                   value={password}
@@ -119,9 +119,9 @@ export default function CreateProfileScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('createProfileFullNameLabel')}</Text>
+                <Text style={styles.fieldLabel}>Full name</Text>
                 <TextInput
-                  placeholder={t('createProfileFullNamePlaceholder')}
+                  placeholder="Add your full name"
                   placeholderTextColor="#91867f"
                   style={styles.input}
                   value={fullName}
@@ -130,9 +130,9 @@ export default function CreateProfileScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('createProfileCityLabel')}</Text>
+                <Text style={styles.fieldLabel}>City</Text>
                 <TextInput
-                  placeholder={t('createProfileCityPlaceholder')}
+                  placeholder="Where are you based?"
                   placeholderTextColor="#91867f"
                   style={styles.input}
                   value={city}
@@ -141,9 +141,9 @@ export default function CreateProfileScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('createProfileBioLabel')}</Text>
+                <Text style={styles.fieldLabel}>About you</Text>
                 <TextInput
-                  placeholder={t('createProfileBioPlaceholder')}
+                  placeholder="What kind of events do you love most?"
                   placeholderTextColor="#91867f"
                   style={[styles.input, styles.textArea]}
                   multiline
@@ -154,9 +154,10 @@ export default function CreateProfileScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.primary, isCompleteDisabled && styles.primaryDisabled]}
-                disabled={isCompleteDisabled || isBusy}
+                style={[styles.primary, (isCompleteDisabled || isSubmitting) && styles.primaryDisabled]}
+                disabled={isCompleteDisabled || isSubmitting}
                 onPress={async () => {
+                  setIsSubmitting(true);
                   const result = await createProfile({
                     username,
                     fullName,
@@ -166,17 +167,19 @@ export default function CreateProfileScreen() {
                     email,
                     password,
                   });
-                  if (result.ok) {
-                    router.replace('/(tabs)');
+                  setIsSubmitting(false);
+                  if (!result.ok) {
+                    setError(result.error ?? 'Unable to create your account.');
                     return;
                   }
-
-                  Alert.alert(t('createProfileFailedTitle'), result.error ?? t('createProfileFailedMessage'));
+                  setError('');
+                  router.replace('/(tabs)');
                 }}>
                 <Text style={styles.primaryText}>
-                  {isBusy ? t('createProfileSubmittingButton') : t('createProfileCompleteButton')}
+                  {isSubmitting ? 'Creating account...' : 'Complete profile'}
                 </Text>
               </TouchableOpacity>
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -270,4 +273,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   primaryText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  errorText: {
+    color: '#c64d3a',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 });

@@ -69,7 +69,9 @@ class DrinkDetectionApp {
 
             // Connect WebSocket
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/detect`;
+            const token = this.getAccessToken();
+            const wsQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+            const wsUrl = `${protocol}//${window.location.host}/ws/detect${wsQuery}`;
             this.ws = new WebSocket(wsUrl);
 
             this.ws.onopen = () => {
@@ -312,10 +314,16 @@ class DrinkDetectionApp {
 
         const formData = new FormData();
         formData.append('file', file);
+        const headers = {};
+        const token = this.getAccessToken();
+        if (token) {
+            headers.Authorization = `Bearer ${token}`;
+        }
 
         try {
             const response = await fetch('/api/detect', {
                 method: 'POST',
+                headers,
                 body: formData,
             });
 
@@ -353,6 +361,17 @@ class DrinkDetectionApp {
         this.connectionStatus.className = `status ${status}`;
         const labels = { connected: 'Connected', disconnected: 'Disconnected', connecting: 'Connecting...' };
         this.connectionStatus.textContent = labels[status] || status;
+    }
+
+    getAccessToken() {
+        const params = new URLSearchParams(window.location.search);
+        const fromQuery = params.get('token');
+        if (fromQuery && fromQuery.trim()) {
+            return fromQuery.trim();
+        }
+
+        const fromStorage = window.localStorage.getItem('eventcapture_access_token');
+        return fromStorage && fromStorage.trim() ? fromStorage.trim() : '';
     }
 
     escapeHtml(text) {

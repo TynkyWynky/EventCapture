@@ -2,7 +2,6 @@ import { AppButton } from '@/components/ui/app-button';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { LogoMark } from '@/components/logo-mark';
 import { Colors, Radius, Typography } from '@/constants/theme';
-import { useLanguage } from '@/context/LanguageContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,22 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, user, isBusy } = useUser();
-  const { t } = useLanguage();
+  const { signIn, user } = useUser();
   const [email, setEmail] = useState(user.email);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('eventcapture123');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSignIn = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError(t('loginEmptyError'));
-      return;
-    }
-
+    setIsSubmitting(true);
     const result = await signIn(email, password);
+    setIsSubmitting(false);
 
     if (!result.ok) {
-      setError(result.error ?? t('loginFailedMessage'));
+      setError(result.error ?? 'Sign in failed.');
       return;
     }
 
@@ -49,17 +45,37 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.copy}>
-                <Text style={styles.title}>{t('loginTitle')}</Text>
+                <Text style={styles.title}>Welcome back</Text>
                 <Text style={styles.subtitle}>
-                  {t('loginSubtitle')}
+                  Sign in to keep capturing events and moments that matter.
                 </Text>
+              </View>
+
+              <View style={styles.accountRow}>
+                <TouchableOpacity
+                  style={[styles.demoCard, email === 'demo@eventcapture.app' && styles.demoCardActive]}
+                  activeOpacity={0.85}
+                  onPress={() => { setEmail('demo@eventcapture.app'); setPassword('eventcapture123'); setError(''); }}>
+                  <Text style={styles.demoLabel}>Demo account</Text>
+                  <Text style={styles.demoValue}>demo@eventcapture.app</Text>
+                  <Text style={styles.demoHint}>Tap to fill</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.demoCard, email === 'admin' && styles.demoCardActive]}
+                  activeOpacity={0.85}
+                  onPress={() => { setEmail('admin'); setPassword('admin'); setError(''); }}>
+                  <Text style={styles.demoLabel}>Admin</Text>
+                  <Text style={styles.demoValue}>admin</Text>
+                  <Text style={styles.demoHint}>Tap to fill</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.inputRow}>
                 <Ionicons name="mail-outline" size={18} color="#81776f" />
                 <TextInput
                   value={email}
-                  placeholder={t('loginEmailPlaceholder')}
+                  placeholder="Email"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   autoCapitalize="none"
@@ -72,7 +88,7 @@ export default function LoginScreen() {
                 <Ionicons name="lock-closed-outline" size={18} color="#81776f" />
                 <TextInput
                   value={password}
-                  placeholder={t('loginPasswordPlaceholder')}
+                  placeholder="Password"
                   placeholderTextColor="#9a9189"
                   style={styles.input}
                   secureTextEntry
@@ -81,25 +97,25 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.metaRow}>
-                <Text style={styles.metaText}>{t('loginMetaText')}</Text>
-                <TouchableOpacity disabled={isBusy} onPress={() => router.push('/auth/reset')}>
-                  <Text style={styles.metaLink}>{t('loginForgotPassword')}</Text>
+                <Text style={styles.metaText}>Backend account sign-in</Text>
+                <TouchableOpacity onPress={() => router.push('/auth/reset')}>
+                  <Text style={styles.metaLink}>Forgot password?</Text>
                 </TouchableOpacity>
               </View>
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
               <AppButton
-                label={isBusy ? t('loginSubmitBusy') : t('loginSubmit')}
+                label={isSubmitting ? 'Signing in...' : 'Sign in'}
                 onPress={() => void handleSignIn()}
                 size="lg"
-                disabled={isBusy}
+                disabled={isSubmitting}
               />
               <AppButton
-                label={t('loginCreateAccount')}
+                label="Create account"
                 variant="secondary"
                 onPress={() => router.push('/profile/create')}
-                disabled={isBusy}
+                disabled={isSubmitting}
               />
             </SurfaceCard>
           </ScrollView>
@@ -133,6 +149,26 @@ const styles = StyleSheet.create({
   copy: { gap: 6 },
   title: { ...Typography.titleLg, color: Colors.light.title, textAlign: 'center' },
   subtitle: { ...Typography.body, color: Colors.light.subtitle, textAlign: 'center' },
+  accountRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  demoCard: {
+    flex: 1,
+    backgroundColor: '#fff2e6',
+    borderRadius: Radius.lg,
+    padding: 14,
+    gap: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  demoCardActive: {
+    borderColor: Colors.light.tint,
+    backgroundColor: '#fff8f0',
+  },
+  demoLabel: { color: '#8a6a52', fontSize: 12, fontWeight: '800', letterSpacing: 0.8 },
+  demoValue: { color: '#1f1a17', fontWeight: '800' },
+  demoHint: { color: '#7d726a', fontSize: 12.5 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',

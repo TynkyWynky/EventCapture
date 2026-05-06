@@ -24,6 +24,13 @@ def serialize_detections(detections: list[Detection]) -> list[DetectionResponse]
 
 
 def serialize_debug_regions(debug_regions: dict) -> DebugRegionsResponse:
+    if hasattr(debug_regions, "persons") and hasattr(debug_regions, "faces") and hasattr(debug_regions, "head_zones"):
+        return DebugRegionsResponse(
+            persons=[list(bbox) for bbox in debug_regions.persons],
+            faces=[list(bbox) for bbox in debug_regions.faces],
+            head_zones=[list(bbox) for bbox in debug_regions.head_zones],
+        )
+
     return DebugRegionsResponse(
         persons=[list(bbox) for bbox in debug_regions.get("persons", [])],
         faces=[list(bbox) for bbox in debug_regions.get("faces", [])],

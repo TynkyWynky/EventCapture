@@ -4,7 +4,6 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
 import { Colors } from '@/constants/theme';
-import { useLanguage } from '@/context/LanguageContext';
 import { useToast } from '@/context/ToastContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,43 +15,44 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const { user, updateProfile, deleteAccount, isBusy } = useUser();
+  const { user, updateProfile, deleteAccount } = useUser();
   const { showToast } = useToast();
-  const { t } = useLanguage();
   const [avatarUri, setAvatarUri] = useState(user.avatarUri);
   const [username, setUsername] = useState(user.username);
   const [fullName, setFullName] = useState(user.fullName);
   const [city, setCity] = useState(user.city);
   const [email, setEmail] = useState(user.email);
   const [bio, setBio] = useState(user.bio);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteAccount = () => {
-      Alert.alert(
-        t('editProfAlertDelTitle'),
-        t('editProfAlertDelMsg'),
-        [
-        { text: t('editProfAlertCancel'), style: 'cancel' },
+    Alert.alert(
+      'Delete account',
+      'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: t('editProfAlertDelete'),
+          text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            void deleteAccount().then((result) => {
-              if (!result.ok) {
-                showToast({
-                  tone: 'error',
-                  title: t('accountDeleteFailedTitle'),
-                  message: result.error ?? t('accountDeleteFailedMessage'),
-                });
-                return;
-              }
-
+          onPress: async () => {
+            setIsDeleting(true);
+            const result = await deleteAccount();
+            setIsDeleting(false);
+            if (!result.ok) {
               showToast({
-                tone: 'info',
-                title: t('editProfDelToastTitle'),
-                message: t('editProfDelToastMsg'),
+                tone: 'error',
+                title: 'Delete failed',
+                message: result.error ?? 'Unable to delete your account right now.',
               });
-              router.replace('/auth/login');
+              return;
+            }
+            showToast({
+              tone: 'info',
+              title: 'Account deleted',
+              message: 'Your account has been removed.',
             });
+            router.replace('/auth/login');
           },
         },
       ]
@@ -64,8 +64,8 @@ export default function EditProfileScreen() {
 
     if (!permission.granted) {
       Alert.alert(
-        t('createProfilePhotoAccessTitle'),
-        t('createProfilePhotoAccessMessage')
+        'Photo access needed',
+        'Allow photo library access to choose a profile picture on your device.'
       );
       return;
     }
@@ -88,12 +88,12 @@ export default function EditProfileScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={styles.container}>
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={styles.container}>
           <ScreenHeader
-            eyebrow={t('editProfEyebrow')}
-            title={t('editProfTitle')}
-            subtitle={t('editProfSubtitle')}
+            eyebrow="PROFILE"
+            title="Edit profile"
+            subtitle="Refresh your identity, bio, and public details."
             onBack={() => router.back()}
           />
 
@@ -111,9 +111,9 @@ export default function EditProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.heroTitle}>{t('editProfHeroTitle')}</Text>
+            <Text style={styles.heroTitle}>Keep your profile fresh</Text>
             <Text style={styles.heroText}>
-              {t('editProfHeroText')}
+              Update your public details, bio and account presence in one clean flow.
             </Text>
 
             <View style={styles.heroStats}>
@@ -124,9 +124,9 @@ export default function EditProfileScreen() {
 
           <SurfaceCard style={styles.sectionCard}>
             <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('editProfLblUser')}</Text>
-                <TextInput
-                placeholder={t('editProfPlhUser')}
+              <Text style={styles.fieldLabel}>Username</Text>
+              <TextInput
+                placeholder="Update username"
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={username}
@@ -135,9 +135,9 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('editProfLblName')}</Text>
-                <TextInput
-                placeholder={t('editProfPlhName')}
+              <Text style={styles.fieldLabel}>Full name</Text>
+              <TextInput
+                placeholder="Update full name"
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={fullName}
@@ -146,9 +146,9 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('editProfLblEmail')}</Text>
-                <TextInput
-                placeholder={t('editProfPlhEmail')}
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                placeholder="Update your email"
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={email}
@@ -159,9 +159,9 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('editProfLblCity')}</Text>
-                <TextInput
-                placeholder={t('editProfPlhCity')}
+              <Text style={styles.fieldLabel}>City</Text>
+              <TextInput
+                placeholder="Update your city"
                 placeholderTextColor="#91867f"
                 style={styles.input}
                 value={city}
@@ -170,9 +170,9 @@ export default function EditProfileScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{t('editProfLblBio')}</Text>
-                <TextInput
-                placeholder={t('editProfPlhBio')}
+              <Text style={styles.fieldLabel}>About you</Text>
+              <TextInput
+                placeholder="Update your bio"
                 placeholderTextColor="#91867f"
                 style={[styles.input, styles.textArea]}
                 multiline
@@ -185,34 +185,40 @@ export default function EditProfileScreen() {
 
           <View style={styles.actionRow}>
             <AppButton
-              label={isBusy ? t('editProfBtnSaving') : t('editProfBtnSave')}
+              label={isSaving ? 'Saving...' : 'Save profile'}
+              disabled={isSaving || isDeleting}
               onPress={async () => {
+                setIsSaving(true);
                 const result = await updateProfile({ avatarUri, username, fullName, city, bio, email });
+                setIsSaving(false);
                 if (!result.ok) {
                   showToast({
                     tone: 'error',
-                    title: t('editProfTitle'),
-                    message: result.error ?? t('editProfSaveFailedMessage'),
+                    title: 'Profile update failed',
+                    message: result.error ?? 'Unable to update your profile right now.',
                   });
                   return;
                 }
-
                 showToast({
                   tone: 'success',
-                  title: t('editProfToastTitle'),
-                  message: t('editProfToastMsg'),
+                  title: 'Profile updated',
+                  message: 'Your public profile changes were saved.',
                 });
                 router.back();
               }}
-              disabled={isBusy}
             />
             <AppButton
-              label={t('editProfBtnPass')}
+              label="Change password"
               variant="secondary"
               onPress={() => router.push('/auth/change-password')}
-              disabled={isBusy}
+              disabled={isSaving || isDeleting}
             />
-            <AppButton label={t('editProfBtnDel')} variant="danger" onPress={handleDeleteAccount} disabled={isBusy} />
+            <AppButton
+              label={isDeleting ? 'Deleting account...' : 'Delete account'}
+              variant="danger"
+              onPress={handleDeleteAccount}
+              disabled={isSaving || isDeleting}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
