@@ -1,6 +1,6 @@
 import { Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import React from 'react';
-import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 interface SurfaceCardProps {
   children: React.ReactNode;
@@ -51,8 +51,7 @@ const styles = StyleSheet.create({
   inset: {
     backgroundColor: Colors.light.canvas,
     borderColor: Colors.light.border,
-    shadowOpacity: 0,
-    elevation: 0,
+    ...(Platform.OS === 'web' ? { boxShadow: 'none' } : { shadowOpacity: 0, elevation: 0 }),
   },
   unpadded: {
     padding: 0,

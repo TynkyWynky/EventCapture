@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 export interface ToastItem {
   id: string;
@@ -48,11 +48,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 8px 14px rgba(0, 0, 0, 0.08)' }
+      : {
+          shadowColor: '#000',
+          shadowOpacity: 0.08,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 8,
+        }),
   },
   success: {
     backgroundColor: '#f4fff8',

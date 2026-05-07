@@ -3,6 +3,7 @@ import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import 'react-native-reanimated';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { EventProvider } from '@/context/EventContext';
@@ -66,7 +67,13 @@ export default function RootLayout() {
                         <Stack.Screen name="profile/edit" />
                         <Stack.Screen name="terms" />
                         <Stack.Screen name="filters" />
-                        <Stack.Screen name="menu" options={{ presentation: 'transparentModal', animation: 'slide_from_right' }} />
+                        <Stack.Screen
+                          name="menu"
+                          options={{
+                            presentation: Platform.OS === 'web' ? 'card' : 'transparentModal',
+                            animation: 'slide_from_right',
+                          }}
+                        />
                         <Stack.Screen name="likes" />
                         <Stack.Screen name="comments" />
                         <Stack.Screen name="notifications" />

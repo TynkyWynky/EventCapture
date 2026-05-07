@@ -55,6 +55,14 @@ interface StoredSessionState {
 const STORAGE_KEY = 'eventcapture.session';
 const DEFAULT_AVATAR = 'https://i.pravatar.cc/160?img=64';
 
+function isUsableAvatarUri(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return !value.startsWith('blob:') && !value.startsWith('file:') && !value.startsWith('content://') && !value.startsWith('/data/user/');
+}
+
 const EMPTY_USER: UserProfile = {
   id: '',
   username: '',
@@ -87,7 +95,7 @@ function mapApiUserToProfile(user: {
     bio: user.bio,
     city: user.city,
     email: user.email,
-    avatarUri: user.avatar_uri || DEFAULT_AVATAR,
+    avatarUri: isUsableAvatarUri(user.avatar_uri) ? user.avatar_uri : DEFAULT_AVATAR,
     role: user.role,
     crownCount: typeof user.crown_count === 'number' ? user.crown_count : 0,
   };
@@ -236,7 +244,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             password,
             city: profile.city.trim() || 'Brussels',
             bio: profile.bio.trim(),
-            avatar_uri: profile.avatarUri.trim() || DEFAULT_AVATAR,
+            avatar_uri: profile.avatarUri.trim(),
           });
           setToken(response.token);
           setUser(mapApiUserToProfile(response.user));
@@ -281,7 +289,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setIsBusy(true);
         try {
           const response = await requestPasswordReset(email.trim());
-          return { ok: true, resetToken: response.reset_token ?? undefined };
+          const resetToken =
+            response.challenge_id && response.debug_code
+              ? `${response.challenge_id}:${response.debug_code}`
+              : undefined;
+          return { ok: true, resetToken };
         } catch (error) {
           return {
             ok: false,

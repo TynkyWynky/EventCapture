@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 interface ExpoConstantsHostShape {
   expoGoConfig?: {
@@ -166,6 +167,19 @@ export function getBackendApiBaseUrlCandidates(): string[] {
     candidates.push(trimTrailingSlash(configuredUrl));
   }
 
+  if (Platform.OS === 'web') {
+    candidates.push(`http://localhost:${BACKEND_PORT}`);
+    candidates.push(`http://127.0.0.1:${BACKEND_PORT}`);
+
+    for (const host of getExpoHosts()) {
+      if (host === 'localhost' || host.startsWith('127.')) {
+        candidates.push(`http://${host}:${BACKEND_PORT}`);
+      }
+    }
+
+    return Array.from(new Set(candidates.map(trimTrailingSlash)));
+  }
+
   for (const host of getExpoHosts()) {
     candidates.push(`http://${host}:${BACKEND_PORT}`);
   }
@@ -283,15 +297,28 @@ export async function apiPatchJson<T>(path: string, body: unknown, includeAuth =
   return apiPostJson<T>(path, body, 'PATCH', includeAuth);
 }
 
-export async function apiPostFormData<T>(path: string, body: FormData, includeAuth = true): Promise<T> {
+export async function apiFormData<T>(
+  path: string,
+  body: FormData,
+  method: 'POST' | 'PUT' | 'PATCH' = 'POST',
+  includeAuth = true
+): Promise<T> {
   return apiRequest<T>(
     path,
     {
-      method: 'POST',
+      method,
       body,
     },
     includeAuth
   );
+}
+
+export async function apiPostFormData<T>(path: string, body: FormData, includeAuth = true): Promise<T> {
+  return apiFormData<T>(path, body, 'POST', includeAuth);
+}
+
+export async function apiPutFormData<T>(path: string, body: FormData, includeAuth = true): Promise<T> {
+  return apiFormData<T>(path, body, 'PUT', includeAuth);
 }
 
 export async function apiDelete<T = void>(path: string, includeAuth = true): Promise<T> {

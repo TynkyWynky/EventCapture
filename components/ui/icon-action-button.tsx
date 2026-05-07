@@ -1,7 +1,7 @@
 import { Colors, Radius, Shadows } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Animated, Pressable, StyleSheet } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
 
 interface IconActionButtonProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -19,6 +19,7 @@ export function IconActionButton({
   disabled = false,
 }: IconActionButtonProps) {
   const scale = React.useRef(new Animated.Value(1)).current;
+  const useNativeDriver = Platform.OS !== 'web';
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -39,7 +40,7 @@ export function IconActionButton({
         onPressIn={() =>
           Animated.spring(scale, {
             toValue: 0.94,
-            useNativeDriver: true,
+            useNativeDriver,
             friction: 7,
             tension: 180,
           }).start()
@@ -47,7 +48,7 @@ export function IconActionButton({
         onPressOut={() =>
           Animated.spring(scale, {
             toValue: 1,
-            useNativeDriver: true,
+            useNativeDriver,
             friction: 7,
             tension: 180,
           }).start()

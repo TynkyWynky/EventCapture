@@ -21,7 +21,7 @@ def free_port() -> int:
 class EventCaptureApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         cls.port = free_port()
         cls.base_url = f"http://127.0.0.1:{cls.port}"
         env = os.environ.copy()
@@ -64,6 +64,7 @@ class EventCaptureApiTests(unittest.TestCase):
             cls.server.wait(timeout=10)
         except subprocess.TimeoutExpired:
             cls.server.kill()
+        time.sleep(1)
         cls.temp_dir.cleanup()
 
     def api_request(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, object]:
@@ -72,6 +73,64 @@ class EventCaptureApiTests(unittest.TestCase):
         if body is not None:
             payload = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        request = urllib.request.Request(
+            f"{self.base_url}{path}",
+            data=payload,
+            headers=headers,
+            method=method,
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                content = response.read().decode("utf-8")
+                return response.status, json.loads(content) if content else {}
+        except urllib.error.HTTPError as error:
+            content = error.read().decode("utf-8")
+            return error.code, json.loads(content) if content else {}
+
+    def multipart_request(
+        self,
+        method: str,
+        path: str,
+        fields: dict[str, str],
+        files: dict[str, tuple[str, bytes, str]],
+        token: str | None = None,
+    ) -> tuple[int, object]:
+        boundary = "----EventCaptureTestBoundary7MA4YWxkTrZu0gW"
+        chunks: list[bytes] = []
+
+        for key, value in fields.items():
+            chunks.extend(
+                [
+                    f"--{boundary}\r\n".encode("utf-8"),
+                    f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8"),
+                    value.encode("utf-8"),
+                    b"\r\n",
+                ]
+            )
+
+        for key, (filename, content, content_type) in files.items():
+            chunks.extend(
+                [
+                    f"--{boundary}\r\n".encode("utf-8"),
+                    (
+                        f'Content-Disposition: form-data; name="{key}"; filename="{filename}"\r\n'
+                        f"Content-Type: {content_type}\r\n\r\n"
+                    ).encode("utf-8"),
+                    content,
+                    b"\r\n",
+                ]
+            )
+
+        chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+        payload = b"".join(chunks)
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        }
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
@@ -119,6 +178,48 @@ class EventCaptureApiTests(unittest.TestCase):
 
         status, _ = self.api_request("GET", "/api/auth/me", token=session["token"])
         self.assertEqual(status, 401)
+
+    def test_json_profile_update_and_multipart_register_avatar(self):
+        session = self.register_and_login("json-profile@example.com", "jsonprofile")
+
+        status, payload = self.api_request(
+            "PUT",
+            "/api/users/me",
+            {
+                "full_name": "Json Profile Updated",
+                "city": "Antwerp",
+                "bio": "Updated over JSON.",
+                "avatar_uri": "https://example.com/updated-avatar.jpg",
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["full_name"], "Json Profile Updated")
+        self.assertEqual(payload["city"], "Antwerp")
+        self.assertEqual(payload["bio"], "Updated over JSON.")
+        self.assertEqual(payload["avatar_uri"], "https://example.com/updated-avatar.jpg")
+
+        png_bytes = (
+            b"\x89PNG\r\n\x1a\n"
+            b"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+            b"\x00\x00\x00\x0cIDAT\x08\xd7c\xf8\xff\xff?\x00\x05\xfe\x02\xfeA\xd9\xa3\x1f"
+            b"\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+        status, payload = self.multipart_request(
+            "POST",
+            "/api/auth/register",
+            {
+                "email": "multipart-avatar@example.com",
+                "username": "multipartavatar",
+                "password": "Password123!",
+                "full_name": "Multipart Avatar",
+                "city": "Brussels",
+                "bio": "Avatar upload validation.",
+            },
+            {"avatar_file": ("avatar.png", png_bytes, "image/png")},
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertIn("/media/avatars/", payload["user"]["avatar_uri"])
 
     def test_password_reset_support_rewards_and_notifications(self):
         owner = self.register_and_login("reward-owner@example.com", "rewardowner")

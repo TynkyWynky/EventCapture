@@ -1,6 +1,6 @@
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import React from 'react';
-import { Animated, Pressable, StyleProp, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
+import { Animated, Platform, Pressable, StyleProp, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 
 interface AppButtonProps {
   label: string;
@@ -24,11 +24,12 @@ export function AppButton({
   accessibilityLabel,
 }: AppButtonProps) {
   const scale = React.useRef(new Animated.Value(1)).current;
+  const useNativeDriver = Platform.OS !== 'web';
 
   const animateTo = (toValue: number) => {
     Animated.spring(scale, {
       toValue,
-      useNativeDriver: true,
+      useNativeDriver,
       friction: 7,
       tension: 180,
     }).start();

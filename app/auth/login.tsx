@@ -62,11 +62,11 @@ export default function LoginScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.demoCard, email === 'admin' && styles.demoCardActive]}
+                  style={[styles.demoCard, email === 'admin@eventcapture.app' && styles.demoCardActive]}
                   activeOpacity={0.85}
-                  onPress={() => { setEmail('admin'); setPassword('admin'); setError(''); }}>
+                  onPress={() => { setEmail('admin@eventcapture.app'); setPassword('admin'); setError(''); }}>
                   <Text style={styles.demoLabel}>Admin</Text>
-                  <Text style={styles.demoValue}>admin</Text>
+                  <Text style={styles.demoValue}>admin@eventcapture.app</Text>
                   <Text style={styles.demoHint}>Tap to fill</Text>
                 </TouchableOpacity>
               </View>

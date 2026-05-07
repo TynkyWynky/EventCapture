@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +58,7 @@ class BackendSettings(BaseSettings):
     port: int = 8000
 
     database_url: str = Field(default_factory=_default_database_url)
+    database_path: Path | None = None
     database_echo: bool = False
 
     auth_jwt_secret: str = "change-me-before-production"
@@ -186,6 +187,12 @@ class BackendSettings(BaseSettings):
     @property
     def sqlite_fallback_url(self) -> str:
         return f"sqlite+pysqlite:///{DEFAULT_SQLITE_PATH}"
+
+    @model_validator(mode="after")
+    def _apply_database_path_override(self) -> "BackendSettings":
+        if self.database_path is not None:
+            self.database_url = f"sqlite+pysqlite:///{self.database_path}"
+        return self
 
     def redacted_database_url(self) -> str:
         if "@" not in self.database_url:

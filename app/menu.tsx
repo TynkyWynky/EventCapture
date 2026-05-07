@@ -5,11 +5,11 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Href, useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
+import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
 
 const getMenuItems = (
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: Colors.light.scrim,
+    backgroundColor: Platform.OS === 'web' ? Colors.light.background : Colors.light.scrim,
     justifyContent: 'flex-end',
   },
   backdrop: {
@@ -206,11 +206,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 32,
     borderLeftWidth: 1,
     borderColor: Colors.light.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: { width: -10, height: 0 },
-    elevation: 20,
+    ...Shadows.floating,
     overflow: 'hidden',
   },
   container: {
@@ -292,11 +288,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.light.border,
     padding: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    ...Shadows.soft,
   },
   menuIconWrap: {
     width: 42,

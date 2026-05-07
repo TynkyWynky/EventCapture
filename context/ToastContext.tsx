@@ -1,6 +1,6 @@
 import { Toast, ToastItem } from '@/components/ui/toast';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ShowToastInput {
@@ -23,7 +23,7 @@ function ToastPortal({ toast, opacity, translateY }: { toast: ToastItem | null; 
   }
 
   return (
-    <View pointerEvents="none" style={[styles.portal, { top: Math.max(insets.top, 18) + 6 }]}>
+    <View style={[styles.portal, { top: Math.max(insets.top, 18) + 6, pointerEvents: 'none' }]}>
       <Animated.View style={{ opacity, transform: [{ translateY }] }}>
         <Toast item={toast} />
       </Animated.View>
@@ -35,6 +35,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastItem | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-12)).current;
+  const useNativeDriver = Platform.OS !== 'web';
 
   useEffect(() => {
     if (!toast) {
@@ -42,14 +43,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }
 
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver }),
+      Animated.timing(translateY, { toValue: 0, duration: 180, useNativeDriver }),
     ]).start();
 
     const timer = setTimeout(() => {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: -12, duration: 180, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver }),
+        Animated.timing(translateY, { toValue: -12, duration: 180, useNativeDriver }),
       ]).start(() => setToast(null));
     }, 2400);
 

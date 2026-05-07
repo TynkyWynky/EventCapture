@@ -1,5 +1,32 @@
 import { Platform } from 'react-native';
 
+function createShadow(
+  boxShadow: string,
+  {
+    shadowOpacity,
+    shadowRadius,
+    shadowOffset,
+    elevation,
+  }: {
+    shadowOpacity: number;
+    shadowRadius: number;
+    shadowOffset: { width: number; height: number };
+    elevation: number;
+  }
+) {
+  if (Platform.OS === 'web') {
+    return { boxShadow };
+  }
+
+  return {
+    shadowColor: '#000',
+    shadowOpacity,
+    shadowRadius,
+    shadowOffset,
+    elevation,
+  };
+}
+
 const Palette = {
   cream0: '#fdfbf8',
   cream50: '#fcfaf7',
@@ -41,27 +68,24 @@ export const Radius = {
 } as const;
 
 export const Shadows = {
-  soft: {
-    shadowColor: '#000',
+  soft: createShadow('0px 4px 8px rgba(0, 0, 0, 0.04)', {
     shadowOpacity: 0.04,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
-  },
-  card: {
-    shadowColor: '#000',
+  }),
+  card: createShadow('0px 8px 14px rgba(0, 0, 0, 0.06)', {
     shadowOpacity: 0.06,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
-  },
-  floating: {
-    shadowColor: '#000',
+  }),
+  floating: createShadow('0px 10px 18px rgba(0, 0, 0, 0.10)', {
     shadowOpacity: 0.1,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
-  },
+  }),
 } as const;
 
 export const Typography = {

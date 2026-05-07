@@ -2,7 +2,7 @@ import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageProps } from 'expo-image';
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Animated, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Animated, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 
 interface AppImageProps extends Omit<ImageProps, 'style'> {
   style?: StyleProp<ViewStyle>;
@@ -12,6 +12,7 @@ export function AppImage({ style, ...props }: AppImageProps) {
   const fade = useRef(new Animated.Value(0)).current;
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const useNativeDriver = Platform.OS !== 'web';
 
   return (
     <View style={[styles.wrap, style]}>
@@ -30,7 +31,7 @@ export function AppImage({ style, ...props }: AppImageProps) {
               Animated.timing(fade, {
                 toValue: 1,
                 duration: 220,
-                useNativeDriver: true,
+                useNativeDriver,
               }).start();
             }}
             onError={() => {

@@ -117,6 +117,90 @@ function Wait-BackendReady {
     throw "Backend health check timed out after $TimeoutSeconds seconds: $HealthUrl"
 }
 
+function Get-ListeningProcessOnPort {
+    param([int]$Port)
+
+    try {
+        $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+            Select-Object -First 1
+        if ($connection) {
+            return Get-CimInstance Win32_Process -Filter "ProcessId = $($connection.OwningProcess)"
+        }
+    } catch {
+        $netstatLine = netstat -ano | Select-String -Pattern "LISTENING\s+$Port$"
+        if ($netstatLine) {
+            $parts = ($netstatLine -split '\s+') | Where-Object { $_ }
+            $pid = $parts[-1]
+            if ($pid) {
+                return Get-CimInstance Win32_Process -Filter "ProcessId = $pid"
+            }
+        }
+    }
+
+    return $null
+}
+
+function Test-IsRepoBackendProcess {
+    param([object]$ProcessInfo)
+
+    if (-not $ProcessInfo) {
+        return $false
+    }
+
+    $commandLine = [string]$ProcessInfo.CommandLine
+    $normalizedBackendPython = [System.IO.Path]::GetFullPath($backendPython)
+    $normalizedExecutablePath = if ($ProcessInfo.ExecutablePath) {
+        [System.IO.Path]::GetFullPath([string]$ProcessInfo.ExecutablePath)
+    } else {
+        ""
+    }
+
+    $isBackendModuleLaunch = $commandLine -like "*uvicorn*backend.app:app*"
+    $targetsRepoPort = $commandLine -like "*--port 8000*"
+    $usesRepoPath = $commandLine -like "*$repoRoot*"
+    $usesRepoVenv = $normalizedExecutablePath -eq $normalizedBackendPython
+
+    return $isBackendModuleLaunch -and ($usesRepoPath -or $usesRepoVenv -or $targetsRepoPort)
+}
+
+function Stop-RepoBackendProcesses {
+    $repoProcesses = @(Get-CimInstance Win32_Process | Where-Object { Test-IsRepoBackendProcess $_ })
+    if (-not $repoProcesses.Count) {
+        return
+    }
+
+    foreach ($processInfo in ($repoProcesses | Sort-Object ProcessId -Unique)) {
+        try {
+            Stop-Process -Id $processInfo.ProcessId -Force -ErrorAction Stop
+        } catch {
+            throw "Unable to stop stale backend process $($processInfo.ProcessId)."
+        }
+    }
+
+    Start-Sleep -Seconds 1
+}
+
+function Assert-BackendPortAvailable {
+    param([int]$Port)
+
+    $listener = Get-ListeningProcessOnPort -Port $Port
+    if (-not $listener) {
+        return
+    }
+
+    if (Test-IsRepoBackendProcess $listener) {
+        try {
+            Stop-Process -Id $listener.ProcessId -Force -ErrorAction Stop
+            Start-Sleep -Seconds 1
+            return
+        } catch {
+            throw "Unable to stop the existing backend process on port $Port (PID $($listener.ProcessId))."
+        }
+    }
+
+    throw "Port $Port is already in use by PID $($listener.ProcessId): $($listener.CommandLine)"
+}
+
 $pythonCommand = Resolve-CommandPath -Names @("python", "python.exe", "py.exe", "py") -FallbackPaths @() -Label "Python"
 $nodeCommand = Resolve-CommandPath -Names @("node", "node.exe") -FallbackPaths @("C:\Program Files\nodejs\node.exe") -Label "Node.js"
 $npmCommand = Resolve-CommandPath -Names @("npm.cmd", "npm", "npm.exe") -FallbackPaths @("C:\Program Files\nodejs\npm.cmd") -Label "npm"
@@ -190,8 +274,13 @@ if ($CheckOnly) {
     exit 0
 }
 
+Invoke-Step "Stopping stale backend processes..." {
+    Stop-RepoBackendProcesses
+    Assert-BackendPortAvailable -Port 8000
+}
+
 $backendCommand = "Set-Location '$repoRoot'; & '$backendPython' -m uvicorn backend.app:app --host 0.0.0.0 --port 8000"
-$expoCommand = "Set-Location '$repoRoot'; & '$npmCommand' start"
+$expoCommand = "Set-Location '$repoRoot'; `$env:EXPO_PUBLIC_BACKEND_API_URL='http://localhost:8000'; & '$npmCommand' start"
 
 Write-Host ""
 Write-Host "Starting backend in a new PowerShell window..." -ForegroundColor Cyan

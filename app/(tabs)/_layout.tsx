@@ -3,7 +3,7 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Animated, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Animated, Platform, Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Layout, Radius, Shadows, Spacing, TabRouteName, TabThemes } from '@/constants/theme';
@@ -19,6 +19,7 @@ function TabButton({
   style?: StyleProp<ViewStyle>;
 }) {
   const scale = React.useRef(new Animated.Value(1)).current;
+  const useNativeDriver = Platform.OS !== 'web';
 
   return (
     <Animated.View style={[style, { transform: [{ scale }] }]}>
@@ -27,7 +28,7 @@ function TabButton({
         onPressIn={() =>
           Animated.spring(scale, {
             toValue: 0.96,
-            useNativeDriver: true,
+            useNativeDriver,
             friction: 7,
             tension: 180,
           }).start()
@@ -35,7 +36,7 @@ function TabButton({
         onPressOut={() =>
           Animated.spring(scale, {
             toValue: 1,
-            useNativeDriver: true,
+            useNativeDriver,
             friction: 7,
             tension: 180,
           }).start()
@@ -101,7 +102,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View pointerEvents="box-none" style={[styles.wrapper, { bottom: Math.max(insets.bottom, Layout.tabBarInset) }]}>
+    <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, Layout.tabBarInset), pointerEvents: 'box-none' }]}>
       <View style={styles.bar}>
         <View style={styles.row}>
           {state.routes.filter((route) => route.name !== 'profile').map((route, index) => renderButton(route, index))}
@@ -245,9 +246,13 @@ const styles = StyleSheet.create({
     marginTop: -10,
   },
   cameraWrapFocused: {
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 10px 14px rgba(0, 0, 0, 0.18)' }
+      : {
+          shadowOpacity: 0.18,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 10,
+        }),
   },
 });

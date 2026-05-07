@@ -108,6 +108,7 @@ class UserProfileResponse(AppUserResponse):
 
 class AuthSessionResponse(BaseModel):
     access_token: str
+    token: str | None = None
     token_type: str = "bearer"
     user: UserProfileResponse
 
@@ -117,9 +118,28 @@ class AuthLoginRequest(BaseModel):
     password: str
 
 
+class AuthRegisterRequest(BaseModel):
+    email: str
+    password: str
+    username: str
+    full_name: str
+    city: str = ""
+    bio: str = ""
+    avatar_uri: str | None = None
+
+
 class AuthChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class AuthProfileUpdateRequest(BaseModel):
+    email: str | None = None
+    username: str | None = None
+    full_name: str | None = None
+    city: str | None = None
+    bio: str | None = None
+    avatar_uri: str | None = None
 
 
 class PasswordResetRequest(BaseModel):
@@ -130,6 +150,7 @@ class PasswordResetChallengeResponse(BaseModel):
     ok: bool = True
     challenge_id: str | None = None
     debug_code: str | None = None
+    reset_token: str | None = None
     message: str
 
 
@@ -289,6 +310,8 @@ class PostPayload(BaseModel):
     likes: list[str] = Field(default_factory=list)
     comments: list[PostCommentResponse] = Field(default_factory=list)
     capture_id: str | None = None
+    crown_awarded: bool | None = None
+    crown_count: int | None = None
 
 
 class AddPostCommentRequest(BaseModel):

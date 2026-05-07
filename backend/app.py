@@ -22,7 +22,7 @@ from pathlib import Path
 import cv2
 import jwt
 import numpy as np
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -34,22 +34,44 @@ try:
     from .database import (
         PasswordResetRequestResult,
         add_post_comment,
+        archive_group,
+        accept_group_invite,
         authenticate_user,
         change_user_password,
         check_database_connection,
         confirm_password_reset,
+        create_activity_notification,
         create_capture,
+        create_friend_request,
+        create_group,
         create_password_reset_request,
         create_user,
         delete_event,
+        decline_group_invite,
+        list_friend_requests,
+        list_friends,
+        list_group_members,
+        list_groups,
+        list_notifications,
         delete_post,
         delete_user,
+        get_group_detail,
+        get_group_leaderboard,
+        get_rewards_summary,
         get_user_by_id,
         init_database,
+        invite_group_members,
+        mark_all_notifications_read,
         list_captures,
         list_events,
         list_posts,
+        remove_group_member,
+        remove_friend,
+        respond_to_friend_request,
+        search_users_for_friendship,
         toggle_post_like,
+        update_group,
+        update_group_member_role,
         update_user_profile,
         upsert_event,
         upsert_post,
@@ -61,6 +83,8 @@ try:
         AppUserResponse,
         AuthChangePasswordRequest,
         AuthLoginRequest,
+        AuthProfileUpdateRequest,
+        AuthRegisterRequest,
         AuthSessionResponse,
         CaptureListItemResponse,
         CaptureRecordResponse,
@@ -69,6 +93,19 @@ try:
         DeleteResponse,
         DetectImageResponse,
         EventPayload,
+        FriendListItemResponse,
+        FriendRequestCreateRequest,
+        FriendRequestListResponse,
+        FriendRequestResponse,
+        GroupCreateRequest,
+        GroupDetailResponse,
+        GroupInvitationRequest,
+        GroupLeaderboardResponse,
+        GroupListResponse,
+        GroupMemberResponse,
+        GroupMemberUpdateRequest,
+        GroupSummaryResponse,
+        GroupUpdateRequest,
         HealthResponse,
         PasswordResetChallengeResponse,
         PasswordResetConfirmRequest,
@@ -77,6 +114,7 @@ try:
         PostPayload,
         StatusResponse,
         TogglePostLikeRequest,
+        UserSearchResultResponse,
         UserProfileResponse,
     )
     from .security import create_access_token, decode_access_token
@@ -87,22 +125,44 @@ except ImportError:
     from database import (
         PasswordResetRequestResult,
         add_post_comment,
+        accept_group_invite,
+        archive_group,
         authenticate_user,
         change_user_password,
         check_database_connection,
         confirm_password_reset,
+        create_activity_notification,
         create_capture,
+        create_friend_request,
+        create_group,
         create_password_reset_request,
         create_user,
         delete_event,
+        decline_group_invite,
+        list_friend_requests,
+        list_friends,
+        list_group_members,
+        list_groups,
+        list_notifications,
         delete_post,
         delete_user,
+        get_group_detail,
+        get_group_leaderboard,
+        get_rewards_summary,
         get_user_by_id,
         init_database,
+        invite_group_members,
+        mark_all_notifications_read,
         list_captures,
         list_events,
         list_posts,
+        remove_group_member,
+        remove_friend,
+        respond_to_friend_request,
+        search_users_for_friendship,
         toggle_post_like,
+        update_group,
+        update_group_member_role,
         update_user_profile,
         upsert_event,
         upsert_post,
@@ -114,6 +174,8 @@ except ImportError:
         AppUserResponse,
         AuthChangePasswordRequest,
         AuthLoginRequest,
+        AuthProfileUpdateRequest,
+        AuthRegisterRequest,
         AuthSessionResponse,
         CaptureListItemResponse,
         CaptureRecordResponse,
@@ -122,6 +184,19 @@ except ImportError:
         DeleteResponse,
         DetectImageResponse,
         EventPayload,
+        FriendListItemResponse,
+        FriendRequestCreateRequest,
+        FriendRequestListResponse,
+        FriendRequestResponse,
+        GroupCreateRequest,
+        GroupDetailResponse,
+        GroupInvitationRequest,
+        GroupLeaderboardResponse,
+        GroupListResponse,
+        GroupMemberResponse,
+        GroupMemberUpdateRequest,
+        GroupSummaryResponse,
+        GroupUpdateRequest,
         HealthResponse,
         PasswordResetChallengeResponse,
         PasswordResetConfirmRequest,
@@ -130,6 +205,7 @@ except ImportError:
         PostPayload,
         StatusResponse,
         TogglePostLikeRequest,
+        UserSearchResultResponse,
         UserProfileResponse,
     )
     from security import create_access_token, decode_access_token
@@ -154,6 +230,9 @@ inference_executor = ThreadPoolExecutor(
     thread_name_prefix="eventcapture-inference",
 )
 inference_semaphore = asyncio.Semaphore(settings.effective_inference_concurrency)
+event_social_runtime: dict[str, dict[str, dict[str, object]]] = {}
+notification_runtime: dict[str, list[dict[str, object]]] = {}
+revoked_access_tokens: set[str] = set()
 
 
 def _create_detector() -> DrinkDetector:
@@ -266,15 +345,45 @@ def _encode_jpeg_bytes(image: np.ndarray, quality: int) -> bytes:
 def _resolve_avatar_uri(request: Request, avatar_uri: str) -> str:
     if not avatar_uri:
         return avatar_uri
-    if avatar_uri.startswith(("http://", "https://")):
+    if avatar_uri.startswith(("blob:", "file:")):
+        return ""
+    if avatar_uri.startswith(("http://", "https://", "data:")):
         return avatar_uri
     return storage_service.build_public_url(request, avatar_uri)
 
 
 def _build_media_url(request: Request, relative_path: str) -> str:
-    if relative_path.startswith(("http://", "https://")):
+    if relative_path.startswith(("http://", "https://", "blob:", "file:", "data:")):
         return relative_path
     return storage_service.build_public_url(request, relative_path)
+
+
+def _get_runtime_event_social_state(current_user: dict[str, object], event_id: str) -> dict[str, object]:
+    user_id = str(current_user["id"])
+    user_state = event_social_runtime.setdefault(user_id, {})
+    state = user_state.setdefault(
+        event_id,
+        {
+            "liked": False,
+            "saved": False,
+            "likes": [],
+            "comments": [],
+            "plan_status": None,
+            "plan_note": "",
+        },
+    )
+    return state
+
+
+def _serialize_runtime_social_state(state: dict[str, object]) -> dict[str, object]:
+    return {
+        "liked": bool(state.get("liked", False)),
+        "saved": bool(state.get("saved", False)),
+        "likes": list(state.get("likes", [])),
+        "comments": list(state.get("comments", [])),
+        "plan_status": state.get("plan_status"),
+        "plan_note": str(state.get("plan_note", "")),
+    }
 
 
 def _serialize_user_profile_response(request: Request, user: dict[str, object]) -> UserProfileResponse:
@@ -287,6 +396,81 @@ def _serialize_user_profile_response(request: Request, user: dict[str, object]) 
         city=str(user["city"]),
         email=str(user["email"]),
         role=str(user["role"]),
+    )
+
+
+def _resolve_public_user_payload(request: Request, payload: dict[str, object]) -> dict[str, object]:
+    resolved = dict(payload)
+    resolved["avatar_uri"] = _resolve_avatar_uri(request, str(payload.get("avatar_uri", "")))
+    return resolved
+
+
+def _resolve_user_search_payloads(request: Request, payloads: list[dict[str, object]]) -> list[UserSearchResultResponse]:
+    return [
+        UserSearchResultResponse(**_resolve_public_user_payload(request, payload))
+        for payload in payloads
+    ]
+
+
+def _resolve_friend_request_payload(request: Request, payload: dict[str, object]) -> FriendRequestResponse:
+    resolved = dict(payload)
+    resolved["requester_user"] = _resolve_public_user_payload(request, dict(payload["requester_user"]))
+    resolved["addressee_user"] = _resolve_public_user_payload(request, dict(payload["addressee_user"]))
+    return FriendRequestResponse(**resolved)
+
+
+def _resolve_friend_list_payloads(request: Request, payloads: list[dict[str, object]]) -> list[FriendListItemResponse]:
+    resolved_items: list[FriendListItemResponse] = []
+    for payload in payloads:
+        resolved = dict(payload)
+        resolved["friend"] = _resolve_public_user_payload(request, dict(payload["friend"]))
+        resolved_items.append(FriendListItemResponse(**resolved))
+    return resolved_items
+
+
+def _resolve_notification_payload(request: Request, payload: dict[str, object]) -> dict[str, object]:
+    resolved = dict(payload)
+    resolved["actor_avatar_uri"] = _resolve_avatar_uri(request, str(payload.get("actor_avatar_uri", "")))
+    return resolved
+
+
+def _resolve_group_member_payload(request: Request, payload: dict[str, object]) -> GroupMemberResponse:
+    resolved = dict(payload)
+    resolved["user"] = _resolve_public_user_payload(request, dict(payload["user"]))
+    return GroupMemberResponse(**resolved)
+
+
+def _resolve_group_summary_payload(request: Request, payload: dict[str, object]) -> GroupSummaryResponse:
+    return GroupSummaryResponse(**dict(payload))
+
+
+def _resolve_group_detail_payload(request: Request, payload: dict[str, object]) -> GroupDetailResponse:
+    resolved = dict(payload)
+    resolved["members"] = [
+        _resolve_group_member_payload(request, dict(member)).model_dump()
+        for member in payload.get("members", [])
+    ]
+    return GroupDetailResponse(**resolved)
+
+
+def _resolve_group_list_payload(request: Request, payload: dict[str, object]) -> GroupListResponse:
+    return GroupListResponse(
+        items=[_resolve_group_summary_payload(request, dict(item)) for item in payload.get("items", [])],
+        pending_invites=[_resolve_group_summary_payload(request, dict(item)) for item in payload.get("pending_invites", [])],
+    )
+
+
+def _resolve_group_leaderboard_payload(request: Request, payload: dict[str, object]) -> GroupLeaderboardResponse:
+    resolved_entries = []
+    for entry in payload.get("entries", []):
+        resolved_entry = dict(entry)
+        resolved_entry["avatar_url"] = _resolve_avatar_uri(request, str(entry.get("avatar_url", "")))
+        resolved_entries.append(resolved_entry)
+    return GroupLeaderboardResponse(
+        group_id=str(payload["group_id"]),
+        period=str(payload["period"]),
+        generated_at=str(payload["generated_at"]),
+        entries=resolved_entries,
     )
 
 
@@ -349,6 +533,8 @@ def _serialize_post_payload(request: Request, post: dict[str, object]) -> PostPa
             for comment in post.get("comments", [])
         ],
         capture_id=post.get("capture_id"),
+        crown_awarded=bool(post["crown_awarded"]) if "crown_awarded" in post else None,
+        crown_count=int(post["crown_count"]) if post.get("crown_count") is not None else None,
     )
 
 
@@ -417,6 +603,8 @@ def _require_file_size(contents: bytes) -> None:
 
 def _current_user_from_token(token: str | None) -> dict[str, object] | None:
     if not token:
+        return None
+    if token in revoked_access_tokens:
         return None
 
     try:
@@ -548,8 +736,13 @@ async def health() -> HealthResponse:
     )
 
 
+@app.get("/health", response_model=HealthResponse)
+async def legacy_health() -> HealthResponse:
+    return await health()
+
+
 @app.get("/api/status", response_model=StatusResponse)
-async def status():
+async def api_status():
     return _build_status_response()
 
 
@@ -575,32 +768,91 @@ async def login(request: Request, payload: AuthLoginRequest):
     token = create_access_token(str(user["id"]), str(user["role"]))
     return AuthSessionResponse(
         access_token=token,
+        token=token,
         user=_serialize_user_profile_response(request, user),
+    )
+
+
+def _coerce_optional_string(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+async def _parse_auth_request_payload(request: Request) -> tuple[dict[str, object], UploadFile | None]:
+    content_type = request.headers.get("content-type", "").lower()
+    if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+        form = await request.form()
+        avatar_candidate = form.get("avatar_file")
+        avatar_file = (
+            avatar_candidate
+            if avatar_candidate is not None
+            and hasattr(avatar_candidate, "read")
+            and hasattr(avatar_candidate, "filename")
+            else None
+        )
+        payload = {
+            "email": _coerce_optional_string(form.get("email")),
+            "password": _coerce_optional_string(form.get("password")),
+            "username": _coerce_optional_string(form.get("username")),
+            "full_name": _coerce_optional_string(form.get("full_name")),
+            "city": _coerce_optional_string(form.get("city")),
+            "bio": _coerce_optional_string(form.get("bio")),
+            "avatar_uri": _coerce_optional_string(form.get("avatar_uri")),
+        }
+        return payload, avatar_file
+
+    try:
+        payload = await request.json()
+    except ValueError:
+        payload = {}
+
+    if payload in (None, ""):
+        payload = {}
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Request body must be a JSON object.")
+    return payload, None
+
+
+async def _parse_register_payload(request: Request) -> tuple[AuthRegisterRequest, UploadFile | None]:
+    payload, avatar_file = await _parse_auth_request_payload(request)
+    required_fields = ("email", "password", "username", "full_name")
+    if any(not str(payload.get(field, "")).strip() for field in required_fields):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing required fields.")
+
+    return (
+        AuthRegisterRequest(
+            email=str(payload["email"]),
+            password=str(payload["password"]),
+            username=str(payload["username"]),
+            full_name=str(payload["full_name"]),
+            city=str(payload.get("city") or ""),
+            bio=str(payload.get("bio") or ""),
+            avatar_uri=_coerce_optional_string(payload.get("avatar_uri")),
+        ),
+        avatar_file,
     )
 
 
 @app.post("/api/auth/register", response_model=AuthSessionResponse)
 async def register(
     request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
-    username: str = Form(...),
-    full_name: str = Form(...),
-    city: str = Form(default=""),
-    bio: str = Form(default=""),
-    avatar_uri: str | None = Form(default=None),
-    avatar_file: UploadFile | None = File(default=None),
 ):
-    initial_avatar_uri = avatar_uri.strip() if avatar_uri else settings.bootstrap_demo_avatar_uri
+    register_payload, avatar_file = await _parse_register_payload(request)
+    initial_avatar_uri = (
+        register_payload.avatar_uri.strip()
+        if register_payload.avatar_uri
+        else settings.bootstrap_demo_avatar_uri
+    )
     try:
         user = await asyncio.to_thread(
             create_user,
-            email=email,
-            password=password,
-            username=username,
-            full_name=full_name,
-            city=city,
-            bio=bio,
+            email=register_payload.email,
+            password=register_payload.password,
+            username=register_payload.username,
+            full_name=register_payload.full_name,
+            city=register_payload.city,
+            bio=register_payload.bio,
             avatar_uri=initial_avatar_uri,
         )
     except ValueError as error:
@@ -624,6 +876,7 @@ async def register(
     token = create_access_token(str(user["id"]), str(user["role"]))
     return AuthSessionResponse(
         access_token=token,
+        token=token,
         user=_serialize_user_profile_response(request, user),
     )
 
@@ -631,6 +884,13 @@ async def register(
 @app.get("/api/auth/me", response_model=UserProfileResponse)
 async def me(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
     return _serialize_user_profile_response(request, current_user)
+
+
+@app.post("/api/auth/logout")
+async def logout(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+    if credentials and credentials.credentials:
+        revoked_access_tokens.add(credentials.credentials)
+    return {"ok": True}
 
 
 @app.post("/api/auth/change-password")
@@ -663,12 +923,22 @@ async def request_password_reset(payload: PasswordResetRequest):
     return PasswordResetChallengeResponse(
         challenge_id=result.challenge_id,
         debug_code=result.debug_code,
+        reset_token=(
+            f"{result.challenge_id}:{result.debug_code}"
+            if result.challenge_id and result.debug_code
+            else None
+        ),
         message=(
             "If that account exists, a reset challenge is ready."
             if result.debug_code
             else "If that account exists, reset instructions were sent."
         ),
     )
+
+
+@app.post("/api/auth/reset-password/request", response_model=PasswordResetChallengeResponse)
+async def request_password_reset_legacy(payload: PasswordResetRequest):
+    return await request_password_reset(payload)
 
 
 @app.post("/api/auth/password-reset/confirm", response_model=PasswordResetConfirmResponse)
@@ -686,19 +956,53 @@ async def confirm_password_reset_route(payload: PasswordResetConfirmRequest):
     return PasswordResetConfirmResponse(message="Password reset successfully.")
 
 
+@app.post("/api/auth/reset-password/confirm", response_model=PasswordResetConfirmResponse)
+async def confirm_password_reset_legacy(payload: dict[str, object] = Body(default_factory=dict)):
+    legacy_token = str(payload.get("token", "")).strip()
+    if legacy_token:
+        challenge_id, separator, code = legacy_token.partition(":")
+        if not challenge_id or not separator or not code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reset token must look like challenge-id:code.",
+            )
+        request_payload = PasswordResetConfirmRequest(
+            challenge_id=challenge_id,
+            code=code,
+            new_password=str(payload.get("new_password", "")),
+        )
+        return await confirm_password_reset_route(request_payload)
+
+    request_payload = PasswordResetConfirmRequest(
+        challenge_id=str(payload.get("challenge_id", "")),
+        code=str(payload.get("code", "")),
+        new_password=str(payload.get("new_password", "")),
+    )
+    return await confirm_password_reset_route(request_payload)
+
+
+async def _parse_profile_update_payload(request: Request) -> tuple[AuthProfileUpdateRequest, UploadFile | None]:
+    payload, avatar_file = await _parse_auth_request_payload(request)
+    return (
+        AuthProfileUpdateRequest(
+            email=_coerce_optional_string(payload.get("email")),
+            username=_coerce_optional_string(payload.get("username")),
+            full_name=_coerce_optional_string(payload.get("full_name")),
+            city=_coerce_optional_string(payload.get("city")),
+            bio=_coerce_optional_string(payload.get("bio")),
+            avatar_uri=_coerce_optional_string(payload.get("avatar_uri")),
+        ),
+        avatar_file,
+    )
+
+
 @app.put("/api/users/me", response_model=UserProfileResponse)
 async def update_me(
     request: Request,
-    email: str | None = Form(default=None),
-    username: str | None = Form(default=None),
-    full_name: str | None = Form(default=None),
-    city: str | None = Form(default=None),
-    bio: str | None = Form(default=None),
-    avatar_uri: str | None = Form(default=None),
-    avatar_file: UploadFile | None = File(default=None),
     current_user: dict[str, object] = Depends(get_current_user),
 ):
-    next_avatar_uri = avatar_uri.strip() if avatar_uri else None
+    update_payload, avatar_file = await _parse_profile_update_payload(request)
+    next_avatar_uri = update_payload.avatar_uri.strip() if update_payload.avatar_uri else None
     avatar_contents, avatar_filename, avatar_content_type = await _read_avatar_upload(avatar_file)
     if avatar_contents:
         stored_avatar = await asyncio.to_thread(
@@ -714,11 +1018,11 @@ async def update_me(
         updated_user = await asyncio.to_thread(
             update_user_profile,
             str(current_user["id"]),
-            email=email,
-            username=username,
-            full_name=full_name,
-            city=city,
-            bio=bio,
+            email=update_payload.email,
+            username=update_payload.username,
+            full_name=update_payload.full_name,
+            city=update_payload.city,
+            bio=update_payload.bio,
             avatar_uri=next_avatar_uri,
         )
     except ValueError as error:
@@ -727,12 +1031,56 @@ async def update_me(
     return _serialize_user_profile_response(request, updated_user)
 
 
+@app.put("/api/auth/profile", response_model=UserProfileResponse)
+async def update_me_legacy(
+    request: Request,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    return await update_me(
+        request=request,
+        current_user=current_user,
+    )
+
+
 @app.delete("/api/users/me", response_model=DeleteResponse)
 async def delete_me(current_user: dict[str, object] = Depends(get_current_user)):
     deleted = await asyncio.to_thread(delete_user, str(current_user["id"]))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return DeleteResponse()
+
+
+@app.delete("/api/auth/account", response_model=DeleteResponse)
+async def delete_me_legacy(current_user: dict[str, object] = Depends(get_current_user)):
+    return await delete_me(current_user)
+
+
+@app.get("/api/rewards/me")
+async def get_my_rewards(current_user: dict[str, object] = Depends(get_current_user)):
+    return await asyncio.to_thread(get_rewards_summary, str(current_user["id"]))
+
+
+@app.post("/api/support/contact")
+async def create_support_contact(
+    payload: dict[str, object] = Body(default_factory=dict),
+    current_user: dict[str, object] | None = Depends(get_optional_user),
+):
+    subject = str(payload.get("subject", "")).strip()
+    message = str(payload.get("message", "")).strip()
+    contact_email = str(payload.get("email", "")).strip()
+
+    if not subject or not message:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Support subject and message are required.")
+    if current_user is None and not contact_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Guest support requests must include an email address.")
+
+    return {
+        "id": f"support-{uuid.uuid4().hex[:12]}",
+        "subject": subject,
+        "message": message,
+        "email": str(current_user["email"]) if current_user is not None else contact_email,
+        "created_at": time.time(),
+    }
 
 
 @app.post("/api/detect", response_model=DetectImageResponse)
@@ -825,6 +1173,381 @@ async def get_captures(
     return [_serialize_capture_list_item(request, capture) for capture in captures]
 
 
+@app.get("/api/users/search", response_model=list[UserSearchResultResponse])
+async def search_users(request: Request, q: str = "", current_user: dict[str, object] = Depends(get_current_user)):
+    payload = await asyncio.to_thread(search_users_for_friendship, q, str(current_user["id"]))
+    return _resolve_user_search_payloads(request, payload)
+
+
+@app.get("/api/friends", response_model=list[FriendListItemResponse])
+async def get_friends(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
+    payload = await asyncio.to_thread(list_friends, str(current_user["id"]))
+    return _resolve_friend_list_payloads(request, payload)
+
+
+@app.get("/api/friends/requests", response_model=FriendRequestListResponse)
+async def get_friend_requests(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
+    payload = await asyncio.to_thread(list_friend_requests, str(current_user["id"]))
+    return FriendRequestListResponse(
+        incoming=[_resolve_friend_request_payload(request, item) for item in payload["incoming"]],
+        outgoing=[_resolve_friend_request_payload(request, item) for item in payload["outgoing"]],
+    )
+
+
+@app.post("/api/friends/requests", response_model=FriendRequestResponse, status_code=status.HTTP_201_CREATED)
+async def create_friend_request_route(
+    request: Request,
+    payload: FriendRequestCreateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        response_payload = await asyncio.to_thread(create_friend_request, str(current_user["id"]), payload.user_id)
+        return _resolve_friend_request_payload(request, response_payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+
+@app.post("/api/friends/requests/{request_id}/accept", response_model=FriendRequestResponse)
+async def accept_friend_request_route(request: Request, request_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    try:
+        response_payload = await asyncio.to_thread(respond_to_friend_request, str(current_user["id"]), request_id, accept=True)
+        return _resolve_friend_request_payload(request, response_payload)
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend request not found.")
+
+
+@app.post("/api/friends/requests/{request_id}/decline", response_model=FriendRequestResponse)
+async def decline_friend_request_route(request: Request, request_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    try:
+        response_payload = await asyncio.to_thread(respond_to_friend_request, str(current_user["id"]), request_id, accept=False)
+        return _resolve_friend_request_payload(request, response_payload)
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend request not found.")
+
+
+@app.delete("/api/friends/{user_id}", response_model=DeleteResponse)
+async def remove_friend_route(user_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    removed = await asyncio.to_thread(remove_friend, str(current_user["id"]), user_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend not found.")
+    return DeleteResponse()
+
+
+@app.get("/api/notifications")
+async def get_notifications(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
+    payload = await asyncio.to_thread(list_notifications, str(current_user["id"]))
+    return {
+        "items": [_resolve_notification_payload(request, item) for item in payload["items"]],
+        "unread_count": payload["unread_count"],
+    }
+
+
+@app.post("/api/notifications/read-all")
+async def read_all_notifications(current_user: dict[str, object] = Depends(get_current_user)):
+    await asyncio.to_thread(mark_all_notifications_read, str(current_user["id"]))
+    return {"ok": True}
+
+
+@app.post("/api/notifications/activity")
+async def create_notification_activity(payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    return await asyncio.to_thread(
+        create_activity_notification,
+        str(current_user["id"]),
+        title=str(payload.get("title", "")),
+        message=str(payload.get("message", "")),
+        icon=str(payload.get("icon", "notifications-outline")),
+        color=str(payload.get("color", "#f97316")),
+        related_type=payload.get("related_type"),
+        related_id=payload.get("related_id"),
+    )
+
+
+@app.get("/api/groups", response_model=GroupListResponse)
+async def get_groups(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
+    payload = await asyncio.to_thread(list_groups, str(current_user["id"]))
+    return _resolve_group_list_payload(request, payload)
+
+
+@app.post("/api/groups", response_model=GroupDetailResponse, status_code=status.HTTP_201_CREATED)
+async def create_group_route(
+    request: Request,
+    payload: GroupCreateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        response_payload = await asyncio.to_thread(
+            create_group,
+            str(current_user["id"]),
+            name=payload.name,
+            description=payload.description,
+            invited_user_ids=payload.invited_user_ids,
+        )
+        return _resolve_group_detail_payload(request, response_payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+
+
+@app.get("/api/groups/{group_id}", response_model=GroupDetailResponse)
+async def get_group_route(request: Request, group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    try:
+        payload = await asyncio.to_thread(get_group_detail, group_id, str(current_user["id"]))
+        return _resolve_group_detail_payload(request, payload)
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+
+
+@app.patch("/api/groups/{group_id}", response_model=GroupDetailResponse)
+async def update_group_route(
+    request: Request,
+    group_id: str,
+    payload: GroupUpdateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        response_payload = await asyncio.to_thread(
+            update_group,
+            group_id,
+            str(current_user["id"]),
+            name=payload.name,
+            description=payload.description,
+        )
+        return _resolve_group_detail_payload(request, response_payload)
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+
+
+@app.delete("/api/groups/{group_id}", response_model=DeleteResponse)
+async def delete_group_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    try:
+        await asyncio.to_thread(archive_group, group_id, str(current_user["id"]))
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+    return DeleteResponse()
+
+
+@app.post("/api/groups/{group_id}/invitations", response_model=GroupDetailResponse)
+async def invite_group_members_route(
+    request: Request,
+    group_id: str,
+    payload: GroupInvitationRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        response_payload = await asyncio.to_thread(
+            invite_group_members,
+            group_id,
+            str(current_user["id"]),
+            payload.user_ids,
+        )
+        return _resolve_group_detail_payload(request, response_payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+
+
+@app.post("/api/groups/{group_id}/invitations/accept", response_model=GroupDetailResponse)
+async def accept_group_invite_route(
+    request: Request,
+    group_id: str,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        payload = await asyncio.to_thread(accept_group_invite, group_id, str(current_user["id"]))
+        return _resolve_group_detail_payload(request, payload)
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")    
+
+
+@app.post("/api/groups/{group_id}/invitations/decline")
+async def decline_group_invite_route(group_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    try:
+        await asyncio.to_thread(decline_group_invite, group_id, str(current_user["id"]))
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+    return {"ok": True}
+
+
+@app.get("/api/groups/{group_id}/members", response_model=list[GroupMemberResponse])
+async def get_group_members_route(
+    request: Request,
+    group_id: str,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        payload = await asyncio.to_thread(list_group_members, group_id, str(current_user["id"]))
+        return [_resolve_group_member_payload(request, item) for item in payload]
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+
+
+@app.delete("/api/groups/{group_id}/members/{user_id}", response_model=DeleteResponse)
+async def remove_group_member_route(
+    group_id: str,
+    user_id: str,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        await asyncio.to_thread(remove_group_member, group_id, str(current_user["id"]), user_id)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group member not found.")
+    return DeleteResponse()
+
+
+@app.patch("/api/groups/{group_id}/members/{user_id}", response_model=GroupDetailResponse)
+async def update_group_member_role_route(
+    request: Request,
+    group_id: str,
+    user_id: str,
+    payload: GroupMemberUpdateRequest,
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        response_payload = await asyncio.to_thread(
+            update_group_member_role,
+            group_id,
+            str(current_user["id"]),
+            user_id,
+            payload.role,
+        )
+        return _resolve_group_detail_payload(request, response_payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group member not found.")
+
+
+@app.get("/api/groups/{group_id}/leaderboard", response_model=GroupLeaderboardResponse)
+async def get_group_leaderboard_route(
+    request: Request,
+    group_id: str,
+    period: str = "all_time",
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    try:
+        payload = await asyncio.to_thread(get_group_leaderboard, group_id, str(current_user["id"]), period=period)
+        return _resolve_group_leaderboard_payload(request, payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except PermissionError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
+
+
+@app.get("/api/events/social")
+async def get_event_social_map(current_user: dict[str, object] = Depends(get_current_user)):
+    user_state = event_social_runtime.get(str(current_user["id"]), {})
+    return {"items": {event_id: _serialize_runtime_social_state(state) for event_id, state in user_state.items()}}
+
+
+@app.get("/api/events/plans")
+async def get_event_plans(current_user: dict[str, object] = Depends(get_current_user)):
+    items = []
+    for event_id, state in event_social_runtime.get(str(current_user["id"]), {}).items():
+        if state.get("saved") or state.get("plan_status"):
+            items.append(
+                {
+                    "event_id": event_id,
+                    "saved": bool(state.get("saved", False)),
+                    "plan_status": state.get("plan_status"),
+                    "plan_note": str(state.get("plan_note", "")),
+                }
+            )
+    return {"items": items}
+
+
+@app.post("/api/events/{event_id}/likes/toggle")
+async def toggle_event_like_route(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    state = _get_runtime_event_social_state(current_user, event_id)
+    state["liked"] = not bool(state.get("liked", False))
+    likes = [item for item in list(state.get("likes", [])) if item.get("id") != str(current_user["id"])]
+    if state["liked"]:
+        likes.append(
+            {
+                "id": str(current_user["id"]),
+                "username": str(current_user["username"]),
+                "avatar_uri": str(current_user.get("avatar_uri", "")),
+            }
+        )
+    state["likes"] = likes
+    return _serialize_runtime_social_state(state)
+
+
+@app.post("/api/events/{event_id}/save-toggle")
+async def toggle_event_save_route(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    state = _get_runtime_event_social_state(current_user, event_id)
+    state["saved"] = not bool(state.get("saved", False))
+    return _serialize_runtime_social_state(state)
+
+
+@app.post("/api/events/{event_id}/plan")
+async def set_event_plan_route(event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    state = _get_runtime_event_social_state(current_user, event_id)
+    state["plan_status"] = payload.get("status")
+    return _serialize_runtime_social_state(state)
+
+
+@app.post("/api/events/{event_id}/plan-note")
+async def set_event_plan_note_route(event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    state = _get_runtime_event_social_state(current_user, event_id)
+    state["plan_note"] = str(payload.get("note", ""))
+    return _serialize_runtime_social_state(state)
+
+
+@app.post("/api/events/{event_id}/comments")
+async def add_event_comment_route(event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    state = _get_runtime_event_social_state(current_user, event_id)
+    comments = list(state.get("comments", []))
+    comments.insert(
+        0,
+        {
+            "id": f"comment-{uuid.uuid4().hex[:12]}",
+            "user": {
+                "id": str(current_user["id"]),
+                "username": str(current_user["username"]),
+                "avatar_uri": str(current_user.get("avatar_uri", "")),
+            },
+            "text": str(payload.get("text", "")),
+            "time": "Just now",
+        },
+    )
+    state["comments"] = comments
+    return _serialize_runtime_social_state(state)
+
+
 @app.get("/api/events", response_model=list[EventPayload])
 async def get_events():
     events = await asyncio.to_thread(list_events)
@@ -833,17 +1556,20 @@ async def get_events():
 
 @app.post("/api/events", response_model=EventPayload)
 async def create_event(
-    payload: EventPayload,
-    _admin_user: dict[str, object] = Depends(get_admin_user),
+    payload: dict[str, object] = Body(default_factory=dict),
+    _current_user: dict[str, object] = Depends(get_current_user),
 ):
-    event = await asyncio.to_thread(upsert_event, payload.model_dump())
+    event_payload = dict(payload)
+    if not str(event_payload.get("id", "")).strip():
+        event_payload["id"] = f"event-{uuid.uuid4().hex[:12]}"
+    event = await asyncio.to_thread(upsert_event, event_payload)
     return EventPayload(**event)
 
 
 @app.delete("/api/events/{event_id}", response_model=DeleteResponse)
 async def remove_event(
     event_id: str,
-    _admin_user: dict[str, object] = Depends(get_admin_user),
+    _current_user: dict[str, object] = Depends(get_current_user),
 ):
     deleted = await asyncio.to_thread(delete_event, event_id)
     if not deleted:
@@ -860,13 +1586,17 @@ async def get_posts(request: Request):
 @app.post("/api/posts", response_model=PostPayload)
 async def create_post(
     request: Request,
-    payload: PostPayload,
+    payload: dict[str, object] = Body(default_factory=dict),
     current_user: dict[str, object] = Depends(get_current_user),
 ):
     try:
-        post = await asyncio.to_thread(upsert_post, payload.model_dump(), str(current_user["id"]))
+        rewards_before = await asyncio.to_thread(get_rewards_summary, str(current_user["id"]))
+        post = await asyncio.to_thread(upsert_post, dict(payload), str(current_user["id"]))
+        rewards_after = await asyncio.to_thread(get_rewards_summary, str(current_user["id"]))
     except PermissionError as error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    post["crown_count"] = int(rewards_after["crown_count"])
+    post["crown_awarded"] = int(rewards_after["crown_count"]) > int(rewards_before["crown_count"])
     return _serialize_post_payload(request, post)
 
 
