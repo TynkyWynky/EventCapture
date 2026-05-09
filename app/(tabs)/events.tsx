@@ -6,10 +6,12 @@ import { IconActionButton } from '@/components/ui/icon-action-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { BadgeThemes, getEventBadgeTheme } from '@/constants/badgeThemes';
 import { Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { useFilters } from '@/context/FilterContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -20,6 +22,7 @@ export default function EventsScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { events, isOffline, isUsingCachedData, error } = useEvents();
+  const { unreadCount } = useSocial();
   const {
     filteredEvents,
     activeFilterCount,
@@ -57,6 +60,7 @@ export default function EventsScreen() {
               <IconActionButton
                 icon="notifications-outline"
                 accessibilityLabel={t('notifTitle')}
+                unreadCount={unreadCount}
                 onPress={() => router.push('/notifications')}
               />
               <IconActionButton
@@ -176,8 +180,15 @@ export default function EventsScreen() {
                 <AppImage source={{ uri: event.heroImage }} style={styles.eventImage} contentFit="cover" />
                 <View style={styles.eventBody}>
                   <View style={styles.eventHeader}>
-                    <View style={styles.dateBadge}>
-                      <Text style={styles.dateBadgeText}>{event.date}</Text>
+                    <View
+                      style={[
+                        styles.dateBadge,
+                        {
+                          backgroundColor: getEventBadgeTheme(event.badge).background,
+                          borderColor: getEventBadgeTheme(event.badge).border,
+                        },
+                      ]}>
+                      <Text style={[styles.dateBadgeText, { color: getEventBadgeTheme(event.badge).text }]}>{event.date}</Text>
                     </View>
                     <Text style={styles.price}>{event.price}</Text>
                   </View>
@@ -212,11 +223,11 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: Radius.lg,
-    backgroundColor: '#effaf8',
+    backgroundColor: BadgeThemes.blueCuracao.background,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#d7ece8',
+    borderColor: BadgeThemes.blueCuracao.border,
   },
   headerActions: { flexDirection: 'row', gap: 8 },
   utilityCard: { gap: 14 },
@@ -289,12 +300,12 @@ const styles = StyleSheet.create({
   eventBody: { gap: 12 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   dateBadge: {
-    backgroundColor: '#e1f4f0',
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  dateBadgeText: { color: '#25665f', fontWeight: '800', fontSize: 11 },
+  dateBadgeText: { fontWeight: '800', fontSize: 11 },
   price: { color: TabThemes.events.accent, fontWeight: '800', fontSize: 14 },
   cardTitle: { color: TabThemes.events.panel, fontWeight: '800', fontSize: 20 },
   cardMeta: { color: '#5f7471', lineHeight: 20 },

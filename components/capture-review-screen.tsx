@@ -1,5 +1,6 @@
 import { AppImage } from '@/components/ui/app-image';
 import { AppButton } from '@/components/ui/app-button';
+import { BadgeThemes } from '@/constants/badgeThemes';
 import { useEvents } from '@/context/EventContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Colors } from '@/constants/theme';
@@ -46,7 +47,7 @@ export function CaptureReviewScreen({
     [events, selectedEventId]
   );
 
-  const badgeColor = isBeerFinished ? '#0f766e' : '#8a6a52';
+  const badgeTheme = isBeerFinished ? BadgeThemes.mojito : BadgeThemes.stout;
   const accentColor = isBeerFinished ? Colors.light.tint : '#8a6a52';
   const title = isBeerFinished ? t('reviewSuccessTitle') : t('reviewFailTitle');
   const message = isBeerFinished ? t('reviewSuccessMsg') : t('reviewFailMsg');
@@ -84,9 +85,9 @@ export function CaptureReviewScreen({
             <Text style={styles.title}>{t('reviewTitle')}</Text>
           </View>
 
-          <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
-            <Ionicons name={isBeerFinished ? 'ribbon' : 'refresh-outline'} size={14} color="#fff" />
-            <Text style={styles.statusBadgeText}>
+          <View style={[styles.statusBadge, { backgroundColor: badgeTheme.background, borderColor: badgeTheme.border }]}>
+            <Ionicons name={isBeerFinished ? 'ribbon' : 'refresh-outline'} size={14} color={badgeTheme.icon ?? badgeTheme.text} />
+            <Text style={[styles.statusBadgeText, { color: badgeTheme.text }]}>
               {isBeerFinished ? t('reviewBadgeSuccess') : t('reviewBadgeFail')}
             </Text>
           </View>
@@ -294,12 +295,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   statusBadgeText: {
-    color: '#fff',
     fontSize: 12,
     fontWeight: '800',
   },

@@ -7,7 +7,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, or_, select
 from sqlalchemy.engine import Engine
@@ -33,6 +33,10 @@ def _coerce_utc_datetime(value: datetime) -> datetime:
 
 
 logger = logging.getLogger(__name__)
+
+NotificationEvent = dict[str, object]
+NotificationEventListener = Callable[[NotificationEvent], None]
+_notification_event_listener: NotificationEventListener | None = None
 
 
 def _new_prefixed_id(prefix: str) -> str:
@@ -349,11 +353,33 @@ def session_scope() -> Any:
     try:
         yield session
         session.commit()
+        _dispatch_session_events(session)
     except Exception:
         session.rollback()
         raise
     finally:
         session.close()
+
+
+def set_notification_event_listener(listener: NotificationEventListener | None) -> None:
+    global _notification_event_listener
+    _notification_event_listener = listener
+
+
+def _append_session_notification_event(session: Session, event: NotificationEvent) -> None:
+    session.info.setdefault("notification_events", []).append(event)
+
+
+def _dispatch_session_events(session: Session) -> None:
+    if _notification_event_listener is None:
+        return
+
+    events = list(session.info.pop("notification_events", []))
+    for event in events:
+        try:
+            _notification_event_listener(event)
+        except Exception:
+            logger.exception("Failed to dispatch notification event.")
 
 
 def init_database() -> None:
@@ -395,6 +421,16 @@ def _serialize_public_user(user: User) -> dict[str, object]:
     }
 
 
+def _serialize_public_user_profile(user: User) -> dict[str, object]:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "avatar_uri": user.avatar_uri,
+        "bio": user.bio,
+    }
+
+
 def _serialize_friend_request(request: Friendship, *, current_user_id: str) -> dict[str, object]:
     direction = "incoming" if request.addressee_user_id == current_user_id else "outgoing"
     return {
@@ -423,6 +459,7 @@ def _serialize_notification(notification: ActivityNotification) -> dict[str, obj
     actor = notification.actor_user  # type: ignore[attr-defined]
     return {
         "id": notification.id,
+        "actor_user_id": actor.id if actor is not None else None,
         "actor_username": actor.username if actor is not None else "EventCapture",
         "actor_avatar_uri": actor.avatar_uri if actor is not None else "",
         "title": notification.title,
@@ -434,6 +471,18 @@ def _serialize_notification(notification: ActivityNotification) -> dict[str, obj
         "is_read": notification.is_read,
         "created_at": notification.created_at.isoformat(),
     }
+
+
+def _count_unread_notifications(session: Session, user_id: str) -> int:
+    return int(
+        session.scalar(
+            select(func.count(ActivityNotification.id)).where(
+                ActivityNotification.user_id == user_id,
+                ActivityNotification.is_read == False,  # noqa: E712
+            )
+        )
+        or 0
+    )
 
 
 def _serialize_event(event: Event) -> dict[str, object]:
@@ -622,6 +671,21 @@ def _create_notification(
         related_id=related_id,
     )
     session.add(notification)
+    session.flush()
+    notification = session.scalars(
+        select(ActivityNotification)
+        .options(selectinload(ActivityNotification.actor_user))
+        .where(ActivityNotification.id == notification.id)
+    ).one()
+    _append_session_notification_event(
+        session,
+        {
+            "type": "notification.created",
+            "user_id": user_id,
+            "item": _serialize_notification(notification),
+            "unread_count": _count_unread_notifications(session, user_id),
+        },
+    )
     return notification
 
 
@@ -1265,6 +1329,14 @@ def mark_all_notifications_read(user_id: str) -> None:
         items = session.scalars(select(ActivityNotification).where(ActivityNotification.user_id == user_id, ActivityNotification.is_read == False)).all()  # noqa: E712
         for item in items:
             item.is_read = True
+        _append_session_notification_event(
+            session,
+            {
+                "type": "notification.read_all",
+                "user_id": user_id,
+                "unread_count": 0,
+            },
+        )
 
 
 def create_activity_notification(
@@ -1468,6 +1540,14 @@ def get_user_by_id(user_id: str) -> dict[str, object] | None:
         if user is None or not user.is_active:
             return None
         return _serialize_user(user)
+
+
+def get_public_user_profile(user_id: str) -> dict[str, object] | None:
+    with session_scope() as session:
+        user = session.get(User, user_id)
+        if user is None or not user.is_active:
+            return None
+        return _serialize_public_user_profile(user)
 
 
 def get_user_by_email(email: str) -> dict[str, object] | None:

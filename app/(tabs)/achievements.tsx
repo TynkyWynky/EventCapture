@@ -10,6 +10,7 @@ import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -22,6 +23,7 @@ export default function AchievementsScreen() {
   const { events } = useEvents();
   const { crowns, posts } = usePosts();
   const { t } = useLanguage();
+  const { unreadCount } = useSocial();
 
   const rewardProgress = Math.min((crowns / CROWN_TARGET) * 100, 100);
   const remainingCrowns = Math.max(CROWN_TARGET - crowns, 0);
@@ -76,6 +78,7 @@ export default function AchievementsScreen() {
               <IconActionButton
                 icon="notifications-outline"
                 accessibilityLabel={t('notifTitle')}
+                unreadCount={unreadCount}
                 onPress={() => router.push('/notifications')}
               />
               <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />

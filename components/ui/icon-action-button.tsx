@@ -1,3 +1,4 @@
+import { BadgeThemes } from '@/constants/badgeThemes';
 import { Colors, Radius, Shadows } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
@@ -9,6 +10,7 @@ interface IconActionButtonProps {
   tone?: 'light' | 'dark' | 'subtle' | 'accent';
   accessibilityLabel?: string;
   disabled?: boolean;
+  unreadCount?: number;
 }
 
 export function IconActionButton({
@@ -17,9 +19,11 @@ export function IconActionButton({
   tone = 'light',
   accessibilityLabel,
   disabled = false,
+  unreadCount = 0,
 }: IconActionButtonProps) {
   const scale = React.useRef(new Animated.Value(1)).current;
   const useNativeDriver = Platform.OS !== 'web';
+  const badgeLabel = unreadCount > 9 ? '9+' : unreadCount > 0 ? String(unreadCount) : '';
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
@@ -64,6 +68,9 @@ export function IconActionButton({
                 : Colors.light.title
           }
         />
+        {badgeLabel ? (
+          <Animated.Text style={[styles.badge, tone === 'dark' && styles.badgeDark]}>{badgeLabel}</Animated.Text>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
@@ -99,5 +106,26 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
+  },
+  badge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    overflow: 'hidden',
+    backgroundColor: BadgeThemes.aperitif.background,
+    borderWidth: 1,
+    borderColor: BadgeThemes.aperitif.border,
+    color: BadgeThemes.aperitif.text,
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  badgeDark: {
+    borderColor: BadgeThemes.aperitif.border,
   },
 });

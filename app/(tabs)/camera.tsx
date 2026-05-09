@@ -6,14 +6,17 @@ import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { IconActionButton } from '@/components/ui/icon-action-button';
 import { Colors, Radius } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 
 const tipKeys = ['cameraGuideVisible', 'cameraGuideLighting', 'cameraGuideSharp'] as const;
 
 export default function CameraScreen() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { unreadCount } = useSocial();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -102,20 +105,13 @@ export default function CameraScreen() {
           </View>
 
           <View style={styles.topActions}>
-            <TouchableOpacity
-              accessibilityRole="button"
+            <IconActionButton
+              icon="notifications-outline"
               accessibilityLabel={t('notifTitle')}
-              style={styles.topButton}
-              onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={20} color="#1f1a17" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={t('menuTitle')}
-              style={styles.topButton}
-              onPress={() => router.push('/menu')}>
-              <Ionicons name="menu" size={20} color="#1f1a17" />
-            </TouchableOpacity>
+              unreadCount={unreadCount}
+              onPress={() => router.push('/notifications')}
+            />
+            <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
           </View>
         </View>
 
@@ -220,14 +216,6 @@ const styles = StyleSheet.create({
     color: '#ffe1ca',
     marginTop: 2,
     lineHeight: 20,
-  },
-  topButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fffaf5',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   guideCard: {
     backgroundColor: '#fff7ef',

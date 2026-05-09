@@ -162,6 +162,10 @@ export default function FriendsScreen() {
     );
   };
 
+  const openPublicProfile = (userId: string) => {
+    router.push({ pathname: '/profile/[id]', params: { id: userId } });
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
@@ -282,13 +286,18 @@ export default function FriendsScreen() {
             <View style={styles.stack}>
               {friends.map((entry) => (
                 <SurfaceCard key={entry.friendship_id} style={styles.userCard} variant="subtle">
-                  <View style={styles.userRow}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={getDisplayName(entry.friend)}
+                    activeOpacity={0.88}
+                    style={styles.userRow}
+                    onPress={() => openPublicProfile(entry.friend.id)}>
                     <UserAvatar user={entry.friend} />
                     <View style={styles.userCopy}>
                       <Text style={styles.userTitle}>{getDisplayName(entry.friend)}</Text>
                       <Text style={styles.userMeta}>@{entry.friend.username} · {entry.friend.crown_count} {t('friendsStatCrowns')}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                   <AppButton
                     label={t('friendsActionRemove')}
                     variant="secondary"

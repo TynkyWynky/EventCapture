@@ -5,11 +5,13 @@ import { FeedbackBanner } from '@/components/ui/feedback-banner';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { BadgeThemes } from '@/constants/badgeThemes';
 import { getCrownLevelProgress, getNextCrownReward } from '@/constants/crowns';
 import { Colors, Layout, Radius, TabThemes } from '@/constants/theme';
 import { useEvents } from '@/context/EventContext';
 import { usePosts } from '@/context/PostContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 import { useUser } from '@/context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function HomeFeed() {
   const router = useRouter();
   const { user } = useUser();
+  const { unreadCount } = useSocial();
   const { t } = useLanguage();
   const {
     events,
@@ -86,6 +89,7 @@ export default function HomeFeed() {
             <IconActionButton
               icon="notifications-outline"
               accessibilityLabel={t('notifTitle')}
+              unreadCount={unreadCount}
               onPress={() => router.push('/notifications')}
             />
             <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
@@ -239,9 +243,16 @@ export default function HomeFeed() {
                 <Text style={styles.sectionSubtitle}>{t('homeLatestCaptureSub')}</Text>
               </View>
               {latestPost.isBeerFinished ? (
-                <View style={styles.captureBadge}>
-                  <Ionicons name="sparkles" size={14} color="#fff" />
-                  <Text style={styles.captureBadgeText}>{t('socialCrownBadge')}</Text>
+                <View
+                  style={[
+                    styles.captureBadge,
+                    {
+                      backgroundColor: BadgeThemes.mojito.background,
+                      borderColor: BadgeThemes.mojito.border,
+                    },
+                  ]}>
+                  <Ionicons name="sparkles" size={14} color={BadgeThemes.mojito.icon} />
+                  <Text style={[styles.captureBadgeText, { color: BadgeThemes.mojito.text }]}>{t('socialCrownBadge')}</Text>
                 </View>
               ) : null}
             </View>
@@ -287,8 +298,15 @@ export default function HomeFeed() {
                       <Text style={styles.eventTitle}>{event.title}</Text>
                       <Text style={styles.eventMeta}>{event.vibe}</Text>
                     </View>
-                    <View style={styles.priceBadge}>
-                      <Text style={styles.priceText}>{event.price}</Text>
+                    <View
+                      style={[
+                        styles.priceBadge,
+                        {
+                          backgroundColor: BadgeThemes.stout.background,
+                          borderColor: BadgeThemes.stout.border,
+                        },
+                      ]}>
+                      <Text style={[styles.priceText, { color: BadgeThemes.stout.text }]}>{event.price}</Text>
                     </View>
                   </View>
 
@@ -334,12 +352,14 @@ const styles = StyleSheet.create({
   },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   heroBadge: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: BadgeThemes.aperitif.background,
+    borderWidth: 1,
+    borderColor: BadgeThemes.aperitif.border,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  heroBadgeText: { color: '#fff7ef', fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  heroBadgeText: { color: BadgeThemes.aperitif.text, fontWeight: '800', fontSize: 11, letterSpacing: 1 },
   heroMeta: { color: '#f0c9a9', fontWeight: '700', fontSize: 12.5 },
   heroTitle: { color: '#fff7ef', fontWeight: '800', fontSize: 28, lineHeight: 32 },
   heroSubtitleText: { color: '#f0c9a9', fontWeight: '700', fontSize: 13.5 },
@@ -390,12 +410,14 @@ const styles = StyleSheet.create({
     minWidth: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#231b17',
+    backgroundColor: BadgeThemes.lager.background,
+    borderWidth: 1,
+    borderColor: BadgeThemes.lager.border,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
   },
-  progressBadgeText: { color: '#fff7ef', fontWeight: '800', fontSize: 15 },
+  progressBadgeText: { color: BadgeThemes.lager.text, fontWeight: '800', fontSize: 15 },
   progressMeter: {
     height: 10,
     borderRadius: 999,
@@ -416,12 +438,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#0f766e',
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  captureBadgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  captureBadgeText: { fontWeight: '700', fontSize: 12 },
   captureImage: { width: '100%', height: 176, borderRadius: 18 },
   captureTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 19 },
   captureMeta: { color: '#81776f', fontSize: 13 },
@@ -440,12 +462,12 @@ const styles = StyleSheet.create({
   eventTitle: { color: '#1f1a17', fontWeight: '800', fontSize: 20 },
   eventMeta: { color: '#81776f', fontSize: 13.5, marginTop: 2 },
   priceBadge: {
-    backgroundColor: '#231b17',
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  priceText: { color: '#fff7ef', fontWeight: '800', fontSize: 12 },
+  priceText: { fontWeight: '800', fontSize: 12 },
   eventStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   emptyCard: { gap: 14 },
 });

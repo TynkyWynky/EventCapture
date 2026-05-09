@@ -10,6 +10,7 @@ import { usePosts } from '@/context/PostContext';
 import { useUser } from '@/context/UserContext';
 import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +24,7 @@ export default function ProfileScreen() {
   const { posts, crowns } = usePosts();
   const { events } = useEvents();
   const { user } = useUser();
+  const { unreadCount } = useSocial();
   const { t } = useLanguage();
   const rewardProgress = Math.min((crowns / 9) * 100, 100);
   const activeReward = getActiveCrownReward(crowns);
@@ -53,7 +55,7 @@ export default function ProfileScreen() {
             }
             rightAction={
               <View style={styles.headerActions}>
-                <IconActionButton icon="notifications-outline" tone="dark" onPress={() => router.push('/notifications')} />
+                <IconActionButton icon="notifications-outline" tone="dark" unreadCount={unreadCount} onPress={() => router.push('/notifications')} />
                 <IconActionButton icon="menu" tone="dark" onPress={() => router.push('/menu')} />
               </View>
             }

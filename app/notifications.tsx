@@ -15,7 +15,7 @@ import { Colors, Layout, Typography } from '@/constants/theme';
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { notifications, unreadCount, markAllRead, isOffline, isUsingCachedData, error } = useSocial();
+  const { notifications, unreadCount, realtimeStatus, markAllRead, isOffline, isUsingCachedData, error } = useSocial();
   const { showToast } = useToast();
   const { t } = useLanguage();
   const [isClearing, setIsClearing] = React.useState(false);
@@ -25,7 +25,15 @@ export default function NotificationsScreen() {
   }));
   const sections = [t('notifSectionNew'), t('notifSectionEarlier')];
 
-  const handleNotificationPress = (relatedType?: string | null, relatedId?: string | null) => {
+  const handleNotificationPress = (
+    actorUserId?: string | null,
+    relatedType?: string | null,
+    relatedId?: string | null
+  ) => {
+    if (actorUserId) {
+      router.push({ pathname: '/profile/[id]', params: { id: actorUserId } });
+      return;
+    }
     if (relatedType === 'friendship') {
       router.push('/friends');
       return;
@@ -75,6 +83,18 @@ export default function NotificationsScreen() {
 
         {error ? <FeedbackBanner tone="error" title={t('notifTitle')} message={error} /> : null}
 
+        {!error && realtimeStatus !== 'connected' ? (
+          <FeedbackBanner
+            tone={realtimeStatus === 'reconnecting' ? 'error' : 'info'}
+            title={realtimeStatus === 'reconnecting' ? 'Realtime updates are reconnecting' : 'Connecting live activity'}
+            message={
+              realtimeStatus === 'reconnecting'
+                ? 'New notifications may be delayed for a moment while the live connection comes back.'
+                : 'Setting up the live notification connection.'
+            }
+          />
+        ) : null}
+
         {!error && (isOffline || isUsingCachedData) ? (
           <FeedbackBanner
             tone={isOffline ? 'error' : 'info'}
@@ -100,8 +120,8 @@ export default function NotificationsScreen() {
                   key={`${section}-${idx}`}
                   accessibilityRole="button"
                   accessibilityLabel={item.title || item.user}
-                  activeOpacity={item.relatedType || item.relatedId ? 0.9 : 1}
-                  onPress={() => handleNotificationPress(item.relatedType, item.relatedId)}>
+                  activeOpacity={item.actorUserId || item.relatedType || item.relatedId ? 0.9 : 1}
+                  onPress={() => handleNotificationPress(item.actorUserId, item.relatedType, item.relatedId)}>
                   <SurfaceCard style={styles.card}>
                   <View style={[styles.avatar, { backgroundColor: item.color }]}>
                     <Text style={styles.avatarText}>{item.user.charAt(0)}</Text>

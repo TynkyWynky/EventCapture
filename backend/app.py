@@ -57,6 +57,7 @@ try:
         delete_user,
         get_group_detail,
         get_group_leaderboard,
+        get_public_user_profile,
         get_rewards_summary,
         get_user_by_id,
         init_database,
@@ -69,6 +70,7 @@ try:
         remove_friend,
         respond_to_friend_request,
         search_users_for_friendship,
+        set_notification_event_listener,
         toggle_post_like,
         update_group,
         update_group_member_role,
@@ -107,6 +109,7 @@ try:
         GroupSummaryResponse,
         GroupUpdateRequest,
         HealthResponse,
+        PublicUserProfileResponse,
         PasswordResetChallengeResponse,
         PasswordResetConfirmRequest,
         PasswordResetConfirmResponse,
@@ -148,6 +151,7 @@ except ImportError:
         delete_user,
         get_group_detail,
         get_group_leaderboard,
+        get_public_user_profile,
         get_rewards_summary,
         get_user_by_id,
         init_database,
@@ -160,6 +164,7 @@ except ImportError:
         remove_friend,
         respond_to_friend_request,
         search_users_for_friendship,
+        set_notification_event_listener,
         toggle_post_like,
         update_group,
         update_group_member_role,
@@ -198,6 +203,7 @@ except ImportError:
         GroupSummaryResponse,
         GroupUpdateRequest,
         HealthResponse,
+        PublicUserProfileResponse,
         PasswordResetChallengeResponse,
         PasswordResetConfirmRequest,
         PasswordResetConfirmResponse,
@@ -232,7 +238,10 @@ inference_executor = ThreadPoolExecutor(
 inference_semaphore = asyncio.Semaphore(settings.effective_inference_concurrency)
 event_social_runtime: dict[str, dict[str, dict[str, object]]] = {}
 notification_runtime: dict[str, list[dict[str, object]]] = {}
+notification_connections: dict[str, set[WebSocket]] = {}
+notification_connections_lock = threading.Lock()
 revoked_access_tokens: set[str] = set()
+main_event_loop: asyncio.AbstractEventLoop | None = None
 
 
 def _create_detector() -> DrinkDetector:
@@ -257,11 +266,16 @@ def _get_last_debug_snapshot() -> DebugSnapshotResponse:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    global main_event_loop
+    main_event_loop = asyncio.get_running_loop()
+    set_notification_event_listener(_handle_notification_event)
     await asyncio.to_thread(storage_service.ensure_ready)
     await asyncio.to_thread(init_database)
     try:
         yield
     finally:
+        set_notification_event_listener(None)
+        main_event_loop = None
         inference_executor.shutdown(wait=True, cancel_futures=False)
 
 
@@ -399,6 +413,16 @@ def _serialize_user_profile_response(request: Request, user: dict[str, object]) 
     )
 
 
+def _serialize_public_user_profile_response(request: Request, user: dict[str, object]) -> PublicUserProfileResponse:
+    return PublicUserProfileResponse(
+        id=str(user["id"]),
+        username=str(user["username"]),
+        avatar_uri=_resolve_avatar_uri(request, str(user["avatar_uri"])),
+        full_name=str(user["full_name"]),
+        bio=str(user["bio"]),
+    )
+
+
 def _resolve_public_user_payload(request: Request, payload: dict[str, object]) -> dict[str, object]:
     resolved = dict(payload)
     resolved["avatar_uri"] = _resolve_avatar_uri(request, str(payload.get("avatar_uri", "")))
@@ -432,6 +456,90 @@ def _resolve_notification_payload(request: Request, payload: dict[str, object]) 
     resolved = dict(payload)
     resolved["actor_avatar_uri"] = _resolve_avatar_uri(request, str(payload.get("actor_avatar_uri", "")))
     return resolved
+
+
+def _resolve_avatar_uri_for_websocket(websocket: WebSocket, avatar_uri: str) -> str:
+    if not avatar_uri:
+        return avatar_uri
+    if avatar_uri.startswith(("blob:", "file:")):
+        return ""
+    if avatar_uri.startswith(("http://", "https://", "data:")):
+        return avatar_uri
+    if settings.normalized_media_url_base:
+        return storage_service.build_public_url(None, avatar_uri)
+
+    scheme = "https" if websocket.url.scheme == "wss" else "http"
+    port = f":{websocket.url.port}" if websocket.url.port else ""
+    normalized_path = avatar_uri.replace("\\", "/").lstrip("/")
+    return f"{scheme}://{websocket.url.hostname}{port}/media/{normalized_path}"
+
+
+def _resolve_notification_payload_for_websocket(websocket: WebSocket, payload: dict[str, object]) -> dict[str, object]:
+    resolved = dict(payload)
+    resolved["actor_avatar_uri"] = _resolve_avatar_uri_for_websocket(
+        websocket,
+        str(payload.get("actor_avatar_uri", "")),
+    )
+    return resolved
+
+
+def _register_notification_connection(user_id: str, websocket: WebSocket) -> None:
+    with notification_connections_lock:
+        notification_connections.setdefault(user_id, set()).add(websocket)
+
+
+def _unregister_notification_connection(user_id: str, websocket: WebSocket) -> None:
+    with notification_connections_lock:
+        sockets = notification_connections.get(user_id)
+        if not sockets:
+            return
+        sockets.discard(websocket)
+        if not sockets:
+            notification_connections.pop(user_id, None)
+
+
+def _get_notification_connections(user_id: str) -> list[WebSocket]:
+    with notification_connections_lock:
+        return list(notification_connections.get(user_id, set()))
+
+
+async def _broadcast_notification_event(event: dict[str, object]) -> None:
+    user_id = str(event.get("user_id", ""))
+    if not user_id:
+        return
+
+    sockets = _get_notification_connections(user_id)
+    if not sockets:
+        return
+
+    dead_sockets: list[WebSocket] = []
+    for websocket in sockets:
+        try:
+            if event.get("type") == "notification.created":
+                payload = {
+                    "type": "notification.created",
+                    "item": _resolve_notification_payload_for_websocket(websocket, dict(event.get("item", {}))),
+                    "unread_count": int(event.get("unread_count", 0)),
+                }
+            elif event.get("type") == "notification.read_all":
+                payload = {
+                    "type": "notification.read_all",
+                    "unread_count": int(event.get("unread_count", 0)),
+                }
+            else:
+                continue
+            await websocket.send_text(json.dumps(payload))
+        except Exception:
+            dead_sockets.append(websocket)
+
+    for websocket in dead_sockets:
+        _unregister_notification_connection(user_id, websocket)
+
+
+def _handle_notification_event(event: dict[str, object]) -> None:
+    if main_event_loop is None:
+        return
+    asyncio.run_coroutine_threadsafe(_broadcast_notification_event(event), main_event_loop)
 
 
 def _resolve_group_member_payload(request: Request, payload: dict[str, object]) -> GroupMemberResponse:
@@ -1179,6 +1287,18 @@ async def search_users(request: Request, q: str = "", current_user: dict[str, ob
     return _resolve_user_search_payloads(request, payload)
 
 
+@app.get("/api/users/{user_id}/public", response_model=PublicUserProfileResponse)
+async def get_public_user_profile_route(
+    request: Request,
+    user_id: str,
+    _current_user: dict[str, object] = Depends(get_current_user),
+):
+    payload = await asyncio.to_thread(get_public_user_profile, user_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return _serialize_public_user_profile_response(request, payload)
+
+
 @app.get("/api/friends", response_model=list[FriendListItemResponse])
 async def get_friends(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
     payload = await asyncio.to_thread(list_friends, str(current_user["id"]))
@@ -1259,8 +1379,12 @@ async def read_all_notifications(current_user: dict[str, object] = Depends(get_c
 
 
 @app.post("/api/notifications/activity")
-async def create_notification_activity(payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
-    return await asyncio.to_thread(
+async def create_notification_activity(
+    request: Request,
+    payload: dict[str, object] = Body(default_factory=dict),
+    current_user: dict[str, object] = Depends(get_current_user),
+):
+    created = await asyncio.to_thread(
         create_activity_notification,
         str(current_user["id"]),
         title=str(payload.get("title", "")),
@@ -1270,6 +1394,7 @@ async def create_notification_activity(payload: dict[str, object] = Body(default
         related_type=payload.get("related_type"),
         related_id=payload.get("related_id"),
     )
+    return _resolve_notification_payload(request, created)
 
 
 @app.get("/api/groups", response_model=GroupListResponse)
@@ -1658,6 +1783,40 @@ async def _authenticate_websocket(websocket: WebSocket) -> dict[str, object] | N
         await websocket.close(code=1008, reason="Authentication required.")
         return None
     return user
+
+
+async def _authenticate_required_websocket(websocket: WebSocket) -> dict[str, object] | None:
+    token = websocket.query_params.get("token")
+    user = await asyncio.to_thread(_current_user_from_token, token)
+    if user is None:
+        await websocket.close(code=1008, reason="Authentication required.")
+        return None
+    return user
+
+
+@app.websocket("/ws/notifications")
+async def websocket_notifications(websocket: WebSocket):
+    user = await _authenticate_required_websocket(websocket)
+    if user is None:
+        return
+
+    user_id = str(user["id"])
+    await websocket.accept()
+    _register_notification_connection(user_id, websocket)
+    logger.info("Notification WebSocket connected for user %s", user_id)
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            if message.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+    except WebSocketDisconnect:
+        logger.info("Notification WebSocket disconnected for user %s", user_id)
+    except Exception as error:
+        logger.exception("Notification WebSocket error: %s", error)
+    finally:
+        _unregister_notification_connection(user_id, websocket)
 
 
 @app.websocket("/ws/detect")

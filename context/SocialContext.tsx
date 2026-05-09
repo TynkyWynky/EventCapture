@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { isRemovedSeedEventId } from '@/constants/events';
 import { useEvents } from '@/context/EventContext';
@@ -18,11 +18,13 @@ import {
   toggleEventSaveRemote,
 } from '@/services/eventSocialApi';
 import { createActivityNotification, fetchNotifications, markNotificationsRead } from '@/services/notificationsApi';
+import { connectNotificationsRealtime, NotificationSocketConnection } from '@/services/notificationsRealtimeApi';
 
 export type { EventPlanStatus };
 
 export interface ActivityItem {
   id: string;
+  actorUserId?: string | null;
   user: string;
   text: string;
   title?: string;
@@ -33,6 +35,7 @@ export interface ActivityItem {
   avatarUri?: string;
   relatedType?: string | null;
   relatedId?: string | null;
+  isRead?: boolean;
 }
 
 interface SocialContextType {
@@ -45,6 +48,7 @@ interface SocialContextType {
   addActivity: (item: Omit<ActivityItem, 'id' | 'createdAt' | 'time'>) => Promise<void>;
   notifications: ActivityItem[];
   unreadCount: number;
+  realtimeStatus: 'connecting' | 'connected' | 'reconnecting';
   isUsingCachedData: boolean;
   isOffline: boolean;
   error: string | null;
@@ -91,6 +95,36 @@ function sanitizeSocialStateMap(value: SocialStateMap): SocialStateMap {
   );
 }
 
+function mapRemoteNotification(item: {
+  id: string;
+  actor_username: string;
+  actor_avatar_uri: string;
+  title: string;
+  message: string;
+  icon: string;
+  color: string;
+  created_at: string;
+  related_type?: string | null;
+  related_id?: string | null;
+  is_read?: boolean;
+}): ActivityItem {
+  return {
+    id: item.id,
+    actorUserId: item.actor_user_id,
+    user: item.actor_username,
+    avatarUri: item.actor_avatar_uri,
+    title: item.title,
+    text: item.message,
+    time: timeAgo(item.created_at),
+    icon: item.icon,
+    color: item.color,
+    createdAt: item.created_at,
+    relatedType: item.related_type,
+    relatedId: item.related_id,
+    isRead: item.is_read,
+  };
+}
+
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
 export function SocialProvider({ children }: { children: ReactNode }) {
@@ -99,10 +133,15 @@ export function SocialProvider({ children }: { children: ReactNode }) {
   const [socialState, setSocialState] = useState<SocialStateMap>({});
   const [notifications, setNotifications] = useState<ActivityItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting');
   const [hasHydrated, setHasHydrated] = useState(false);
   const [isUsingCachedData, setIsUsingCachedData] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const socketRef = useRef<NotificationSocketConnection | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const shouldReconnectRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,11 +184,25 @@ export function SocialProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ socialState })).catch(() => {});
   }, [hasHydrated, socialState]);
 
+  const applyRemoteNotifications = (remoteNotifications: Awaited<ReturnType<typeof fetchNotifications>>) => {
+    setNotifications(remoteNotifications.items.map((item) => mapRemoteNotification(item)));
+    setUnreadCount(remoteNotifications.unread_count);
+  };
+
+  const refreshNotifications = async () => {
+    const remoteNotifications = await fetchNotifications();
+    applyRemoteNotifications(remoteNotifications);
+  };
+
   const refreshSocial = async () => {
     if (!isAuthenticated) {
       setSocialState({});
       setNotifications([]);
       setUnreadCount(0);
+      setRealtimeStatus('connecting');
+      setIsUsingCachedData(false);
+      setIsOffline(false);
+      setError(null);
       return;
     }
 
@@ -173,22 +226,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       };
     }
     setSocialState(nextState);
-    setNotifications(
-      remoteNotifications.items.map((item) => ({
-        id: item.id,
-        user: item.actor_username,
-        avatarUri: item.actor_avatar_uri,
-        title: item.title,
-        text: item.message,
-        time: timeAgo(item.created_at),
-        icon: item.icon,
-        color: item.color,
-        createdAt: item.created_at,
-        relatedType: item.related_type,
-        relatedId: item.related_id,
-      }))
-    );
-    setUnreadCount(remoteNotifications.unread_count);
+    applyRemoteNotifications(remoteNotifications);
     setIsUsingCachedData(false);
     setIsOffline(false);
     setError(null);
@@ -203,6 +241,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       setSocialState({});
       setNotifications([]);
       setUnreadCount(0);
+      setRealtimeStatus('connecting');
       return;
     }
 
@@ -210,6 +249,109 @@ export function SocialProvider({ children }: { children: ReactNode }) {
       setIsOffline(true);
       setError(refreshError instanceof Error ? refreshError.message : 'Unable to refresh activity right now.');
     });
+  }, [hasHydrated, isAuthenticated]);
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) {
+      shouldReconnectRef.current = false;
+      reconnectAttemptsRef.current = 0;
+      setRealtimeStatus('connecting');
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      return;
+    }
+
+    shouldReconnectRef.current = true;
+    let isDisposed = false;
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (!shouldReconnectRef.current || isDisposed || reconnectTimeoutRef.current) {
+        return;
+      }
+
+      setRealtimeStatus('reconnecting');
+      const delayMs = Math.min(30000, 1000 * 2 ** reconnectAttemptsRef.current);
+      reconnectAttemptsRef.current += 1;
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectTimeoutRef.current = null;
+        void connectSocket();
+      }, delayMs);
+    };
+
+    const connectSocket = async () => {
+      if (!shouldReconnectRef.current || isDisposed || socketRef.current) {
+        return;
+      }
+
+      try {
+        setRealtimeStatus(reconnectAttemptsRef.current > 0 ? 'reconnecting' : 'connecting');
+        const connection = await connectNotificationsRealtime({
+          onMessage: (message) => {
+            if (message.type === 'notification.created') {
+              const nextItem = mapRemoteNotification(message.item);
+              setNotifications((prev) => {
+                if (prev.some((item) => item.id === nextItem.id)) {
+                  return prev;
+                }
+                return [nextItem, ...prev];
+              });
+              setUnreadCount(message.unread_count);
+              return;
+            }
+
+            if (message.type === 'notification.read_all') {
+              setUnreadCount(message.unread_count);
+              setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+            }
+          },
+          onOpen: () => {
+            reconnectAttemptsRef.current = 0;
+            setRealtimeStatus('connected');
+            void refreshNotifications().catch(() => {});
+          },
+          onClose: () => {
+            socketRef.current = null;
+            if (shouldReconnectRef.current && !isDisposed) {
+              scheduleReconnect();
+            }
+          },
+          onError: () => {
+            // Reconnect handling is driven by close events.
+          },
+        });
+
+        if (isDisposed || !shouldReconnectRef.current) {
+          connection.disconnect();
+          return;
+        }
+
+        clearReconnectTimer();
+        socketRef.current = connection;
+      } catch {
+        scheduleReconnect();
+      }
+    };
+
+    void connectSocket();
+
+    return () => {
+      isDisposed = true;
+      shouldReconnectRef.current = false;
+      clearReconnectTimer();
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
   }, [hasHydrated, isAuthenticated]);
 
   const value = useMemo<SocialContextType>(() => {
@@ -224,13 +366,18 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         setNotifications((prev) => [
           {
             id: created.id,
+            actorUserId: created.actor_user_id,
             user: created.actor_username,
             avatarUri: created.actor_avatar_uri,
+            title: created.title,
             text: created.message,
             time: timeAgo(created.created_at),
             icon: created.icon,
             color: created.color,
             createdAt: created.created_at,
+            relatedType: created.related_type,
+            relatedId: created.related_id,
+            isRead: created.is_read,
           },
           ...prev,
         ]);
@@ -281,12 +428,14 @@ export function SocialProvider({ children }: { children: ReactNode }) {
         time: timeAgo(item.createdAt),
       })),
       unreadCount,
+      realtimeStatus,
       isUsingCachedData,
       isOffline,
       error,
       markAllRead: async () => {
         await markNotificationsRead();
         setUnreadCount(0);
+        setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
       },
       getLikedEvents: () =>
         events
@@ -307,7 +456,7 @@ export function SocialProvider({ children }: { children: ReactNode }) {
           .filter((entry) => entry.saved || entry.planStatus),
       refreshSocial,
     };
-  }, [error, events, isOffline, isUsingCachedData, notifications, socialState, unreadCount]);
+  }, [error, events, isOffline, isUsingCachedData, notifications, realtimeStatus, socialState, unreadCount]);
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;
 }

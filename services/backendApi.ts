@@ -153,6 +153,10 @@ export function configureBackendApiAuth(getToken: () => string | null) {
   authTokenProvider = getToken;
 }
 
+export function getBackendApiAuthToken(): string | null {
+  return authTokenProvider?.() ?? null;
+}
+
 export function clearCachedBackendApiBaseUrl() {
   cachedBackendApiBaseUrl = null;
 }
@@ -232,6 +236,16 @@ export async function resolveBackendApiBaseUrl(): Promise<string> {
   throw new Error(
     `${lastProbeError?.message ?? 'Unable to reach the backend.'} Tried ${attemptedUrls}. For Expo web use localhost, for the Android emulator use http://10.0.2.2:${BACKEND_PORT}, and for a physical phone set EXPO_PUBLIC_BACKEND_API_URL to your computer's LAN IP.`
   );
+}
+
+export async function resolveBackendWebSocketUrl(path: string, query?: Record<string, string>): Promise<string> {
+  const baseUrl = await resolveBackendApiBaseUrl();
+  const wsBaseUrl = baseUrl.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+  const url = new URL(path, `${wsBaseUrl}/`);
+  for (const [key, value] of Object.entries(query ?? {})) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
 }
 
 async function buildHeaders(initHeaders?: HeadersInit, includeAuth = true): Promise<Headers> {

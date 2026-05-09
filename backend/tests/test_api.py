@@ -11,6 +11,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from websockets.sync.client import connect
+
 
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -90,6 +92,10 @@ class EventCaptureApiTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             content = error.read().decode("utf-8")
             return error.code, json.loads(content) if content else {}
+
+    def websocket_url(self, path: str, token: str | None = None) -> str:
+        suffix = f"{path}?token={token}" if token else path
+        return f"ws://127.0.0.1:{self.port}{suffix}"
 
     def multipart_request(
         self,
@@ -348,6 +354,96 @@ class EventCaptureApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 400, payload)
         self.assertIn("detail", payload)
+
+    def test_notification_websocket_requires_auth(self):
+        with self.assertRaises(Exception):
+            with connect(self.websocket_url("/ws/notifications"), open_timeout=5):
+                self.fail("Unauthenticated notification socket should not connect.")
+
+    def test_notification_websocket_receives_create_and_read_all_events(self):
+        owner = self.register_and_login("socket-owner@example.com", "socketowner")
+        other = self.register_and_login("socket-other@example.com", "socketother")
+
+        with connect(self.websocket_url("/ws/notifications", owner["token"]), open_timeout=5) as websocket:
+            status, payload = self.api_request(
+                "POST",
+                "/api/friends/requests",
+                {"user_id": owner["user_id"]},
+                token=other["token"],
+            )
+            self.assertEqual(status, 201, payload)
+
+            message = json.loads(websocket.recv())
+            self.assertEqual(message["type"], "notification.created")
+            self.assertEqual(message["item"]["related_type"], "friendship_request")
+            self.assertEqual(message["item"]["actor_username"], "socketother")
+            self.assertGreaterEqual(message["unread_count"], 1)
+
+            status, _ = self.api_request("POST", "/api/notifications/read-all", {}, token=owner["token"])
+            self.assertEqual(status, 200)
+
+            message = json.loads(websocket.recv())
+            self.assertEqual(message["type"], "notification.read_all")
+            self.assertEqual(message["unread_count"], 0)
+
+    def test_notification_websocket_receives_group_invite_and_friend_accept_events(self):
+        owner = self.register_and_login("socket-group-owner@example.com", "socketgroupowner")
+        member = self.register_and_login("socket-group-member@example.com", "socketgroupmember")
+
+        with connect(self.websocket_url("/ws/notifications", member["token"]), open_timeout=5) as member_socket:
+            status, payload = self.api_request(
+                "POST",
+                "/api/friends/requests",
+                {"user_id": member["user_id"]},
+                token=owner["token"],
+            )
+            self.assertEqual(status, 201, payload)
+            request_id = payload["id"]
+
+            message = json.loads(member_socket.recv())
+            self.assertEqual(message["type"], "notification.created")
+            self.assertEqual(message["item"]["related_type"], "friendship_request")
+
+            status, payload = self.api_request(
+                "POST",
+                f"/api/friends/requests/{request_id}/accept",
+                {},
+                token=member["token"],
+            )
+            self.assertEqual(status, 200, payload)
+
+            message = json.loads(member_socket.recv())
+            self.assertEqual(message["type"], "notification.created")
+            self.assertEqual(message["item"]["related_type"], "friendship")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/groups",
+            {
+                "name": "Socket Test Crew",
+                "description": "Realtime invite delivery.",
+                "invited_user_ids": [member["user_id"]],
+            },
+            token=owner["token"],
+        )
+        self.assertEqual(status, 201, payload)
+
+        with connect(self.websocket_url("/ws/notifications", member["token"]), open_timeout=5) as member_socket:
+            status, payload = self.api_request(
+                "POST",
+                "/api/groups",
+                {
+                    "name": "Socket Test Crew 2",
+                    "description": "Realtime invite delivery.",
+                    "invited_user_ids": [member["user_id"]],
+                },
+                token=owner["token"],
+            )
+            self.assertEqual(status, 201, payload)
+
+            message = json.loads(member_socket.recv())
+            self.assertEqual(message["type"], "notification.created")
+            self.assertEqual(message["item"]["related_type"], "group")
 
     def test_event_post_like_comment_and_delete_permissions(self):
         alice = self.register_and_login("owner@example.com", "owner")

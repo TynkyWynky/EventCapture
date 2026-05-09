@@ -65,6 +65,7 @@ export default function RootLayout() {
                         <Stack.Screen name="auth/change-password" />
                         <Stack.Screen name="profile/create" />
                         <Stack.Screen name="profile/edit" />
+                        <Stack.Screen name="profile/[id]" />
                         <Stack.Screen name="terms" />
                         <Stack.Screen name="filters" />
                         <Stack.Screen

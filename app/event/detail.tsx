@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { StatChip } from '@/components/ui/stat-chip';
 import { SurfaceCard } from '@/components/ui/surface-card';
+import { getEventBadgeTheme } from '@/constants/badgeThemes';
 import { useEvents } from '@/context/EventContext';
 import { useSocial } from '@/context/SocialContext';
 import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
@@ -24,6 +25,7 @@ export default function EventDetailScreen() {
   const social = getEventSocial(eventId);
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
+  const eventBadgeTheme = getEventBadgeTheme(event?.badge);
 
   const handleOpenTickets = async () => {
     if (!event?.sourceUrl) {
@@ -80,8 +82,15 @@ export default function EventDetailScreen() {
             </View>
 
             <View style={styles.heroContent}>
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveBadgeText}>{event.badge}</Text>
+              <View
+                style={[
+                  styles.liveBadge,
+                  {
+                    backgroundColor: eventBadgeTheme.background,
+                    borderColor: eventBadgeTheme.border,
+                  },
+                ]}>
+                <Text style={[styles.liveBadgeText, { color: eventBadgeTheme.text }]}>{event.badge}</Text>
               </View>
               <Text style={styles.title}>{event.title}</Text>
               <Text style={styles.subtitle}>{event.description}</Text>
@@ -306,12 +315,12 @@ const styles = StyleSheet.create({
   heroContent: { gap: 12 },
   liveBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#0f766e',
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  liveBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  liveBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
   title: { color: '#fff7ef', fontSize: 34, fontWeight: '800', lineHeight: 38, maxWidth: 300 },
   subtitle: { color: '#eadccf', fontSize: 15, lineHeight: 22, maxWidth: 320 },
   metaRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },

@@ -106,6 +106,11 @@ class UserProfileResponse(AppUserResponse):
     role: str
 
 
+class PublicUserProfileResponse(AppUserResponse):
+    full_name: str
+    bio: str
+
+
 class AuthSessionResponse(BaseModel):
     access_token: str
     token: str | None = None

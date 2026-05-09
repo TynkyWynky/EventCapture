@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 
 const getMenuItems = (
   t: ReturnType<typeof useLanguage>['t']
@@ -80,6 +81,7 @@ const getMenuItems = (
 export default function MenuScreen() {
   const router = useRouter();
   const { user, signOut } = useUser();
+  const { unreadCount } = useSocial();
   const { t } = useLanguage();
   const menuItems = getMenuItems(t);
 
@@ -166,6 +168,11 @@ export default function MenuScreen() {
                 </View>
 
                 <View style={styles.chevronWrap}>
+                  {item.route === '/notifications' && unreadCount ? (
+                    <View style={styles.menuBadge}>
+                      <Text style={styles.menuBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                    </View>
+                  ) : null}
                   <Ionicons name="chevron-forward" size={16} color="#8b8078" />
                 </View>
               </TouchableOpacity>
@@ -312,12 +319,33 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   chevronWrap: {
+    position: 'relative',
     width: 28,
     height: 28,
     borderRadius: Radius.round,
     backgroundColor: Colors.light.cardSubtle,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  menuBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: '#ef4444',
+    borderWidth: 1,
+    borderColor: Colors.light.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    lineHeight: 12,
   },
   signOutButton: {
     marginTop: 6,

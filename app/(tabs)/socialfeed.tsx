@@ -8,6 +8,7 @@ import { AppButton } from '@/components/ui/app-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FeedbackBanner } from '@/components/ui/feedback-banner';
+import { BadgeThemes } from '@/constants/badgeThemes';
 import { Colors, Layout, Radius, Spacing, TabThemes } from '@/constants/theme';
 import { usePosts } from '@/context/PostContext';
 import { useEvents } from '@/context/EventContext';
@@ -15,12 +16,14 @@ import type { Post } from '@/constants/posts';
 import { useUser } from '@/context/UserContext';
 import { IconActionButton } from '@/components/ui/icon-action-button';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 
 export default function SocialFeedScreen() {
   const router = useRouter();
   const { posts, togglePostLike, refreshPosts, isOffline, isUsingCachedData, error } = usePosts();
   const { events } = useEvents();
   const { user } = useUser();
+  const { unreadCount } = useSocial();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const [refreshing, setRefreshing] = useState(false);
@@ -63,9 +66,16 @@ export default function SocialFeedScreen() {
           </View>
 
           {item.isBeerFinished ? (
-            <View style={styles.headerBadge}>
-              <Ionicons name="ribbon" size={12} color="#fff" />
-              <Text style={styles.headerBadgeText}>{t('socialCrownBadge')}</Text>
+            <View
+              style={[
+                styles.headerBadge,
+                {
+                  backgroundColor: BadgeThemes.roseFizz.background,
+                  borderColor: BadgeThemes.roseFizz.border,
+                },
+              ]}>
+              <Ionicons name="ribbon" size={12} color={BadgeThemes.roseFizz.icon} />
+              <Text style={[styles.headerBadgeText, { color: BadgeThemes.roseFizz.text }]}>{t('socialCrownBadge')}</Text>
             </View>
           ) : null}
         </View>
@@ -73,8 +83,15 @@ export default function SocialFeedScreen() {
         <View style={styles.mediaContainer}>
           <AppImage source={{ uri: item.imageUri }} style={styles.media} contentFit="cover" />
           {item.captureId ? (
-            <View style={styles.captureBadge}>
-              <Text style={styles.captureBadgeText}>{t('socialCaptureSavedLabel')}</Text>
+            <View
+              style={[
+                styles.captureBadge,
+                {
+                  backgroundColor: BadgeThemes.stout.background,
+                  borderColor: BadgeThemes.stout.border,
+                },
+              ]}>
+              <Text style={[styles.captureBadgeText, { color: BadgeThemes.stout.text }]}>{t('socialCaptureSavedLabel')}</Text>
             </View>
           ) : null}
         </View>
@@ -180,6 +197,7 @@ export default function SocialFeedScreen() {
               <IconActionButton
                 icon="notifications-outline"
                 accessibilityLabel={t('notifTitle')}
+                unreadCount={unreadCount}
                 onPress={() => router.push('/notifications')}
               />
               <IconActionButton icon="menu" accessibilityLabel={t('menuTitle')} onPress={() => router.push('/menu')} />
@@ -355,11 +373,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     borderRadius: 999,
-    backgroundColor: '#0f766e',
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  headerBadgeText: { color: '#fff', fontWeight: '800', fontSize: 11.5 },
+  headerBadgeText: { fontWeight: '800', fontSize: 11.5 },
   mediaContainer: {
     position: 'relative',
     width: '100%',
@@ -375,11 +393,11 @@ const styles = StyleSheet.create({
     top: 14,
     left: 14,
     borderRadius: 999,
-    backgroundColor: 'rgba(31,26,23,0.72)',
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
-  captureBadgeText: { color: '#fff7ef', fontWeight: '700', fontSize: 11.5 },
+  captureBadgeText: { fontWeight: '700', fontSize: 11.5 },
   contextBlock: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
