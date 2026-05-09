@@ -297,6 +297,30 @@ class EventPayload(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class EventSocialStateResponse(BaseModel):
+    liked: bool
+    saved: bool
+    likes: list[AppUserResponse] = Field(default_factory=list)
+    comments: list["PostCommentResponse"] = Field(default_factory=list)
+    plan_status: str | None = None
+    plan_note: str = ""
+
+
+class EventSocialMapResponse(BaseModel):
+    items: dict[str, EventSocialStateResponse] = Field(default_factory=dict)
+
+
+class EventPlanListItemResponse(BaseModel):
+    event_id: str
+    saved: bool
+    plan_status: str | None = None
+    plan_note: str = ""
+
+
+class EventPlanListResponse(BaseModel):
+    items: list[EventPlanListItemResponse] = Field(default_factory=list)
+
+
 class PostCommentResponse(BaseModel):
     id: str
     user: AppUserResponse
@@ -358,3 +382,41 @@ class AnalyzeCaptureResponse(DetectImageResponse):
 
 class DeleteResponse(BaseModel):
     deleted: bool = True
+
+
+class SupportTicketResponse(BaseModel):
+    id: str
+    subject: str
+    message: str
+    email: str
+    status: str
+    priority: str
+    created_at: str
+    notification_status: str | None = None
+
+
+class SupportTicketNoteResponse(BaseModel):
+    id: str
+    note: str
+    is_internal: bool
+    created_at: str
+    author_user_id: str | None = None
+    author_username: str | None = None
+
+
+class SupportTicketDetailResponse(SupportTicketResponse):
+    notes: list[SupportTicketNoteResponse] = Field(default_factory=list)
+
+
+class SupportTicketUpdateRequest(BaseModel):
+    status: str | None = None
+    priority: str | None = None
+
+
+class SupportTicketNoteCreateRequest(BaseModel):
+    note: str = Field(min_length=1, max_length=4000)
+    is_internal: bool = True
+
+
+class SupportTicketListResponse(BaseModel):
+    items: list[SupportTicketResponse] = Field(default_factory=list)

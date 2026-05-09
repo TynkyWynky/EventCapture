@@ -60,10 +60,11 @@ class BackendSettings(BaseSettings):
     database_url: str = Field(default_factory=_default_database_url)
     database_path: Path | None = None
     database_echo: bool = False
+    schema_management_mode: Literal["auto", "validate"] | None = None
 
     auth_jwt_secret: str = "change-me-before-production"
     auth_jwt_algorithm: str = "HS256"
-    auth_access_token_minutes: int = 60 * 24 * 7
+    auth_access_token_minutes: int = 60 * 24
     password_reset_code_minutes: int = 15
 
     cors_allowed_origins: list[str] = Field(default_factory=_default_cors_origins)
@@ -96,8 +97,24 @@ class BackendSettings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
     smtp_from_email: str | None = None
     app_public_url: str | None = None
+    support_notification_emails: list[str] = Field(default_factory=list)
+    support_confirmation_enabled: bool = False
+
+    rate_limit_login_attempts: int = 50
+    rate_limit_login_window_seconds: int = 300
+    rate_limit_register_attempts: int = 100
+    rate_limit_register_window_seconds: int = 3600
+    rate_limit_password_reset_attempts: int = 20
+    rate_limit_password_reset_window_seconds: int = 900
+    rate_limit_support_attempts: int = 50
+    rate_limit_support_window_seconds: int = 900
+    rate_limit_search_attempts: int = 200
+    rate_limit_search_window_seconds: int = 60
+    rate_limit_event_social_attempts: int = 100
+    rate_limit_event_social_window_seconds: int = 60
 
     bootstrap_users_enabled: bool = True
     bootstrap_admin_email: str = "admin"
@@ -156,6 +173,23 @@ class BackendSettings(BaseSettings):
             return trimmed or None
         return value
 
+    @field_validator("support_notification_emails", mode="before")
+    @classmethod
+    def _parse_support_notification_emails(cls, value: object) -> object:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed:
+                return []
+            if trimmed.startswith("["):
+                parsed = json.loads(trimmed)
+                if not isinstance(parsed, list):
+                    raise ValueError("support_notification_emails JSON must be an array.")
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in trimmed.split(",") if item.strip()]
+        return value
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
@@ -183,6 +217,12 @@ class BackendSettings(BaseSettings):
     @property
     def effective_inference_concurrency(self) -> int:
         return max(1, min(self.max_concurrent_inference, self.inference_workers))
+
+    @property
+    def effective_schema_management_mode(self) -> Literal["auto", "validate"]:
+        if self.schema_management_mode is not None:
+            return self.schema_management_mode
+        return "validate" if self.is_production else "auto"
 
     @property
     def sqlite_fallback_url(self) -> str:
@@ -218,10 +258,30 @@ class BackendSettings(BaseSettings):
             issues.append("EVENTCAPTURE_MAX_CONCURRENT_INFERENCE must be at least 1.")
         if self.max_upload_bytes < 1:
             issues.append("EVENTCAPTURE_MAX_UPLOAD_BYTES must be at least 1.")
+        for field_name in (
+            "rate_limit_login_attempts",
+            "rate_limit_login_window_seconds",
+            "rate_limit_register_attempts",
+            "rate_limit_register_window_seconds",
+            "rate_limit_password_reset_attempts",
+            "rate_limit_password_reset_window_seconds",
+            "rate_limit_support_attempts",
+            "rate_limit_support_window_seconds",
+            "rate_limit_search_attempts",
+            "rate_limit_search_window_seconds",
+            "rate_limit_event_social_attempts",
+            "rate_limit_event_social_window_seconds",
+        ):
+            if int(getattr(self, field_name)) < 1:
+                issues.append(f"{field_name} must be at least 1.")
 
         if self.is_production:
             if self.auth_jwt_secret == "change-me-before-production":
                 issues.append("EVENTCAPTURE_AUTH_JWT_SECRET must be set in production.")
+            if self.effective_schema_management_mode == "auto":
+                issues.append(
+                    "Production requires EVENTCAPTURE_SCHEMA_MANAGEMENT_MODE=validate and managed migrations."
+                )
             if not self.cors_allowed_origins and not self.effective_cors_allow_origin_regex:
                 issues.append(
                     "Production requires EVENTCAPTURE_CORS_ALLOWED_ORIGINS or EVENTCAPTURE_CORS_ALLOW_ORIGIN_REGEX."
@@ -234,6 +294,8 @@ class BackendSettings(BaseSettings):
                 issues.append(
                     "Disable bootstrap users or override EVENTCAPTURE_BOOTSTRAP_DEMO_PASSWORD in production."
                 )
+            if not self.support_notification_emails:
+                issues.append("EVENTCAPTURE_SUPPORT_NOTIFICATION_EMAILS must be configured in production.")
 
         if issues:
             raise ValueError("Invalid backend configuration:\n- " + "\n- ".join(issues))

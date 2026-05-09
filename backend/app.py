@@ -9,13 +9,12 @@ import asyncio
 import base64
 import json
 import logging
-import smtplib
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from email.message import EmailMessage
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
@@ -33,32 +32,41 @@ try:
     from .config import CUSTOM_MODEL_PATH, DEFAULT_MODEL_PATH, FRONTEND_DIR, settings
     from .database import (
         PasswordResetRequestResult,
+        add_event_comment,
         add_post_comment,
-        archive_group,
+        add_support_request_note,
         accept_group_invite,
+        archive_group,
         authenticate_user,
         change_user_password,
         check_database_connection,
+        consume_rate_limit,
         confirm_password_reset,
         create_activity_notification,
         create_capture,
         create_friend_request,
         create_group,
         create_password_reset_request,
+        create_support_request,
         create_user,
         delete_event,
         decline_group_invite,
+        get_support_request,
+        is_access_token_revoked,
         list_friend_requests,
         list_friends,
         list_group_members,
         list_groups,
         list_notifications,
+        list_event_plan_state,
+        list_event_social_map,
         delete_post,
         delete_user,
         get_group_detail,
         get_group_leaderboard,
         get_public_user_profile,
         get_rewards_summary,
+        list_support_requests,
         get_user_by_id,
         init_database,
         invite_group_members,
@@ -68,10 +76,16 @@ try:
         list_posts,
         remove_group_member,
         remove_friend,
+        revoke_access_token,
         respond_to_friend_request,
         search_users_for_friendship,
+        set_event_plan_note,
+        set_event_plan_status,
         set_notification_event_listener,
+        toggle_event_like,
+        toggle_event_save,
         toggle_post_like,
+        update_support_request,
         update_group,
         update_group_member_role,
         update_user_profile,
@@ -95,6 +109,9 @@ try:
         DeleteResponse,
         DetectImageResponse,
         EventPayload,
+        EventPlanListResponse,
+        EventSocialMapResponse,
+        EventSocialStateResponse,
         FriendListItemResponse,
         FriendRequestCreateRequest,
         FriendRequestListResponse,
@@ -116,9 +133,23 @@ try:
         PasswordResetRequest,
         PostPayload,
         StatusResponse,
+        SupportTicketDetailResponse,
+        SupportTicketListResponse,
+        SupportTicketNoteCreateRequest,
+        SupportTicketNoteResponse,
+        SupportTicketResponse,
+        SupportTicketUpdateRequest,
         TogglePostLikeRequest,
         UserSearchResultResponse,
         UserProfileResponse,
+    )
+    from .mailer import (
+        log_support_delivery_skip,
+        password_reset_delivery_ready,
+        send_password_reset_email,
+        send_support_ticket_confirmation,
+        send_support_ticket_notification,
+        support_delivery_ready,
     )
     from .security import create_access_token, decode_access_token
     from .storage import LOCAL_MEDIA_MOUNT_NAME, StorageService
@@ -127,32 +158,41 @@ except ImportError:
     from config import CUSTOM_MODEL_PATH, DEFAULT_MODEL_PATH, FRONTEND_DIR, settings
     from database import (
         PasswordResetRequestResult,
+        add_event_comment,
         add_post_comment,
+        add_support_request_note,
         accept_group_invite,
         archive_group,
         authenticate_user,
         change_user_password,
         check_database_connection,
+        consume_rate_limit,
         confirm_password_reset,
         create_activity_notification,
         create_capture,
         create_friend_request,
         create_group,
         create_password_reset_request,
+        create_support_request,
         create_user,
         delete_event,
         decline_group_invite,
+        get_support_request,
+        is_access_token_revoked,
         list_friend_requests,
         list_friends,
         list_group_members,
         list_groups,
         list_notifications,
+        list_event_plan_state,
+        list_event_social_map,
         delete_post,
         delete_user,
         get_group_detail,
         get_group_leaderboard,
         get_public_user_profile,
         get_rewards_summary,
+        list_support_requests,
         get_user_by_id,
         init_database,
         invite_group_members,
@@ -162,10 +202,16 @@ except ImportError:
         list_posts,
         remove_group_member,
         remove_friend,
+        revoke_access_token,
         respond_to_friend_request,
         search_users_for_friendship,
+        set_event_plan_note,
+        set_event_plan_status,
         set_notification_event_listener,
+        toggle_event_like,
+        toggle_event_save,
         toggle_post_like,
+        update_support_request,
         update_group,
         update_group_member_role,
         update_user_profile,
@@ -189,6 +235,9 @@ except ImportError:
         DeleteResponse,
         DetectImageResponse,
         EventPayload,
+        EventPlanListResponse,
+        EventSocialMapResponse,
+        EventSocialStateResponse,
         FriendListItemResponse,
         FriendRequestCreateRequest,
         FriendRequestListResponse,
@@ -210,9 +259,23 @@ except ImportError:
         PasswordResetRequest,
         PostPayload,
         StatusResponse,
+        SupportTicketDetailResponse,
+        SupportTicketListResponse,
+        SupportTicketNoteCreateRequest,
+        SupportTicketNoteResponse,
+        SupportTicketResponse,
+        SupportTicketUpdateRequest,
         TogglePostLikeRequest,
         UserSearchResultResponse,
         UserProfileResponse,
+    )
+    from mailer import (
+        log_support_delivery_skip,
+        password_reset_delivery_ready,
+        send_password_reset_email,
+        send_support_ticket_confirmation,
+        send_support_ticket_notification,
+        support_delivery_ready,
     )
     from security import create_access_token, decode_access_token
     from storage import LOCAL_MEDIA_MOUNT_NAME, StorageService
@@ -236,11 +299,8 @@ inference_executor = ThreadPoolExecutor(
     thread_name_prefix="eventcapture-inference",
 )
 inference_semaphore = asyncio.Semaphore(settings.effective_inference_concurrency)
-event_social_runtime: dict[str, dict[str, dict[str, object]]] = {}
-notification_runtime: dict[str, list[dict[str, object]]] = {}
 notification_connections: dict[str, set[WebSocket]] = {}
 notification_connections_lock = threading.Lock()
-revoked_access_tokens: set[str] = set()
 main_event_loop: asyncio.AbstractEventLoop | None = None
 
 
@@ -372,34 +432,6 @@ def _build_media_url(request: Request, relative_path: str) -> str:
     return storage_service.build_public_url(request, relative_path)
 
 
-def _get_runtime_event_social_state(current_user: dict[str, object], event_id: str) -> dict[str, object]:
-    user_id = str(current_user["id"])
-    user_state = event_social_runtime.setdefault(user_id, {})
-    state = user_state.setdefault(
-        event_id,
-        {
-            "liked": False,
-            "saved": False,
-            "likes": [],
-            "comments": [],
-            "plan_status": None,
-            "plan_note": "",
-        },
-    )
-    return state
-
-
-def _serialize_runtime_social_state(state: dict[str, object]) -> dict[str, object]:
-    return {
-        "liked": bool(state.get("liked", False)),
-        "saved": bool(state.get("saved", False)),
-        "likes": list(state.get("likes", [])),
-        "comments": list(state.get("comments", [])),
-        "plan_status": state.get("plan_status"),
-        "plan_note": str(state.get("plan_note", "")),
-    }
-
-
 def _serialize_user_profile_response(request: Request, user: dict[str, object]) -> UserProfileResponse:
     return UserProfileResponse(
         id=str(user["id"]),
@@ -450,6 +482,21 @@ def _resolve_friend_list_payloads(request: Request, payloads: list[dict[str, obj
         resolved["friend"] = _resolve_public_user_payload(request, dict(payload["friend"]))
         resolved_items.append(FriendListItemResponse(**resolved))
     return resolved_items
+
+
+def _resolve_event_social_payload(request: Request, payload: dict[str, object]) -> EventSocialStateResponse:
+    resolved = dict(payload)
+    resolved["likes"] = [
+        _resolve_public_user_payload(request, dict(item))
+        for item in payload.get("likes", [])
+    ]
+    resolved_comments: list[dict[str, object]] = []
+    for comment in payload.get("comments", []):
+        resolved_comment = dict(comment)
+        resolved_comment["user"] = _resolve_public_user_payload(request, dict(comment["user"]))
+        resolved_comments.append(resolved_comment)
+    resolved["comments"] = resolved_comments
+    return EventSocialStateResponse(**resolved)
 
 
 def _resolve_notification_payload(request: Request, payload: dict[str, object]) -> dict[str, object]:
@@ -712,12 +759,14 @@ def _require_file_size(contents: bytes) -> None:
 def _current_user_from_token(token: str | None) -> dict[str, object] | None:
     if not token:
         return None
-    if token in revoked_access_tokens:
-        return None
 
     try:
         payload = decode_access_token(token)
     except jwt.PyJWTError:
+        return None
+
+    token_jti = payload.get("jti")
+    if isinstance(token_jti, str) and token_jti and is_access_token_revoked(token_jti):
         return None
 
     subject = payload.get("sub")
@@ -765,28 +814,47 @@ def get_admin_user(
     return current_user
 
 
-async def _send_password_reset_email(email: str, code: str) -> None:
-    if not settings.smtp_host or not settings.smtp_from_email:
-        return
+def _get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        first = forwarded_for.split(",", 1)[0].strip()
+        if first:
+            return first
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
 
-    def _send() -> None:
-        message = EmailMessage()
-        message["Subject"] = "Your EventCapture reset code"
-        message["From"] = settings.smtp_from_email
-        message["To"] = email
-        message.set_content(
-            "Use this EventCapture password reset code within "
-            f"{settings.password_reset_code_minutes} minutes: {code}"
+
+async def _enforce_rate_limit(
+    *,
+    request: Request,
+    scope: str,
+    max_attempts: int,
+    window_seconds: int,
+    actor_values: list[tuple[str, str]],
+) -> None:
+    retry_after_seconds = 0
+    for actor_type, actor_value in actor_values:
+        normalized_value = actor_value.strip()
+        if not normalized_value:
+            continue
+        result = await asyncio.to_thread(
+            consume_rate_limit,
+            scope=scope,
+            actor_type=actor_type,
+            actor_value=normalized_value,
+            max_attempts=max_attempts,
+            window_seconds=window_seconds,
         )
-
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
-            if settings.smtp_use_tls:
-                smtp.starttls()
-            if settings.smtp_username and settings.smtp_password:
-                smtp.login(settings.smtp_username, settings.smtp_password)
-            smtp.send_message(message)
-
-    await asyncio.to_thread(_send)
+        if result.allowed:
+            continue
+        retry_after_seconds = max(retry_after_seconds, result.retry_after_seconds)
+    if retry_after_seconds > 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please slow down and try again shortly.",
+            headers={"Retry-After": str(retry_after_seconds)},
+        )
 
 
 async def _read_avatar_upload(avatar_file: UploadFile | None) -> tuple[bytes | None, str | None, str | None]:
@@ -869,6 +937,16 @@ async def debug_status(_admin_user: dict[str, object] = Depends(get_admin_user))
 
 @app.post("/api/auth/login", response_model=AuthSessionResponse)
 async def login(request: Request, payload: AuthLoginRequest):
+    await _enforce_rate_limit(
+        request=request,
+        scope="auth.login",
+        max_attempts=settings.rate_limit_login_attempts,
+        window_seconds=settings.rate_limit_login_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("email", payload.email.strip().lower()),
+        ],
+    )
     user = await asyncio.to_thread(authenticate_user, payload.email, payload.password)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect.")
@@ -947,6 +1025,16 @@ async def register(
     request: Request,
 ):
     register_payload, avatar_file = await _parse_register_payload(request)
+    await _enforce_rate_limit(
+        request=request,
+        scope="auth.register",
+        max_attempts=settings.rate_limit_register_attempts,
+        window_seconds=settings.rate_limit_register_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("email", register_payload.email.strip().lower()),
+        ],
+    )
     initial_avatar_uri = (
         register_payload.avatar_uri.strip()
         if register_payload.avatar_uri
@@ -997,7 +1085,21 @@ async def me(request: Request, current_user: dict[str, object] = Depends(get_cur
 @app.post("/api/auth/logout")
 async def logout(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
     if credentials and credentials.credentials:
-        revoked_access_tokens.add(credentials.credentials)
+        try:
+            payload = decode_access_token(credentials.credentials)
+            subject = payload.get("sub")
+            token_jti = payload.get("jti")
+            expires_at = payload.get("exp")
+            if isinstance(token_jti, str) and token_jti and isinstance(expires_at, int):
+                await asyncio.to_thread(
+                    revoke_access_token,
+                    token=credentials.credentials,
+                    jti=token_jti,
+                    user_id=subject if isinstance(subject, str) else None,
+                    expires_at=datetime.fromtimestamp(expires_at, tz=UTC),
+                )
+        except jwt.PyJWTError:
+            logger.warning("Ignoring invalid token during logout.")
     return {"ok": True}
 
 
@@ -1020,13 +1122,28 @@ async def change_password(
 
 
 @app.post("/api/auth/password-reset/request", response_model=PasswordResetChallengeResponse)
-async def request_password_reset(payload: PasswordResetRequest):
+async def request_password_reset(request: Request, payload: PasswordResetRequest):
+    await _enforce_rate_limit(
+        request=request,
+        scope="auth.password_reset",
+        max_attempts=settings.rate_limit_password_reset_attempts,
+        window_seconds=settings.rate_limit_password_reset_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("email", payload.email.strip().lower()),
+        ],
+    )
     result: PasswordResetRequestResult = await asyncio.to_thread(
         create_password_reset_request,
         payload.email,
     )
-    if result.code and settings.smtp_host and settings.smtp_from_email:
-        await _send_password_reset_email(payload.email, result.code)
+    if result.code and password_reset_delivery_ready():
+        await asyncio.to_thread(
+            send_password_reset_email,
+            recipient=payload.email,
+            reset_token=result.code,
+            expires_minutes=settings.password_reset_code_minutes,
+        )
 
     return PasswordResetChallengeResponse(
         challenge_id=result.challenge_id,
@@ -1045,8 +1162,8 @@ async def request_password_reset(payload: PasswordResetRequest):
 
 
 @app.post("/api/auth/reset-password/request", response_model=PasswordResetChallengeResponse)
-async def request_password_reset_legacy(payload: PasswordResetRequest):
-    return await request_password_reset(payload)
+async def request_password_reset_legacy(request: Request, payload: PasswordResetRequest):
+    return await request_password_reset(request, payload)
 
 
 @app.post("/api/auth/password-reset/confirm", response_model=PasswordResetConfirmResponse)
@@ -1168,8 +1285,9 @@ async def get_my_rewards(current_user: dict[str, object] = Depends(get_current_u
     return await asyncio.to_thread(get_rewards_summary, str(current_user["id"]))
 
 
-@app.post("/api/support/contact")
+@app.post("/api/support/contact", response_model=SupportTicketResponse)
 async def create_support_contact(
+    request: Request,
     payload: dict[str, object] = Body(default_factory=dict),
     current_user: dict[str, object] | None = Depends(get_optional_user),
 ):
@@ -1181,14 +1299,109 @@ async def create_support_contact(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Support subject and message are required.")
     if current_user is None and not contact_email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Guest support requests must include an email address.")
+    requester_email = str(current_user["email"]) if current_user is not None else contact_email
+    await _enforce_rate_limit(
+        request=request,
+        scope="support.contact",
+        max_attempts=settings.rate_limit_support_attempts,
+        window_seconds=settings.rate_limit_support_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("email", requester_email.strip().lower()),
+            ("user", str(current_user["id"])) if current_user is not None else ("guest", requester_email.strip().lower()),
+        ],
+    )
 
-    return {
-        "id": f"support-{uuid.uuid4().hex[:12]}",
-        "subject": subject,
-        "message": message,
-        "email": str(current_user["email"]) if current_user is not None else contact_email,
-        "created_at": time.time(),
-    }
+    ticket = await asyncio.to_thread(
+        create_support_request,
+        user_id=str(current_user["id"]) if current_user is not None else None,
+        email=requester_email,
+        subject=subject,
+        message=message,
+    )
+    notification_status = "ticket_saved_email_skipped"
+    if support_delivery_ready():
+        try:
+            await asyncio.to_thread(
+                send_support_ticket_notification,
+                ticket_id=str(ticket["id"]),
+                requester_email=requester_email,
+                subject=subject,
+                message=message,
+                priority=str(ticket["priority"]),
+            )
+            if settings.support_confirmation_enabled:
+                await asyncio.to_thread(
+                    send_support_ticket_confirmation,
+                    recipient=requester_email,
+                    ticket_id=str(ticket["id"]),
+                    subject=subject,
+                )
+            notification_status = "ticket_saved_notified"
+        except Exception as error:
+            logger.exception("Support ticket %s saved but email notification failed.", ticket["id"])
+            notification_status = f"ticket_saved_notification_failed:{error.__class__.__name__}"
+    else:
+        log_support_delivery_skip(str(ticket["id"]), "SMTP or support notification recipients are not configured.")
+    return SupportTicketResponse(**ticket, notification_status=notification_status)
+
+
+@app.get("/api/support/requests", response_model=SupportTicketListResponse)
+async def get_support_requests(limit: int = 100, _admin_user: dict[str, object] = Depends(get_admin_user)):
+    items = await asyncio.to_thread(list_support_requests, limit)
+    return SupportTicketListResponse(items=[SupportTicketResponse(**item) for item in items])
+
+
+@app.get("/api/support/requests/{ticket_id}", response_model=SupportTicketDetailResponse)
+async def get_support_request_detail(ticket_id: str, _admin_user: dict[str, object] = Depends(get_admin_user)):
+    try:
+        payload = await asyncio.to_thread(get_support_request, ticket_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found.")
+    return SupportTicketDetailResponse(**payload)
+
+
+@app.patch("/api/support/requests/{ticket_id}", response_model=SupportTicketResponse)
+async def patch_support_request(
+    ticket_id: str,
+    payload: SupportTicketUpdateRequest,
+    _admin_user: dict[str, object] = Depends(get_admin_user),
+):
+    next_status = payload.status.strip() if payload.status else None
+    next_priority = payload.priority.strip() if payload.priority else None
+    if next_status is not None and next_status not in {"new", "in_progress", "resolved", "closed"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported support ticket status.")
+    if next_priority is not None and next_priority not in {"low", "normal", "high", "urgent"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported support ticket priority.")
+    try:
+        updated = await asyncio.to_thread(
+            update_support_request,
+            ticket_id,
+            status=next_status,
+            priority=next_priority,
+        )
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found.")
+    return SupportTicketResponse(**updated)
+
+
+@app.post("/api/support/requests/{ticket_id}/notes", response_model=SupportTicketNoteResponse)
+async def create_support_request_note(
+    ticket_id: str,
+    payload: SupportTicketNoteCreateRequest,
+    admin_user: dict[str, object] = Depends(get_admin_user),
+):
+    try:
+        note = await asyncio.to_thread(
+            add_support_request_note,
+            ticket_id,
+            author_user_id=str(admin_user["id"]),
+            note=payload.note,
+            is_internal=payload.is_internal,
+        )
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Support ticket not found.")
+    return SupportTicketNoteResponse(**note)
 
 
 @app.post("/api/detect", response_model=DetectImageResponse)
@@ -1283,6 +1496,16 @@ async def get_captures(
 
 @app.get("/api/users/search", response_model=list[UserSearchResultResponse])
 async def search_users(request: Request, q: str = "", current_user: dict[str, object] = Depends(get_current_user)):
+    await _enforce_rate_limit(
+        request=request,
+        scope="users.search",
+        max_attempts=settings.rate_limit_search_attempts,
+        window_seconds=settings.rate_limit_search_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("user", str(current_user["id"])),
+        ],
+    )
     payload = await asyncio.to_thread(search_users_for_friendship, q, str(current_user["id"]))
     return _resolve_user_search_payloads(request, payload)
 
@@ -1592,85 +1815,133 @@ async def get_group_leaderboard_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found.")
 
 
-@app.get("/api/events/social")
-async def get_event_social_map(current_user: dict[str, object] = Depends(get_current_user)):
-    user_state = event_social_runtime.get(str(current_user["id"]), {})
-    return {"items": {event_id: _serialize_runtime_social_state(state) for event_id, state in user_state.items()}}
-
-
-@app.get("/api/events/plans")
-async def get_event_plans(current_user: dict[str, object] = Depends(get_current_user)):
-    items = []
-    for event_id, state in event_social_runtime.get(str(current_user["id"]), {}).items():
-        if state.get("saved") or state.get("plan_status"):
-            items.append(
-                {
-                    "event_id": event_id,
-                    "saved": bool(state.get("saved", False)),
-                    "plan_status": state.get("plan_status"),
-                    "plan_note": str(state.get("plan_note", "")),
-                }
-            )
-    return {"items": items}
-
-
-@app.post("/api/events/{event_id}/likes/toggle")
-async def toggle_event_like_route(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
-    state = _get_runtime_event_social_state(current_user, event_id)
-    state["liked"] = not bool(state.get("liked", False))
-    likes = [item for item in list(state.get("likes", [])) if item.get("id") != str(current_user["id"])]
-    if state["liked"]:
-        likes.append(
-            {
-                "id": str(current_user["id"]),
-                "username": str(current_user["username"]),
-                "avatar_uri": str(current_user.get("avatar_uri", "")),
-            }
-        )
-    state["likes"] = likes
-    return _serialize_runtime_social_state(state)
-
-
-@app.post("/api/events/{event_id}/save-toggle")
-async def toggle_event_save_route(event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
-    state = _get_runtime_event_social_state(current_user, event_id)
-    state["saved"] = not bool(state.get("saved", False))
-    return _serialize_runtime_social_state(state)
-
-
-@app.post("/api/events/{event_id}/plan")
-async def set_event_plan_route(event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
-    state = _get_runtime_event_social_state(current_user, event_id)
-    state["plan_status"] = payload.get("status")
-    return _serialize_runtime_social_state(state)
-
-
-@app.post("/api/events/{event_id}/plan-note")
-async def set_event_plan_note_route(event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
-    state = _get_runtime_event_social_state(current_user, event_id)
-    state["plan_note"] = str(payload.get("note", ""))
-    return _serialize_runtime_social_state(state)
-
-
-@app.post("/api/events/{event_id}/comments")
-async def add_event_comment_route(event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
-    state = _get_runtime_event_social_state(current_user, event_id)
-    comments = list(state.get("comments", []))
-    comments.insert(
-        0,
-        {
-            "id": f"comment-{uuid.uuid4().hex[:12]}",
-            "user": {
-                "id": str(current_user["id"]),
-                "username": str(current_user["username"]),
-                "avatar_uri": str(current_user.get("avatar_uri", "")),
-            },
-            "text": str(payload.get("text", "")),
-            "time": "Just now",
-        },
+@app.get("/api/events/social", response_model=EventSocialMapResponse)
+async def get_event_social_map(request: Request, current_user: dict[str, object] = Depends(get_current_user)):
+    payload = await asyncio.to_thread(list_event_social_map, str(current_user["id"]))
+    return EventSocialMapResponse(
+        items={event_id: _resolve_event_social_payload(request, state) for event_id, state in payload.items()}
     )
-    state["comments"] = comments
-    return _serialize_runtime_social_state(state)
+
+
+@app.get("/api/events/plans", response_model=EventPlanListResponse)
+async def get_event_plans(current_user: dict[str, object] = Depends(get_current_user)):
+    return EventPlanListResponse(
+        items=await asyncio.to_thread(list_event_plan_state, str(current_user["id"]))
+    )
+
+
+@app.post("/api/events/{event_id}/likes/toggle", response_model=EventSocialStateResponse)
+async def toggle_event_like_route(request: Request, event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    await _enforce_rate_limit(
+        request=request,
+        scope="events.social.mutate",
+        max_attempts=settings.rate_limit_event_social_attempts,
+        window_seconds=settings.rate_limit_event_social_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("user", str(current_user["id"])),
+        ],
+    )
+    try:
+        payload = await asyncio.to_thread(toggle_event_like, str(current_user["id"]), event_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    return _resolve_event_social_payload(request, payload)
+
+
+@app.post("/api/events/{event_id}/save-toggle", response_model=EventSocialStateResponse)
+async def toggle_event_save_route(request: Request, event_id: str, current_user: dict[str, object] = Depends(get_current_user)):
+    await _enforce_rate_limit(
+        request=request,
+        scope="events.social.mutate",
+        max_attempts=settings.rate_limit_event_social_attempts,
+        window_seconds=settings.rate_limit_event_social_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("user", str(current_user["id"])),
+        ],
+    )
+    try:
+        payload = await asyncio.to_thread(toggle_event_save, str(current_user["id"]), event_id)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    return _resolve_event_social_payload(request, payload)
+
+
+@app.post("/api/events/{event_id}/plan", response_model=EventSocialStateResponse)
+async def set_event_plan_route(request: Request, event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    await _enforce_rate_limit(
+        request=request,
+        scope="events.social.mutate",
+        max_attempts=settings.rate_limit_event_social_attempts,
+        window_seconds=settings.rate_limit_event_social_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("user", str(current_user["id"])),
+        ],
+    )
+    try:
+        response_payload = await asyncio.to_thread(
+            set_event_plan_status,
+            str(current_user["id"]),
+            event_id,
+            payload.get("status"),
+        )
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    return _resolve_event_social_payload(request, response_payload)
+
+
+@app.post("/api/events/{event_id}/plan-note", response_model=EventSocialStateResponse)
+async def set_event_plan_note_route(request: Request, event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    await _enforce_rate_limit(
+        request=request,
+        scope="events.social.mutate",
+        max_attempts=settings.rate_limit_event_social_attempts,
+        window_seconds=settings.rate_limit_event_social_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("user", str(current_user["id"])),
+        ],
+    )
+    try:
+        response_payload = await asyncio.to_thread(
+            set_event_plan_note,
+            str(current_user["id"]),
+            event_id,
+            str(payload.get("note", "")),
+        )
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    return _resolve_event_social_payload(request, response_payload)
+
+
+@app.post("/api/events/{event_id}/comments", response_model=EventSocialStateResponse)
+async def add_event_comment_route(request: Request, event_id: str, payload: dict[str, object] = Body(default_factory=dict), current_user: dict[str, object] = Depends(get_current_user)):
+    await _enforce_rate_limit(
+        request=request,
+        scope="events.social.mutate",
+        max_attempts=settings.rate_limit_event_social_attempts,
+        window_seconds=settings.rate_limit_event_social_window_seconds,
+        actor_values=[
+            ("ip", _get_client_ip(request)),
+            ("user", str(current_user["id"])),
+        ],
+    )
+    comment_text = str(payload.get("text", "")).strip()
+    if not comment_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comment text is required.")
+    try:
+        response_payload = await asyncio.to_thread(
+            add_event_comment,
+            str(current_user["id"]),
+            event_id,
+            comment_text,
+            "Just now",
+        )
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+    return _resolve_event_social_payload(request, response_payload)
 
 
 @app.get("/api/events", response_model=list[EventPayload])

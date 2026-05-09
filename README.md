@@ -13,11 +13,12 @@ EventCapture is an Expo Router nightlife app backed by a FastAPI + YOLOv8 drink 
 
 - The mobile app is the main product surface
 - Auth, profiles, events, posts, likes, comments, event planning state, and persisted captures are backend-driven
-- AsyncStorage remains only as local session persistence and offline cache, not as the primary production datastore
+- AsyncStorage remains only as offline cache for non-sensitive state; authenticated session tokens should use platform secure storage
 - Events, posts, and social state now treat the backend as the source of truth and only fall back to cached data when the API is unavailable
 - Drink captures are stored by the backend in SQLite plus media files so posted photos survive app restarts and can be reused later
 - Crown rewards are awarded and persisted by the backend when qualifying capture posts are created
 - Notifications and support requests are backend-backed and survive reloads across devices
+- Support tickets now support basic operator status changes and internal notes
 - The backend also saves the latest analyzed and annotated frames into `backend/debug/`
 
 ## Main app flows
@@ -127,9 +128,11 @@ EventCapture is an Expo Router nightlife app backed by a FastAPI + YOLOv8 drink 
 
 Copy `.env.example` values into your shell or your preferred environment file setup.
 
-Important frontend variable:
+Important frontend variables:
 
+- `EXPO_PUBLIC_APP_ENV`
 - `EXPO_PUBLIC_BACKEND_API_URL`
+- `EVENTCAPTURE_ANDROID_ALLOW_CLEARTEXT`
 
 Important backend variables:
 
@@ -141,13 +144,15 @@ Important backend variables:
 - `EVENTCAPTURE_PORT`
 - `EVENTCAPTURE_EXPOSE_DEV_RESET_TOKEN`
 - `EVENTCAPTURE_PASSWORD_RESET_TOKEN_TTL_MINUTES`
-- `EVENTCAPTURE_RESET_EMAIL_FROM`
 - `EVENTCAPTURE_SMTP_HOST`
 - `EVENTCAPTURE_SMTP_PORT`
 - `EVENTCAPTURE_SMTP_USERNAME`
 - `EVENTCAPTURE_SMTP_PASSWORD`
 - `EVENTCAPTURE_SMTP_USE_TLS`
 - `EVENTCAPTURE_SMTP_USE_SSL`
+- `EVENTCAPTURE_SMTP_FROM_EMAIL`
+- `EVENTCAPTURE_SUPPORT_NOTIFICATION_EMAILS`
+- `EVENTCAPTURE_SUPPORT_CONFIRMATION_ENABLED`
 
 ### Install app dependencies
 
@@ -553,7 +558,7 @@ If `pip install -r backend/requirements.txt` fails with certificate validation e
 
 Recommended SMTP variables:
 
-- `EVENTCAPTURE_RESET_EMAIL_FROM`
+- `EVENTCAPTURE_SMTP_FROM_EMAIL`
 - `EVENTCAPTURE_SMTP_HOST`
 - `EVENTCAPTURE_SMTP_PORT`
 - `EVENTCAPTURE_SMTP_USERNAME`
@@ -569,6 +574,8 @@ If production reset delivery is requested without mailer configuration, the API 
 - Keep `EVENTCAPTURE_DEBUG=false` in production
 - Restrict `EVENTCAPTURE_ALLOWED_ORIGINS` to your deployed frontend origins
 - Configure `EXPO_PUBLIC_BACKEND_API_URL` for your production frontend or device builds
+- Use an `https://` backend URL for production mobile and web builds
+- Leave `EVENTCAPTURE_ANDROID_ALLOW_CLEARTEXT=false` for production Android builds
 
 ### SQLite backup and restore
 
@@ -587,7 +594,7 @@ Restore guidance:
 - Restore the matching `backend/storage/` directory so capture records and files stay aligned
 - Restart the backend and confirm `GET /health` returns a healthy database state
 
-### PostgreSQL migration path
+### Database migrations
 
 Current persistence lives in SQLite tables for:
 
@@ -596,6 +603,9 @@ Current persistence lives in SQLite tables for:
 - `events`
 - `event_reactions`
 - `event_comments`
+- `event_likes`
+- `event_saves`
+- `event_plans`
 - `posts`
 - `post_likes`
 - `post_comments`
@@ -604,25 +614,46 @@ Current persistence lives in SQLite tables for:
 - `password_reset_tokens`
 - `notifications`
 - `support_requests`
+- `revoked_access_tokens`
 
-Recommended production migration path for multi-instance deployments:
+Alembic is now the migration entrypoint for managed schema changes:
 
-1. Introduce SQLAlchemy plus Alembic for explicit models and migrations.
-2. Replace the direct `sqlite3` helper layer with a repository or ORM-backed data layer that supports both SQLite and PostgreSQL.
-3. Add an `EVENTCAPTURE_DATABASE_URL` style configuration for PostgreSQL deployments while preserving the current SQLite path for local development.
-4. Export existing SQLite data, import it into PostgreSQL, and validate auth, posts, events, rewards, notifications, and support data before cutover.
+1. Keep `EVENTCAPTURE_SCHEMA_MANAGEMENT_MODE=auto` for local development if you want automatic table creation.
+2. Set `EVENTCAPTURE_SCHEMA_MANAGEMENT_MODE=validate` in production.
+3. Run `backend/.venv/Scripts/python -m alembic upgrade head` before starting the production API.
+4. Production startup now fails fast if required tables are missing instead of silently calling `Base.metadata.create_all()`.
+
+Recommended PostgreSQL cutover path for multi-instance deployments:
+
+1. Point `EVENTCAPTURE_DATABASE_URL` at PostgreSQL.
+2. Run Alembic migrations against PostgreSQL before deployment.
+3. Export existing SQLite data, import it into PostgreSQL, and validate auth, posts, events, rewards, notifications, support, and event social data before cutover.
 
 ### Monitoring and logging
 
-- The backend now emits request-level logs with a request ID header (`X-Request-Id`) for each HTTP response
 - Avoid logging bearer tokens, passwords, reset tokens, or full reset links in production
 - Capture backend stdout/stderr in your process manager or hosting platform
 - Monitor:
   - `GET /health`
   - backend process restarts
   - password reset delivery failures
+  - support notification delivery failures
+  - rate-limit bucket growth and cleanup
   - database file growth and backup success
   - media storage growth in `backend/storage/`
+
+### Rate limiting
+
+Sensitive endpoints now use durable database-backed rate limiting, including:
+
+- login
+- registration
+- password reset request
+- support contact
+- user search
+- event social mutations
+
+Tune these with the `EVENTCAPTURE_RATE_LIMIT_*` environment variables from `.env.example`.
 
 ### Production checklist
 
@@ -631,11 +662,17 @@ Recommended production migration path for multi-instance deployments:
 - Set a real `EVENTCAPTURE_SECRET_KEY`
 - Restrict `EVENTCAPTURE_ALLOWED_ORIGINS`
 - Set `EXPO_PUBLIC_BACKEND_API_URL` for the deployed frontend or Expo build
+- Use an `https://` production backend URL
+- Set `EVENTCAPTURE_ANDROID_ALLOW_CLEARTEXT=false`
 - Configure SMTP variables for password reset delivery
+- Set `EVENTCAPTURE_SCHEMA_MANAGEMENT_MODE=validate`
+- Run `backend/.venv/Scripts/python -m alembic upgrade head`
 - Decide whether SQLite backups are sufficient or whether you need PostgreSQL before launch
 - Run `npm run check`
 - Run backend tests
 - Complete manual QA for auth, events, posts, comments, rewards, notifications, support, and camera capture
+- Review [docs/auth-roadmap.md](docs/auth-roadmap.md) before implementing token refresh
+- Review [docs/database-production.md](docs/database-production.md) before onboarding real production data
 
 ## Notes and limitations
 

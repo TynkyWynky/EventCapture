@@ -27,6 +27,14 @@ const BACKEND_REQUEST_TIMEOUT_MS = 20000;
 let cachedBackendApiBaseUrl: string | null = null;
 let authTokenProvider: (() => string | null) | null = null;
 
+function getPublicAppEnvironment(): string {
+  return (process.env.EXPO_PUBLIC_APP_ENV?.trim() || process.env.NODE_ENV?.trim() || 'development').toLowerCase();
+}
+
+function isProductionLikeEnvironment(): boolean {
+  return getPublicAppEnvironment() === 'production' || process.env.EAS_BUILD_PROFILE?.trim() === 'production';
+}
+
 function trimTrailingSlash(url: string): string {
   return url.replace(/\/+$/, '');
 }
@@ -168,7 +176,12 @@ export function getBackendApiBaseUrlCandidates(): string[] {
   const candidates: string[] = [];
 
   if (configuredUrl) {
+    if (isProductionLikeEnvironment() && !configuredUrl.startsWith('https://')) {
+      throw new Error('Production builds require EXPO_PUBLIC_BACKEND_API_URL to use HTTPS.');
+    }
     candidates.push(trimTrailingSlash(configuredUrl));
+  } else if (isProductionLikeEnvironment()) {
+    throw new Error('Production builds require EXPO_PUBLIC_BACKEND_API_URL to be set to an HTTPS backend URL.');
   }
 
   if (Platform.OS === 'web') {

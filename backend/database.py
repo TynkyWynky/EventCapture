@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, or_, select
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, inspect, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, selectinload, sessionmaker
@@ -116,6 +116,25 @@ class Event(Base):
     tags_json: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
+
+    likes: Mapped[list["EventLike"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+        order_by="EventLike.created_at.asc()",
+    )
+    saves: Mapped[list["EventSave"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
+    plans: Mapped[list["EventPlan"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+    )
+    comments: Mapped[list["EventComment"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+        order_by="EventComment.created_at.desc()",
+    )
 
 
 class Post(Base):
@@ -246,6 +265,74 @@ class FriendRequest(Base):
     addressee_user: Mapped[User] = relationship(foreign_keys=[addressee_user_id], back_populates="incoming_friend_requests")
 
 
+class EventLike(Base):
+    __tablename__ = "event_likes"
+
+    event_id: Mapped[str] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+    event: Mapped[Event] = relationship(back_populates="likes")
+    user: Mapped[User] = relationship()
+
+
+class EventSave(Base):
+    __tablename__ = "event_saves"
+
+    event_id: Mapped[str] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+
+    event: Mapped[Event] = relationship(back_populates="saves")
+    user: Mapped[User] = relationship()
+
+
+class EventPlan(Base):
+    __tablename__ = "event_plans"
+
+    event_id: Mapped[str] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
+
+    event: Mapped[Event] = relationship(back_populates="plans")
+    user: Mapped[User] = relationship()
+
+
+class EventComment(Base):
+    __tablename__ = "event_comments"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True, default=lambda: _new_prefixed_id("eventcomment"))
+    event_id: Mapped[str] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    time_label: Mapped[str] = mapped_column(String(64), default="Just now")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
+
+    event: Mapped[Event] = relationship(back_populates="comments")
+    user: Mapped[User] = relationship()
+
+
 class Friendship(Base):
     __tablename__ = "friendships"
 
@@ -322,6 +409,62 @@ class ActivityNotification(Base):
     actor_user: Mapped[User | None] = relationship(foreign_keys=[actor_user_id])
 
 
+class RevokedAccessToken(Base):
+    __tablename__ = "revoked_access_tokens"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
+
+
+class SupportRequest(Base):
+    __tablename__ = "support_requests"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: _new_prefixed_id("support"))
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    subject: Mapped[str] = mapped_column(String(255))
+    message: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="new", index=True)
+    priority: Mapped[str] = mapped_column(String(16), default="normal", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
+
+    notes: Mapped[list["SupportRequestNote"]] = relationship(
+        back_populates="ticket",
+        cascade="all, delete-orphan",
+        order_by="SupportRequestNote.created_at.desc()",
+    )
+
+
+class SupportRequestNote(Base):
+    __tablename__ = "support_request_notes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: _new_prefixed_id("supportnote"))
+    support_request_id: Mapped[str] = mapped_column(ForeignKey("support_requests.id", ondelete="CASCADE"), index=True)
+    author_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    note: Mapped[str] = mapped_column(Text)
+    is_internal: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, index=True)
+
+    ticket: Mapped[SupportRequest] = relationship(back_populates="notes")
+    author_user: Mapped[User | None] = relationship(foreign_keys=[author_user_id])
+
+
+class RateLimitBucket(Base):
+    __tablename__ = "rate_limit_buckets"
+
+    bucket_key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(64), index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), index=True)
+    actor_value: Mapped[str] = mapped_column(String(255), index=True)
+    request_count: Mapped[int] = mapped_column(Integer, default=0)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utc_now, onupdate=_utc_now)
+
+
 def _create_engine() -> Engine:
     connect_args: dict[str, Any] = {}
     if settings.database_url.startswith("sqlite"):
@@ -345,6 +488,13 @@ class PasswordResetRequestResult:
     challenge_id: str | None
     code: str | None
     debug_code: str | None
+
+
+@dataclass(frozen=True)
+class RateLimitResult:
+    allowed: bool
+    retry_after_seconds: int
+    request_count: int
 
 
 @contextmanager
@@ -384,9 +534,28 @@ def _dispatch_session_events(session: Session) -> None:
 
 def init_database() -> None:
     _migrate_friendships_table_if_needed()
-    Base.metadata.create_all(bind=engine)
-    bootstrap_default_users()
-    _cleanup_invalid_avatar_uris()
+    if settings.effective_schema_management_mode == "auto":
+        Base.metadata.create_all(bind=engine)
+        bootstrap_default_users()
+        _cleanup_invalid_avatar_uris()
+        cleanup_expired_revoked_access_tokens()
+        cleanup_expired_rate_limit_buckets()
+        return
+    validate_database_schema()
+    cleanup_expired_revoked_access_tokens()
+    cleanup_expired_rate_limit_buckets()
+
+
+def validate_database_schema() -> None:
+    expected_tables = set(Base.metadata.tables.keys())
+    actual_tables = set(inspect(engine).get_table_names())
+    missing_tables = sorted(expected_tables - actual_tables)
+    if missing_tables:
+        raise RuntimeError(
+            "Database schema is missing required tables: "
+            + ", ".join(missing_tables)
+            + ". Run Alembic migrations before starting the production API."
+        )
 
 
 def check_database_connection() -> bool:
@@ -431,6 +600,12 @@ def _serialize_public_user_profile(user: User) -> dict[str, object]:
     }
 
 
+def _hash_access_token(token: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def _serialize_friend_request(request: Friendship, *, current_user_id: str) -> dict[str, object]:
     direction = "incoming" if request.addressee_user_id == current_user_id else "outgoing"
     return {
@@ -473,6 +648,19 @@ def _serialize_notification(notification: ActivityNotification) -> dict[str, obj
     }
 
 
+def _serialize_event_social_comment(comment: EventComment) -> dict[str, object]:
+    return {
+        "id": comment.id,
+        "user": {
+            "id": comment.user.id,
+            "username": comment.user.username,
+            "avatar_uri": comment.user.avatar_uri,
+        },
+        "text": comment.text,
+        "time": comment.time_label,
+    }
+
+
 def _count_unread_notifications(session: Session, user_id: str) -> int:
     return int(
         session.scalar(
@@ -507,6 +695,43 @@ def _serialize_event(event: Event) -> dict[str, object]:
         "badge": event.badge,
         "description": event.description,
         "tags": event.tags_json or [],
+    }
+
+
+def _serialize_event_social_state(
+    session: Session,
+    event_id: str,
+    *,
+    current_user_id: str,
+) -> dict[str, object]:
+    event = session.scalars(
+        select(Event)
+        .options(
+            selectinload(Event.likes).selectinload(EventLike.user),
+            selectinload(Event.comments).selectinload(EventComment.user),
+            selectinload(Event.saves),
+            selectinload(Event.plans),
+        )
+        .where(Event.id == event_id)
+    ).first()
+    if event is None:
+        raise KeyError(event_id)
+
+    user_plan = next((plan for plan in event.plans if plan.user_id == current_user_id), None)
+    return {
+        "liked": any(like.user_id == current_user_id for like in event.likes),
+        "saved": any(save.user_id == current_user_id for save in event.saves),
+        "likes": [
+            {
+                "id": like.user.id,
+                "username": like.user.username,
+                "avatar_uri": like.user.avatar_uri,
+            }
+            for like in event.likes
+        ],
+        "comments": [_serialize_event_social_comment(comment) for comment in event.comments],
+        "plan_status": user_plan.status if user_plan is not None else None,
+        "plan_note": user_plan.note if user_plan is not None else "",
     }
 
 
@@ -562,6 +787,30 @@ def _serialize_capture(capture: Capture) -> dict[str, object]:
         "top_confidence": capture.top_confidence,
         "source": capture.source,
         "created_at": capture.created_at.isoformat(),
+    }
+
+
+def _serialize_support_request(ticket: SupportRequest) -> dict[str, object]:
+    return {
+        "id": ticket.id,
+        "subject": ticket.subject,
+        "message": ticket.message,
+        "email": ticket.email,
+        "status": ticket.status,
+        "priority": ticket.priority,
+        "created_at": ticket.created_at.isoformat(),
+    }
+
+
+def _serialize_support_request_note(note: SupportRequestNote) -> dict[str, object]:
+    author = note.author_user  # type: ignore[attr-defined]
+    return {
+        "id": note.id,
+        "note": note.note,
+        "is_internal": note.is_internal,
+        "created_at": note.created_at.isoformat(),
+        "author_user_id": author.id if author is not None else None,
+        "author_username": author.username if author is not None else None,
     }
 
 
@@ -1405,6 +1654,13 @@ def _get_user(session: Session, user_id: str) -> User:
     return user
 
 
+def _load_event_or_raise(session: Session, event_id: str) -> Event:
+    event = session.get(Event, event_id)
+    if event is None:
+        raise KeyError(event_id)
+    return event
+
+
 def _get_post(session: Session, post_id: str) -> Post:
     statement = (
         select(Post)
@@ -1696,6 +1952,317 @@ def confirm_password_reset(challenge_id: str, code: str, new_password: str) -> N
         user.password_hash = hash_password(new_password)
         user.updated_at = _utc_now()
         challenge.used_at = _utc_now()
+
+
+def revoke_access_token(*, token: str, jti: str, user_id: str | None, expires_at: datetime) -> None:
+    hashed_token = _hash_access_token(token)
+    with session_scope() as session:
+        session.query(RevokedAccessToken).where(RevokedAccessToken.expires_at < _utc_now()).delete()
+        existing = session.get(RevokedAccessToken, jti)
+        if existing is not None:
+            return
+        session.add(
+            RevokedAccessToken(
+                jti=jti,
+                token_hash=hashed_token,
+                user_id=user_id,
+                expires_at=_coerce_utc_datetime(expires_at),
+            )
+        )
+
+
+def is_access_token_revoked(jti: str) -> bool:
+    with session_scope() as session:
+        revoked = session.get(RevokedAccessToken, jti)
+        if revoked is None:
+            return False
+        if _coerce_utc_datetime(revoked.expires_at) < _utc_now():
+            session.delete(revoked)
+            return False
+        return True
+
+
+def cleanup_expired_revoked_access_tokens() -> int:
+    with session_scope() as session:
+        deleted = session.query(RevokedAccessToken).where(RevokedAccessToken.expires_at < _utc_now()).delete()
+        return int(deleted or 0)
+
+
+def consume_rate_limit(
+    *,
+    scope: str,
+    actor_type: str,
+    actor_value: str,
+    max_attempts: int,
+    window_seconds: int,
+) -> RateLimitResult:
+    now = _utc_now()
+    bucket_key = f"{scope}:{actor_type}:{actor_value}"
+    with session_scope() as session:
+        session.query(RateLimitBucket).where(RateLimitBucket.expires_at < now).delete()
+        bucket = session.get(RateLimitBucket, bucket_key)
+        if bucket is None or _coerce_utc_datetime(bucket.expires_at) <= now:
+            bucket = RateLimitBucket(
+                bucket_key=bucket_key,
+                scope=scope,
+                actor_type=actor_type,
+                actor_value=actor_value,
+                request_count=1,
+                window_started_at=now,
+                expires_at=now + timedelta(seconds=window_seconds),
+                updated_at=now,
+            )
+            session.add(bucket)
+            session.flush()
+            return RateLimitResult(allowed=True, retry_after_seconds=0, request_count=1)
+
+        if bucket.request_count >= max_attempts:
+            retry_after = max(1, int((_coerce_utc_datetime(bucket.expires_at) - now).total_seconds()))
+            return RateLimitResult(allowed=False, retry_after_seconds=retry_after, request_count=bucket.request_count)
+
+        bucket.request_count += 1
+        bucket.updated_at = now
+        session.flush()
+        return RateLimitResult(allowed=True, retry_after_seconds=0, request_count=bucket.request_count)
+
+
+def cleanup_expired_rate_limit_buckets() -> int:
+    with session_scope() as session:
+        deleted = session.query(RateLimitBucket).where(RateLimitBucket.expires_at < _utc_now()).delete()
+        return int(deleted or 0)
+
+
+def list_event_social_map(current_user_id: str) -> dict[str, dict[str, object]]:
+    with session_scope() as session:
+        _get_user(session, current_user_id)
+        event_ids = {
+            event_id
+            for (event_id,) in session.execute(
+                select(EventLike.event_id).where(EventLike.user_id == current_user_id)
+            ).all()
+        }
+        event_ids.update(
+            event_id
+            for (event_id,) in session.execute(
+                select(EventSave.event_id).where(EventSave.user_id == current_user_id)
+            ).all()
+        )
+        event_ids.update(
+            event_id
+            for (event_id,) in session.execute(
+                select(EventPlan.event_id).where(EventPlan.user_id == current_user_id)
+            ).all()
+        )
+        event_ids.update(
+            event_id
+            for (event_id,) in session.execute(select(EventComment.event_id)).all()
+        )
+        return {
+            event_id: _serialize_event_social_state(session, event_id, current_user_id=current_user_id)
+            for event_id in sorted(event_ids)
+        }
+
+
+def list_event_plan_state(current_user_id: str) -> list[dict[str, object]]:
+    with session_scope() as session:
+        _get_user(session, current_user_id)
+        plans = session.scalars(
+            select(EventPlan).where(EventPlan.user_id == current_user_id).order_by(EventPlan.updated_at.desc())
+        ).all()
+        saved_event_ids = {
+            event_id
+            for (event_id,) in session.execute(
+                select(EventSave.event_id).where(EventSave.user_id == current_user_id)
+            ).all()
+        }
+        items: list[dict[str, object]] = []
+        seen_event_ids: set[str] = set()
+        for plan in plans:
+            items.append(
+                {
+                    "event_id": plan.event_id,
+                    "saved": plan.event_id in saved_event_ids,
+                    "plan_status": plan.status,
+                    "plan_note": plan.note,
+                }
+            )
+            seen_event_ids.add(plan.event_id)
+        for event_id in sorted(saved_event_ids - seen_event_ids):
+            items.append(
+                {
+                    "event_id": event_id,
+                    "saved": True,
+                    "plan_status": None,
+                    "plan_note": "",
+                }
+            )
+        return items
+
+
+def toggle_event_like(current_user_id: str, event_id: str) -> dict[str, object]:
+    with session_scope() as session:
+        acting_user = _get_user(session, current_user_id)
+        _load_event_or_raise(session, event_id)
+        existing = session.get(EventLike, {"event_id": event_id, "user_id": current_user_id})
+        if existing is None:
+            session.add(EventLike(event_id=event_id, user_id=current_user_id))
+        else:
+            session.delete(existing)
+        session.flush()
+        return _serialize_event_social_state(session, event_id, current_user_id=current_user_id)
+
+
+def toggle_event_save(current_user_id: str, event_id: str) -> dict[str, object]:
+    with session_scope() as session:
+        _get_user(session, current_user_id)
+        _load_event_or_raise(session, event_id)
+        existing = session.get(EventSave, {"event_id": event_id, "user_id": current_user_id})
+        if existing is None:
+            session.add(EventSave(event_id=event_id, user_id=current_user_id))
+        else:
+            session.delete(existing)
+        session.flush()
+        return _serialize_event_social_state(session, event_id, current_user_id=current_user_id)
+
+
+def set_event_plan_status(current_user_id: str, event_id: str, status: str | None) -> dict[str, object]:
+    with session_scope() as session:
+        _get_user(session, current_user_id)
+        _load_event_or_raise(session, event_id)
+        plan = session.get(EventPlan, {"event_id": event_id, "user_id": current_user_id})
+        if plan is None:
+            plan = EventPlan(event_id=event_id, user_id=current_user_id, status=status, note="")
+            session.add(plan)
+        else:
+            plan.status = status
+            plan.updated_at = _utc_now()
+        session.flush()
+        return _serialize_event_social_state(session, event_id, current_user_id=current_user_id)
+
+
+def set_event_plan_note(current_user_id: str, event_id: str, note: str) -> dict[str, object]:
+    with session_scope() as session:
+        _get_user(session, current_user_id)
+        _load_event_or_raise(session, event_id)
+        plan = session.get(EventPlan, {"event_id": event_id, "user_id": current_user_id})
+        if plan is None:
+            plan = EventPlan(event_id=event_id, user_id=current_user_id, status=None, note=note)
+            session.add(plan)
+        else:
+            plan.note = note
+            plan.updated_at = _utc_now()
+        session.flush()
+        return _serialize_event_social_state(session, event_id, current_user_id=current_user_id)
+
+
+def add_event_comment(current_user_id: str, event_id: str, text: str, time_label: str) -> dict[str, object]:
+    with session_scope() as session:
+        _get_user(session, current_user_id)
+        _load_event_or_raise(session, event_id)
+        comment = EventComment(
+            event_id=event_id,
+            user_id=current_user_id,
+            text=text,
+            time_label=time_label,
+        )
+        session.add(comment)
+        session.flush()
+        return _serialize_event_social_state(session, event_id, current_user_id=current_user_id)
+
+
+def create_support_request(
+    *,
+    user_id: str | None,
+    email: str,
+    subject: str,
+    message: str,
+    priority: str = "normal",
+) -> dict[str, object]:
+    with session_scope() as session:
+        normalized_email = _normalize_email(email)
+        ticket = SupportRequest(
+            user_id=user_id,
+            email=normalized_email,
+            subject=subject.strip(),
+            message=message.strip(),
+            status="new",
+            priority=priority,
+        )
+        session.add(ticket)
+        session.flush()
+        return _serialize_support_request(ticket)
+
+
+def list_support_requests(limit: int = 100) -> list[dict[str, object]]:
+    safe_limit = max(1, min(limit, 500))
+    with session_scope() as session:
+        tickets = session.scalars(
+            select(SupportRequest)
+            .options(selectinload(SupportRequest.notes).selectinload(SupportRequestNote.author_user))
+            .order_by(SupportRequest.created_at.desc(), SupportRequest.id.desc())
+            .limit(safe_limit)
+        ).all()
+        return [_serialize_support_request(ticket) for ticket in tickets]
+
+
+def get_support_request(ticket_id: str) -> dict[str, object]:
+    with session_scope() as session:
+        ticket = session.scalars(
+            select(SupportRequest)
+            .options(selectinload(SupportRequest.notes).selectinload(SupportRequestNote.author_user))
+            .where(SupportRequest.id == ticket_id)
+        ).first()
+        if ticket is None:
+            raise KeyError(ticket_id)
+        payload = _serialize_support_request(ticket)
+        payload["notes"] = [_serialize_support_request_note(note) for note in ticket.notes]
+        return payload
+
+
+def update_support_request(
+    ticket_id: str,
+    *,
+    status: str | None = None,
+    priority: str | None = None,
+) -> dict[str, object]:
+    with session_scope() as session:
+        ticket = session.get(SupportRequest, ticket_id)
+        if ticket is None:
+            raise KeyError(ticket_id)
+        if status is not None:
+            ticket.status = status
+        if priority is not None:
+            ticket.priority = priority
+        session.flush()
+        return _serialize_support_request(ticket)
+
+
+def add_support_request_note(
+    ticket_id: str,
+    *,
+    author_user_id: str,
+    note: str,
+    is_internal: bool = True,
+) -> dict[str, object]:
+    with session_scope() as session:
+        _get_user(session, author_user_id)
+        ticket = session.get(SupportRequest, ticket_id)
+        if ticket is None:
+            raise KeyError(ticket_id)
+        ticket_note = SupportRequestNote(
+            support_request_id=ticket.id,
+            author_user_id=author_user_id,
+            note=note.strip(),
+            is_internal=is_internal,
+        )
+        session.add(ticket_note)
+        session.flush()
+        ticket_note = session.scalars(
+            select(SupportRequestNote)
+            .options(selectinload(SupportRequestNote.author_user))
+            .where(SupportRequestNote.id == ticket_note.id)
+        ).one()
+        return _serialize_support_request_note(ticket_note)
 
 
 def list_events() -> list[dict[str, object]]:

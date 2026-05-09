@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -66,6 +67,7 @@ def create_access_token(subject: str, role: str) -> str:
     payload = {
         "sub": subject,
         "role": role,
+        "jti": uuid.uuid4().hex,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
     }

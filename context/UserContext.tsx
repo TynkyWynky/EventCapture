@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import React, { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -52,7 +54,8 @@ interface StoredSessionState {
   token: string;
 }
 
-const STORAGE_KEY = 'eventcapture.session';
+const LEGACY_STORAGE_KEY = 'eventcapture.session';
+const TOKEN_STORAGE_KEY = 'eventcapture.session.token';
 const DEFAULT_AVATAR = 'https://i.pravatar.cc/160?img=64';
 
 function isUsableAvatarUri(value: string | undefined): boolean {
@@ -117,6 +120,51 @@ function parseStoredSession(rawValue: string | null): StoredSessionState | null 
   }
 }
 
+async function readPersistedToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return globalThis.localStorage?.getItem(TOKEN_STORAGE_KEY) ?? null;
+  }
+
+  if (await SecureStore.isAvailableAsync()) {
+    return SecureStore.getItemAsync(TOKEN_STORAGE_KEY);
+  }
+
+  return null;
+}
+
+async function writePersistedToken(token: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    globalThis.localStorage?.setItem(TOKEN_STORAGE_KEY, token);
+    return;
+  }
+
+  if (await SecureStore.isAvailableAsync()) {
+    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+  }
+}
+
+async function clearPersistedToken(): Promise<void> {
+  if (Platform.OS === 'web') {
+    globalThis.localStorage?.removeItem(TOKEN_STORAGE_KEY);
+  } else if (await SecureStore.isAvailableAsync()) {
+    await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+  }
+
+  await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => {});
+}
+
+async function migrateLegacyToken(): Promise<string | null> {
+  const storedValue = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+  const session = parseStoredSession(storedValue);
+  if (!session?.token) {
+    return null;
+  }
+
+  await writePersistedToken(session.token);
+  await AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => {});
+  return session.token;
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile>(EMPTY_USER);
   const [token, setToken] = useState<string | null>(null);
@@ -133,10 +181,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const hydrate = async () => {
       try {
-        const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
-        const session = parseStoredSession(storedValue);
-
-        if (!session?.token) {
+        const persistedToken = (await readPersistedToken()) ?? (await migrateLegacyToken());
+        if (!persistedToken?.trim()) {
           return;
         }
 
@@ -144,8 +190,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setToken(session.token);
-        configureBackendApiAuth(() => session.token);
+        setToken(persistedToken);
+        configureBackendApiAuth(() => persistedToken);
         const currentUser = await fetchCurrentUser();
 
         if (!isMounted) {
@@ -160,7 +206,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setUser(EMPTY_USER);
           setIsAuthenticated(false);
         }
-        await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+        await clearPersistedToken().catch(() => {});
       } finally {
         if (isMounted) {
           setIsReady(true);
@@ -181,11 +227,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     if (!token) {
-      AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+      void clearPersistedToken();
       return;
     }
 
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ token })).catch(() => {});
+    void writePersistedToken(token);
   }, [isReady, token]);
 
   const value = useMemo<UserContextType>(
@@ -343,7 +389,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setUser(EMPTY_USER);
           setIsAuthenticated(false);
           clearCachedBackendApiBaseUrl();
-          await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+          await clearPersistedToken().catch(() => {});
           return { ok: true };
         } catch (error) {
           return {
@@ -364,7 +410,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setUser(EMPTY_USER);
           setIsAuthenticated(false);
           clearCachedBackendApiBaseUrl();
-          await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+          await clearPersistedToken().catch(() => {});
         }
       },
     }),

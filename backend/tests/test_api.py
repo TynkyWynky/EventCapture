@@ -22,15 +22,7 @@ def free_port() -> int:
 
 class EventCaptureApiTests(unittest.TestCase):
     @classmethod
-    def setUpClass(cls) -> None:
-        cls.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        cls.port = free_port()
-        cls.base_url = f"http://127.0.0.1:{cls.port}"
-        env = os.environ.copy()
-        env["EVENTCAPTURE_DATABASE_PATH"] = str(Path(cls.temp_dir.name) / "test-eventcapture.db")
-        env["EVENTCAPTURE_ALLOW_INSECURE_PASSWORD_RESET"] = "true"
-        env["EVENTCAPTURE_PORT"] = str(cls.port)
-
+    def start_server(cls) -> None:
         cls.server = subprocess.Popen(
             [
                 str(Path("backend/.venv/Scripts/python.exe")),
@@ -43,7 +35,7 @@ class EventCaptureApiTests(unittest.TestCase):
                 str(cls.port),
             ],
             cwd=Path(__file__).resolve().parents[2],
-            env=env,
+            env=cls.server_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -60,14 +52,37 @@ class EventCaptureApiTests(unittest.TestCase):
         raise RuntimeError("Backend test server did not become healthy in time.")
 
     @classmethod
-    def tearDownClass(cls) -> None:
+    def stop_server(cls) -> None:
         cls.server.terminate()
         try:
             cls.server.wait(timeout=10)
         except subprocess.TimeoutExpired:
             cls.server.kill()
         time.sleep(1)
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.port = free_port()
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+        cls.base_server_env = os.environ.copy()
+        cls.base_server_env["EVENTCAPTURE_DATABASE_PATH"] = str(Path(cls.temp_dir.name) / "test-eventcapture.db")
+        cls.base_server_env["EVENTCAPTURE_ALLOW_INSECURE_PASSWORD_RESET"] = "true"
+        cls.base_server_env["EVENTCAPTURE_PORT"] = str(cls.port)
+        cls.server_env = dict(cls.base_server_env)
+        cls.start_server()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.stop_server()
         cls.temp_dir.cleanup()
+
+    def restart_server(self, extra_env: dict[str, str] | None = None) -> None:
+        self.__class__.server_env = dict(self.__class__.base_server_env)
+        if extra_env:
+            self.__class__.server_env.update(extra_env)
+        self.__class__.stop_server()
+        self.__class__.start_server()
 
     def api_request(self, method: str, path: str, body: dict | None = None, token: str | None = None) -> tuple[int, object]:
         headers = {"Accept": "application/json"}
@@ -182,6 +197,8 @@ class EventCaptureApiTests(unittest.TestCase):
         status, _ = self.api_request("POST", "/api/auth/logout", body={}, token=session["token"])
         self.assertEqual(status, 200)
 
+        self.restart_server()
+
         status, _ = self.api_request("GET", "/api/auth/me", token=session["token"])
         self.assertEqual(status, 401)
 
@@ -279,6 +296,65 @@ class EventCaptureApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 200, support_payload)
         self.assertTrue(support_payload["id"].startswith("support-"))
+        self.assertEqual(support_payload["status"], "new")
+        self.assertEqual(support_payload["priority"], "normal")
+        self.assertIn("notification_status", support_payload)
+
+        status, admin_payload = self.api_request(
+            "POST",
+            "/api/auth/login",
+            {"email": "admin", "password": "admin"},
+        )
+        self.assertEqual(status, 200, admin_payload)
+        admin_token = admin_payload["token"]
+
+        status, support_list_payload = self.api_request("GET", "/api/support/requests", token=admin_token)
+        self.assertEqual(status, 200, support_list_payload)
+        self.assertTrue(any(item["id"] == support_payload["id"] for item in support_list_payload["items"]))
+
+        status, support_detail_payload = self.api_request(
+            "GET",
+            f"/api/support/requests/{support_payload['id']}",
+            token=admin_token,
+        )
+        self.assertEqual(status, 200, support_detail_payload)
+        self.assertEqual(support_detail_payload["notes"], [])
+
+        status, updated_ticket_payload = self.api_request(
+            "PATCH",
+            f"/api/support/requests/{support_payload['id']}",
+            {"status": "in_progress", "priority": "high"},
+            token=admin_token,
+        )
+        self.assertEqual(status, 200, updated_ticket_payload)
+        self.assertEqual(updated_ticket_payload["status"], "in_progress")
+        self.assertEqual(updated_ticket_payload["priority"], "high")
+
+        status, note_payload = self.api_request(
+            "POST",
+            f"/api/support/requests/{support_payload['id']}/notes",
+            {"note": "Investigating upload latency.", "is_internal": True},
+            token=admin_token,
+        )
+        self.assertEqual(status, 200, note_payload)
+        self.assertEqual(note_payload["note"], "Investigating upload latency.")
+
+        status, support_detail_payload = self.api_request(
+            "GET",
+            f"/api/support/requests/{support_payload['id']}",
+            token=admin_token,
+        )
+        self.assertEqual(status, 200, support_detail_payload)
+        self.assertEqual(support_detail_payload["status"], "in_progress")
+        self.assertEqual(len(support_detail_payload["notes"]), 1)
+
+        status, _ = self.api_request(
+            "PATCH",
+            f"/api/support/requests/{support_payload['id']}",
+            {"status": "resolved"},
+            token=owner["token"],
+        )
+        self.assertEqual(status, 403)
 
         status, post_payload = self.api_request(
             "POST",
@@ -445,6 +521,104 @@ class EventCaptureApiTests(unittest.TestCase):
             self.assertEqual(message["type"], "notification.created")
             self.assertEqual(message["item"]["related_type"], "group")
 
+    def test_rate_limiting_for_auth_search_support_and_event_social(self):
+        self.restart_server(
+            {
+                "EVENTCAPTURE_DATABASE_PATH": str(Path(self.temp_dir.name) / "test-eventcapture-rate-limit.db"),
+                "EVENTCAPTURE_RATE_LIMIT_LOGIN_ATTEMPTS": "2",
+                "EVENTCAPTURE_RATE_LIMIT_LOGIN_WINDOW_SECONDS": "3600",
+                "EVENTCAPTURE_RATE_LIMIT_SUPPORT_ATTEMPTS": "2",
+                "EVENTCAPTURE_RATE_LIMIT_SUPPORT_WINDOW_SECONDS": "3600",
+                "EVENTCAPTURE_RATE_LIMIT_SEARCH_ATTEMPTS": "2",
+                "EVENTCAPTURE_RATE_LIMIT_SEARCH_WINDOW_SECONDS": "3600",
+                "EVENTCAPTURE_RATE_LIMIT_EVENT_SOCIAL_ATTEMPTS": "2",
+                "EVENTCAPTURE_RATE_LIMIT_EVENT_SOCIAL_WINDOW_SECONDS": "3600",
+            }
+        )
+        try:
+            session = self.register_and_login("ratelimit@example.com", "ratelimit")
+
+            for _ in range(2):
+                status, _ = self.api_request(
+                    "POST",
+                    "/api/auth/login",
+                    {"email": "ratelimit@example.com", "password": "wrong-password"},
+                )
+                self.assertEqual(status, 401)
+            status, payload = self.api_request(
+                "POST",
+                "/api/auth/login",
+                {"email": "ratelimit@example.com", "password": "wrong-password"},
+            )
+            self.assertEqual(status, 429, payload)
+
+            for _ in range(2):
+                status, payload = self.api_request("GET", "/api/users/search?q=rate", token=session["token"])
+                self.assertEqual(status, 200, payload)
+            status, payload = self.api_request("GET", "/api/users/search?q=rate", token=session["token"])
+            self.assertEqual(status, 429, payload)
+
+            for _ in range(2):
+                status, payload = self.api_request(
+                    "POST",
+                    "/api/support/contact",
+                    {"subject": "Need help", "message": "Rate limit test", "email": "guest@example.com"},
+                )
+                self.assertEqual(status, 200, payload)
+            status, payload = self.api_request(
+                "POST",
+                "/api/support/contact",
+                {"subject": "Need help", "message": "Rate limit test", "email": "guest@example.com"},
+            )
+            self.assertEqual(status, 429, payload)
+
+            status, event_payload = self.api_request(
+                "POST",
+                "/api/events",
+                {
+                    "title": "Rate Limit Event",
+                    "short_title": "Rate Limit",
+                    "date": "10 Oct",
+                    "full_date": "Friday 10 October 2026",
+                    "time": "20:00 - 23:00",
+                    "place": "Brussels",
+                    "address": "Brussels Center",
+                    "attendees": "0 going",
+                    "attendee_count": 0,
+                    "price": "Free",
+                    "price_label": "Free entry",
+                    "vibe": "Test vibe",
+                    "experience": "Test event",
+                    "hero_image": "https://example.com/event.jpg",
+                    "host_name": "Host",
+                    "host_avatar": "https://example.com/host.jpg",
+                    "badge": "TEST",
+                    "description": "Created during rate limit tests.",
+                    "tags": ["test"],
+                },
+                token=session["token"],
+            )
+            self.assertEqual(status, 200, event_payload)
+            event_id = event_payload["id"]
+
+            for _ in range(2):
+                status, payload = self.api_request(
+                    "POST",
+                    f"/api/events/{event_id}/likes/toggle",
+                    body={},
+                    token=session["token"],
+                )
+                self.assertEqual(status, 200, payload)
+            status, payload = self.api_request(
+                "POST",
+                f"/api/events/{event_id}/likes/toggle",
+                body={},
+                token=session["token"],
+            )
+            self.assertEqual(status, 429, payload)
+        finally:
+            self.restart_server()
+
     def test_event_post_like_comment_and_delete_permissions(self):
         alice = self.register_and_login("owner@example.com", "owner")
         bob = self.register_and_login("other@example.com", "other")
@@ -495,6 +669,52 @@ class EventCaptureApiTests(unittest.TestCase):
         )
         self.assertEqual(status, 200, social_payload)
         self.assertEqual(social_payload["comments"][0]["text"], "Looks good")
+        self.assertTrue(social_payload["liked"])
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/save-toggle",
+            body={},
+            token=bob["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+        self.assertTrue(plan_payload["saved"])
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/plan",
+            {"status": "going"},
+            token=bob["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+        self.assertEqual(plan_payload["plan_status"], "going")
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/plan-note",
+            {"note": "See you near the bar"},
+            token=bob["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+        self.assertEqual(plan_payload["plan_note"], "See you near the bar")
+
+        status, social_map_payload = self.api_request("GET", "/api/events/social", token=bob["token"])
+        self.assertEqual(status, 200, social_map_payload)
+        self.assertIn(event_id, social_map_payload["items"])
+
+        status, plans_payload = self.api_request("GET", "/api/events/plans", token=bob["token"])
+        self.assertEqual(status, 200, plans_payload)
+        self.assertTrue(any(item["event_id"] == event_id and item["saved"] for item in plans_payload["items"]))
+
+        self.restart_server()
+
+        status, social_map_payload = self.api_request("GET", "/api/events/social", token=bob["token"])
+        self.assertEqual(status, 200, social_map_payload)
+        self.assertTrue(social_map_payload["items"][event_id]["liked"])
+        self.assertTrue(social_map_payload["items"][event_id]["saved"])
+        self.assertEqual(social_map_payload["items"][event_id]["plan_status"], "going")
+        self.assertEqual(social_map_payload["items"][event_id]["plan_note"], "See you near the bar")
+        self.assertEqual(social_map_payload["items"][event_id]["comments"][0]["text"], "Looks good")
 
         status, post_payload = self.api_request(
             "POST",
