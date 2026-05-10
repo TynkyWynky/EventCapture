@@ -57,3 +57,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# local temp artifacts
+.tmp/
+*.whl
