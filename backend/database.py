@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, inspect, or_, select
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, inspect, or_, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, selectinload, sessionmaker
@@ -536,6 +536,7 @@ def init_database() -> None:
     _migrate_friendships_table_if_needed()
     if settings.effective_schema_management_mode == "auto":
         Base.metadata.create_all(bind=engine)
+        _run_schema_upgrades()
         bootstrap_default_users()
         _cleanup_invalid_avatar_uris()
         cleanup_expired_revoked_access_tokens()
@@ -556,6 +557,19 @@ def validate_database_schema() -> None:
             + ", ".join(missing_tables)
             + ". Run Alembic migrations before starting the production API."
         )
+
+
+def _run_schema_upgrades() -> None:
+    if not settings.database_url.startswith("sqlite"):
+        return
+
+    with engine.begin() as connection:
+        capture_columns = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(captures)"))
+        }
+        if capture_columns and "user_id" not in capture_columns:
+            connection.execute(text("ALTER TABLE captures ADD COLUMN user_id TEXT"))
 
 
 def check_database_connection() -> bool:
@@ -1769,6 +1783,9 @@ def _ensure_bootstrap_user(
             changed = True
 
     if not verify_password(password, user.password_hash):
+        user.password_hash = hash_password(password)
+        changed = True
+    elif password_hash_needs_upgrade(user.password_hash):
         user.password_hash = hash_password(password)
         changed = True
 

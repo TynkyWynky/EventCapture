@@ -84,10 +84,10 @@ interface PixelSummary {
 
 const DEFAULT_LOCAL_BBOX = [0.2, 0.18, 0.8, 0.9] as const;
 
-function buildDetectionFormData(
+async function buildDetectionFormData(
   photoUri: string,
   options: DrinkAnalysisRequestOptions
-): FormData {
+): Promise<FormData> {
   const formData = new FormData();
 
   if (options.eventId?.trim()) {
@@ -96,6 +96,13 @@ function buildDetectionFormData(
 
   if (options.eventTitle?.trim()) {
     formData.append('event_title', options.eventTitle.trim());
+  }
+
+  if (Platform.OS === 'web') {
+    const fileResponse = await fetch(photoUri);
+    const photoBlob = await fileResponse.blob();
+    formData.append('file', photoBlob, 'capture.jpg');
+    return formData;
   }
 
   formData.append('file', {
@@ -434,7 +441,7 @@ async function analyzeWithBackend(
   photoUri: string,
   options: DrinkAnalysisRequestOptions
 ): Promise<DrinkAnalysisApiResponse> {
-  const formData = buildDetectionFormData(photoUri, options);
+  const formData = await buildDetectionFormData(photoUri, options);
   const payload = await apiPostFormData<unknown>('/api/captures/analyze', formData);
   if (!isDrinkAnalysisApiResponse(payload)) {
     throw new Error(getErrorMessage(payload) ?? 'Detection response was missing expected fields.');

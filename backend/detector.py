@@ -63,11 +63,7 @@ DRINK_COCO_CLASSES = {
 DRINK_CLASS_IDS = {39, 40, 41}
 PERSON_CLASS_ID = 0
 
-DRINK_TYPE_MAP = {
-    "bottle": ["Water", "Soda", "Beer", "Juice", "Energy Drink"],
-    "wine glass": ["Wine", "Cocktail", "Juice"],
-    "cup": ["Coffee", "Tea", "Hot Chocolate", "Water"],
-}
+GENERIC_DRINK_TYPE = "Drink"
 
 
 class DrinkDetector:
@@ -119,14 +115,13 @@ class DrinkDetector:
                     if confidence < conf_threshold:
                         continue
                     label = DRINK_COCO_CLASSES[cls_id]
-                    drink_type = self._infer_drink_type(frame, bbox, label)
                     rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
                     detections.append(
                         Detection(
                             label=label,
                             confidence=confidence,
                             bbox=bbox,
-                            drink_type=drink_type,
+                            drink_type=GENERIC_DRINK_TYPE,
                             rotation_degrees=rotation_degrees,
                             rotated_bbox=rotated_bbox,
                         )
@@ -161,7 +156,7 @@ class DrinkDetector:
                             label=result.names[cls_id],
                             confidence=confidence,
                             bbox=bbox,
-                            drink_type=result.names[cls_id].title(),
+                            drink_type=GENERIC_DRINK_TYPE,
                         )
                     )
 
@@ -349,7 +344,7 @@ class DrinkDetector:
                         label=label,
                         confidence=confidence,
                         bbox=bbox,
-                        drink_type=self._infer_drink_type(frame, bbox, label),
+                        drink_type=GENERIC_DRINK_TYPE,
                         rotation_degrees=rotation_degrees,
                         rotated_bbox=rotated_bbox,
                     )
@@ -794,61 +789,6 @@ class DrinkDetector:
             return None
         return ((angle + 90.0) % 180.0) - 90.0
 
-    def _infer_drink_type(self, frame: np.ndarray, bbox: BBox, base_label: str) -> str:
-        x1, y1, x2, y2 = bbox
-        h, w = frame.shape[:2]
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(w, x2)
-        y2 = min(h, y2)
-        crop = frame[y1:y2, x1:x2]
-        if crop.size == 0:
-            return DRINK_TYPE_MAP.get(base_label, ["Unknown"])[0]
-
-        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        mean_hue = float(np.mean(hsv[:, :, 0]))
-        mean_sat = float(np.mean(hsv[:, :, 1]))
-        mean_val = float(np.mean(hsv[:, :, 2]))
-
-        if base_label == "bottle":
-            return self._classify_bottle(mean_hue, mean_sat, mean_val)
-        if base_label == "wine glass":
-            return self._classify_wine_glass(mean_hue, mean_sat, mean_val)
-        if base_label == "cup":
-            return self._classify_cup(mean_hue, mean_sat, mean_val)
-        return "Drink"
-
-    def _classify_bottle(self, hue: float, sat: float, val: float) -> str:
-        if sat < 40 and val > 180:
-            return "Water"
-        if 10 < hue < 25 and sat > 80:
-            return "Beer"
-        if 25 < hue < 45 and sat > 60:
-            return "Juice"
-        if hue > 90 and sat > 50:
-            return "Energy Drink"
-        if sat > 50:
-            return "Soda"
-        return "Bottle (Unknown)"
-
-    def _classify_wine_glass(self, hue: float, sat: float, val: float) -> str:
-        if 0 < hue < 15 and sat > 60:
-            return "Red Wine"
-        if 20 < hue < 40 and sat > 30:
-            return "White Wine"
-        if sat < 30 and val > 160:
-            return "Water"
-        return "Wine"
-
-    def _classify_cup(self, hue: float, sat: float, val: float) -> str:
-        if val < 80:
-            return "Coffee"
-        if 10 < hue < 30 and sat > 40:
-            return "Tea"
-        if sat < 40 and val > 180:
-            return "Water"
-        return "Hot Beverage"
-
     def _detect_drinking_action(
         self,
         detections: list[Detection],
@@ -925,8 +865,8 @@ class DrinkDetector:
                 and drink_width < person_width * 0.52
                 and drink_height > person_height * 0.04
             )
-            near_head = head_distance_score >= (0.22 if self._is_sideways_drink(det) else 0.34)
-            sideways_near_head = self._is_sideways_drink(det) and head_distance_score >= 0.18
+            near_head = head_distance_score >= (0.18 if self._is_sideways_drink(det) else 0.28)
+            sideways_near_head = self._is_sideways_drink(det) and head_distance_score >= 0.14
 
             if not (
                 in_upper_body
@@ -939,8 +879,8 @@ class DrinkDetector:
                 head_overlap_ratio * 1.15
                 + vertical_overlap_ratio * 0.6
                 + head_distance_score * 1.55
-                - horizontal_gap * 1.0
-                - vertical_gap * 0.55
+                - horizontal_gap * 0.82
+                - vertical_gap * 0.45
             )
             if det.label == "bottle":
                 score += 0.15
@@ -952,13 +892,19 @@ class DrinkDetector:
                 score += 0.15
             if sideways_near_head:
                 score += 0.36
+            if touches_head_band:
+                score += 0.12
+            if head_overlap_ratio >= 0.18:
+                score += 0.1
+            if vertical_overlap_ratio >= 0.1:
+                score += 0.08
 
             if score > best_score:
                 best_score = score
                 best_head_bbox = head_bbox
 
         det.head_bbox = best_head_bbox
-        return best_score >= 0.34
+        return best_score >= 0.28
 
     def _update_drinking_tracks(
         self,
@@ -975,9 +921,9 @@ class DrinkDetector:
                     continue
                 iou = self._bbox_iou(det.bbox, track["bbox"])  # type: ignore[arg-type]
                 center_distance = self._bbox_center_distance_ratio(det.bbox, track["bbox"])  # type: ignore[arg-type]
-                if iou < 0.1 and center_distance > 0.65:
+                if iou < 0.06 and center_distance > 0.82:
                     continue
-                match_score = iou + max(0.0, 0.65 - center_distance)
+                match_score = iou + max(0.0, 0.82 - center_distance)
                 if match_score > matched_score:
                     matched_score = match_score
                     matched_track = track
@@ -986,7 +932,7 @@ class DrinkDetector:
             if matched_track is not None:
                 streak = min(int(matched_track["streak"]) + 1, 6)
 
-            det.is_drinking = streak >= 3
+            det.is_drinking = streak >= 2
             updated_tracks.append({
                 "label": det.label,
                 "bbox": det.bbox,

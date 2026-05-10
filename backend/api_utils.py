@@ -41,7 +41,7 @@ def serialize_debug_regions(debug_regions: dict) -> DebugRegionsResponse:
 def build_analysis_summary(detections: list[Detection]) -> AnalysisSummaryResponse:
     has_detections = bool(detections)
     has_drinking_action = any(det.is_drinking for det in detections)
-    contains_beer = any("beer" in f"{det.drink_type} {det.label}".lower() for det in detections)
+    contains_beer = False
 
     drink_types: list[str] = []
     seen_types: set[str] = set()
@@ -58,16 +58,12 @@ def build_analysis_summary(detections: list[Detection]) -> AnalysisSummaryRespon
         top_drink = top_detection.drink_type or top_detection.label.title()
         top_confidence = round(top_detection.confidence, 3)
 
-    crown_eligible = has_drinking_action or contains_beer
+    crown_eligible = has_drinking_action
 
     if has_drinking_action:
         status_label = "drinking_detected"
         headline = "Drinking moment detected"
         message = "The detector found a drink close enough to the head zone to count as an active drinking moment."
-    elif contains_beer:
-        status_label = "beer_detected"
-        headline = "Beer-like drink detected"
-        message = "The detector found a beer-like drink in frame, but not a strong active-drinking match."
     elif has_detections:
         status_label = "drink_detected"
         headline = "Drink detected"

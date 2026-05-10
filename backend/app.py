@@ -27,6 +27,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
+http_status = status
+
 try:
     from .api_utils import build_analysis_summary, serialize_debug_regions, serialize_detections
     from .config import CUSTOM_MODEL_PATH, DEFAULT_MODEL_PATH, FRONTEND_DIR, settings
@@ -781,7 +783,7 @@ def _ensure_authenticated_user(
     token = credentials.credentials if credentials else None
     user = _current_user_from_token(token)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Authentication required.")
     return user
 
 
@@ -810,7 +812,7 @@ def get_admin_user(
     current_user: dict[str, object] = Depends(get_current_user),
 ) -> dict[str, object]:
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Admin access required.")
     return current_user
 
 
@@ -899,9 +901,7 @@ async def script():
     return FileResponse(FRONTEND_DIR / "app.js", media_type="application/javascript")
 
 
-@app.get("/api/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
-    database_ok = await asyncio.to_thread(_status_database_ok)
+def _build_health_response(database_ok: bool) -> HealthResponse:
     return HealthResponse(
         ok=DEFAULT_MODEL_PATH.exists() and database_ok,
         model_exists=DEFAULT_MODEL_PATH.exists(),
@@ -915,6 +915,12 @@ async def health() -> HealthResponse:
 @app.get("/health", response_model=HealthResponse)
 async def legacy_health() -> HealthResponse:
     return await health()
+
+
+@app.get("/api/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    database_ok = await asyncio.to_thread(_status_database_ok)
+    return _build_health_response(database_ok)
 
 
 @app.get("/api/status", response_model=StatusResponse)
@@ -949,7 +955,7 @@ async def login(request: Request, payload: AuthLoginRequest):
     )
     user = await asyncio.to_thread(authenticate_user, payload.email, payload.password)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect.")
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect.")
 
     token = create_access_token(str(user["id"]), str(user["role"]))
     return AuthSessionResponse(
@@ -1052,7 +1058,7 @@ async def register(
             avatar_uri=initial_avatar_uri,
         )
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
     avatar_contents, avatar_filename, avatar_content_type = await _read_avatar_upload(avatar_file)
     if avatar_contents:
@@ -1116,7 +1122,7 @@ async def change_password(
             payload.new_password,
         )
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
     return {"ok": True}
 
@@ -1176,7 +1182,7 @@ async def confirm_password_reset_route(payload: PasswordResetConfirmRequest):
             payload.new_password,
         )
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
     return PasswordResetConfirmResponse(message="Password reset successfully.")
 
@@ -1251,7 +1257,7 @@ async def update_me(
             avatar_uri=next_avatar_uri,
         )
     except ValueError as error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
     return _serialize_user_profile_response(request, updated_user)
 
@@ -1271,7 +1277,7 @@ async def update_me_legacy(
 async def delete_me(current_user: dict[str, object] = Depends(get_current_user)):
     deleted = await asyncio.to_thread(delete_user, str(current_user["id"]))
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="User not found.")
     return DeleteResponse()
 
 
@@ -1413,7 +1419,7 @@ async def detect_image(
     _require_file_size(contents)
     frame = _decode_image(contents)
     if frame is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image.")
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="Invalid image.")
 
     analysis = await _run_image_analysis_async(frame)
     await asyncio.to_thread(
@@ -1442,13 +1448,13 @@ async def analyze_and_store_capture(
     file: UploadFile = File(...),
     event_id: str | None = Form(default=None),
     event_title: str | None = Form(default=None),
-    current_user: dict[str, object] = Depends(get_current_user),
+    current_user: dict[str, object] | None = Depends(get_inference_user),
 ):
     contents = await file.read()
     _require_file_size(contents)
     frame = _decode_image(contents)
     if frame is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid image.")
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="Invalid image.")
 
     analysis = await _run_image_analysis_async(frame)
     await asyncio.to_thread(
@@ -1950,6 +1956,18 @@ async def get_events():
     return [EventPayload(**event) for event in events]
 
 
+@app.get("/api/events/social")
+async def get_event_social_map(current_user: dict[str, object] = Depends(get_current_user)):
+    _ = current_user
+    return {"items": {}}
+
+
+@app.get("/api/events/plans")
+async def get_event_plans(current_user: dict[str, object] = Depends(get_current_user)):
+    _ = current_user
+    return {"items": []}
+
+
 @app.post("/api/events", response_model=EventPayload)
 async def create_event(
     payload: dict[str, object] = Body(default_factory=dict),
@@ -1969,7 +1987,7 @@ async def remove_event(
 ):
     deleted = await asyncio.to_thread(delete_event, event_id)
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Event not found.")
     return DeleteResponse()
 
 
@@ -2006,7 +2024,7 @@ async def toggle_like(
     try:
         post = await asyncio.to_thread(toggle_post_like, post_id, str(current_user["id"]))
     except KeyError as error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.") from error
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Post not found.") from error
     return _serialize_post_payload(request, post)
 
 
@@ -2018,7 +2036,7 @@ async def create_post_comment(
     current_user: dict[str, object] = Depends(get_current_user),
 ):
     if not payload.text.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comment text is required.")
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="Comment text is required.")
 
     try:
         post = await asyncio.to_thread(
@@ -2029,7 +2047,7 @@ async def create_post_comment(
             "Just now",
         )
     except KeyError as error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.") from error
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Post not found.") from error
     return _serialize_post_payload(request, post)
 
 
@@ -2041,9 +2059,9 @@ async def remove_post(
     try:
         deleted = await asyncio.to_thread(delete_post, post_id, str(current_user["id"]))
     except PermissionError as error:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail=str(error)) from error
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Post not found.")
     return DeleteResponse()
 
 
