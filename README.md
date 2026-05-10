@@ -26,6 +26,7 @@ EventCapture is an Expo Router nightlife app backed by a FastAPI + YOLOv8 drink 
 - Splash and onboarding route into login or the authenticated tab experience
 - Primary navigation includes feed, events, camera, social, and rewards, while profile lives in the burger menu
 - The camera screen captures a photo, sends it to the backend, and routes to a success or fail review screen
+- Native builds can also run an embedded on-device drink analysis path inside the app when `EXPO_PUBLIC_DETECTION_MODE=local` or `auto`
 - Posting a crown-eligible capture increments backend-backed crown rewards and reward progression
 - Admin and support screens use the same backend APIs as the rest of the app, but admin moderation is still intentionally lightweight
 
@@ -132,6 +133,7 @@ Important frontend variables:
 
 - `EXPO_PUBLIC_APP_ENV`
 - `EXPO_PUBLIC_BACKEND_API_URL`
+- `EXPO_PUBLIC_DETECTION_MODE`
 - `EVENTCAPTURE_ANDROID_ALLOW_CLEARTEXT`
 
 Important backend variables:

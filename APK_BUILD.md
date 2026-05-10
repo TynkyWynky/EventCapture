@@ -4,9 +4,9 @@ This project can now produce a downloadable Android APK with Expo Application Se
 
 ## What gets packaged
 
-The APK contains the Expo mobile app only.
+The APK now includes an embedded on-device drink analysis path for native builds.
 
-The FastAPI + YOLO detector in `backend/` is **not** bundled into the APK, so the installed app still needs a reachable detector server over the network.
+The FastAPI + YOLO detector in `backend/` is still available as an optional backend mode, but it is no longer required for the basic camera review flow inside the Android app.
 
 ## First-time setup
 
@@ -38,9 +38,25 @@ This uses the `preview` build profile in [eas.json](/c:/Users/EXT2076997/Game/Ev
 npm run build:aab
 ```
 
+## Detection mode
+
+Native builds now default to local on-device analysis.
+
+You can override the mode at build time with:
+
+```powershell
+$env:EXPO_PUBLIC_DETECTION_MODE="local"
+```
+
+Valid values are:
+
+- `local`: analyze inside the APK
+- `backend`: always call the FastAPI detector
+- `auto`: try local first, then fall back to the backend
+
 ## Detector backend note
 
-If you install the APK on a real Android phone, point the app at a detector server your phone can actually reach. A local machine on the same Wi-Fi network is the usual setup.
+If you choose `backend` or `auto`, point the app at a detector server your phone can actually reach. A local machine on the same Wi-Fi network is the usual setup.
 
 Example:
 
