@@ -1,8 +1,10 @@
 import { AppImage } from '@/components/ui/app-image';
 import { AppButton } from '@/components/ui/app-button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { BadgeThemes } from '@/constants/badgeThemes';
 import { useEvents } from '@/context/EventContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useSocial } from '@/context/SocialContext';
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,21 +35,45 @@ export function CaptureReviewScreen({
   const router = useRouter();
   const { t } = useLanguage();
   const { events } = useEvents();
+  const { getPlannedEvents } = useSocial();
   const [selectedEventId, setSelectedEventId] = useState('');
   const [isPosting, setIsPosting] = useState(false);
 
+  const availableEvents = useMemo((): (typeof events)[number][] => {
+    const eventMap = new Map(events.map((event) => [event.id, event]));
+    const isEventRecord = (
+      event: (typeof events)[number] | undefined
+    ): event is (typeof events)[number] => Boolean(event);
+    return getPlannedEvents()
+      .filter((entry) => entry.planStatus === 'going')
+      .map((entry) => eventMap.get(entry.eventId))
+      .filter(isEventRecord);
+  }, [events, getPlannedEvents]);
+
   useEffect(() => {
-    if (!selectedEventId && events.length) {
-      setSelectedEventId(events[0].id);
+    if (!availableEvents.length) {
+      if (selectedEventId) {
+        setSelectedEventId('');
+      }
+      return;
     }
-  }, [events, selectedEventId]);
+
+    if (!availableEvents.some((event) => event.id === selectedEventId)) {
+      setSelectedEventId(availableEvents[0].id);
+    }
+  }, [availableEvents, selectedEventId]);
 
   const selectedEvent = useMemo(
-    () => events.find((event) => event.id === selectedEventId),
-    [events, selectedEventId]
+    () => availableEvents.find((event) => event.id === selectedEventId),
+    [availableEvents, selectedEventId]
   );
 
-  const badgeTheme = isBeerFinished ? BadgeThemes.mojito : BadgeThemes.stout;
+  const badgeTheme: {
+    background: string;
+    border: string;
+    text: string;
+    icon?: string;
+  } = isBeerFinished ? BadgeThemes.mojito : BadgeThemes.stout;
   const accentColor = isBeerFinished ? Colors.light.tint : '#8a6a52';
   const title = isBeerFinished ? t('reviewSuccessTitle') : t('reviewFailTitle');
   const message = isBeerFinished ? t('reviewSuccessMsg') : t('reviewFailMsg');
@@ -180,80 +206,92 @@ export function CaptureReviewScreen({
           <Text style={styles.sectionTitle}>{t('reviewSectionTitle')}</Text>
           <Text style={styles.sectionSubtitle}>{eventHint}</Text>
 
-          <View style={styles.eventList}>
-            {events.map((event) => {
-              const isSelected = event.id === selectedEventId;
+          {availableEvents.length ? (
+            <View style={styles.eventList}>
+              {availableEvents.map((event) => {
+                const isSelected = event.id === selectedEventId;
 
-              return (
-                <TouchableOpacity
-                  key={event.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={event.title}
-                  activeOpacity={0.92}
-                  style={[styles.eventCard, isSelected && styles.eventCardSelected]}
-                  onPress={() => setSelectedEventId(event.id)}>
-                  <LinearGradient
-                    colors={isSelected ? ['#f7a24d', '#f47b20'] : ['#f6eee4', '#f6eee4']}
-                    style={styles.eventDateBadge}>
-                    <Text style={[styles.eventDateText, isSelected && styles.eventDateTextSelected]}>{event.date}</Text>
-                  </LinearGradient>
+                return (
+                  <TouchableOpacity
+                    key={event.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={event.title}
+                    activeOpacity={0.92}
+                    style={[styles.eventCard, isSelected && styles.eventCardSelected]}
+                    onPress={() => setSelectedEventId(event.id)}>
+                    <LinearGradient
+                      colors={isSelected ? ['#f7a24d', '#f47b20'] : ['#f6eee4', '#f6eee4']}
+                      style={styles.eventDateBadge}>
+                      <Text style={[styles.eventDateText, isSelected && styles.eventDateTextSelected]}>{event.date}</Text>
+                    </LinearGradient>
 
-                  <AppImage source={{ uri: event.heroImage }} style={styles.eventThumb} contentFit="cover" />
+                    <AppImage source={{ uri: event.heroImage }} style={styles.eventThumb} contentFit="cover" />
 
-                  <View style={styles.eventBody}>
-                    <View style={styles.eventTopRow}>
-                      <Text style={styles.eventTitle}>{event.title}</Text>
-                      {isSelected ? (
-                        <View style={styles.selectedPill}>
-                          <Text style={styles.selectedPillText}>{t('reviewSelectedPill')}</Text>
-                        </View>
-                      ) : null}
+                    <View style={styles.eventBody}>
+                      <View style={styles.eventTopRow}>
+                        <Text style={styles.eventTitle}>{event.title}</Text>
+                        {isSelected ? (
+                          <View style={styles.selectedPill}>
+                            <Text style={styles.selectedPillText}>{t('reviewSelectedPill')}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.eventMeta}>{event.place}</Text>
+                      <Text style={styles.eventMeta}>{event.attendees}</Text>
+                      <Text style={styles.eventTagline}>{event.vibe}</Text>
                     </View>
-                    <Text style={styles.eventMeta}>{event.place}</Text>
-                    <Text style={styles.eventMeta}>{event.attendees}</Text>
-                    <Text style={styles.eventTagline}>{event.vibe}</Text>
-                  </View>
 
-                  <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-                    {isSelected ? <View style={styles.radioInner} /> : null}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                      {isSelected ? <View style={styles.radioInner} /> : null}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptyStateWrap}>
+              <EmptyState
+                icon="calendar-outline"
+                title={t('reviewNoEventsTitle')}
+                message={t('reviewNoEventsMessage')}
+              />
+              <AppButton label={t('reviewNoEventsButton')} onPress={() => router.push('/(tabs)/events')} />
+            </View>
+          )}
         </View>
 
-        <View style={styles.footerCard}>
-          <View>
-            <Text style={styles.footerLabel}>{t('reviewFooterLabel')}</Text>
-            <Text style={styles.footerTitle}>{selectedEvent?.title ?? t('reviewFooterEmpty')}</Text>
-          </View>
+        {selectedEvent ? (
+          <View style={styles.footerCard}>
+            <View>
+              <Text style={styles.footerLabel}>{t('reviewFooterLabel')}</Text>
+              <Text style={styles.footerTitle}>{selectedEvent.title}</Text>
+            </View>
 
-          <View style={styles.actionRow}>
-            <AppButton label={t('reviewBtnRetake')} variant="ghost" onPress={() => router.back()} style={styles.secondaryAction} textStyle={styles.secondaryActionText} />
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
-              style={[
-                styles.primaryAction,
-                !selectedEvent && styles.primaryActionDisabled,
-                isPosting && styles.primaryActionDisabled,
-              ]}
-              disabled={!selectedEvent || isPosting}
-              onPress={() => void handleSubmit()}>
-              {isPosting ? (
-                <View style={styles.postingRow}>
-                  <ActivityIndicator size="small" color="#fff" />
-                  <Text style={styles.primaryActionText}>{t('reviewBtnPosting')}</Text>
-                </View>
-              ) : (
-                <Text style={styles.primaryActionText}>
-                  {isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
-                </Text>
-              )}
-            </TouchableOpacity>
+            <View style={styles.actionRow}>
+              <AppButton label={t('reviewBtnRetake')} variant="ghost" onPress={() => router.back()} style={styles.secondaryAction} textStyle={styles.secondaryActionText} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
+                style={[
+                  styles.primaryAction,
+                  isPosting && styles.primaryActionDisabled,
+                ]}
+                disabled={isPosting}
+                onPress={() => void handleSubmit()}>
+                {isPosting ? (
+                  <View style={styles.postingRow}>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.primaryActionText}>{t('reviewBtnPosting')}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryActionText}>
+                    {isBeerFinished ? t('reviewBtnSuccess') : t('reviewBtnFail')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -464,6 +502,9 @@ const styles = StyleSheet.create({
   },
   eventList: {
     gap: 12,
+  },
+  emptyStateWrap: {
+    gap: 14,
   },
   eventCard: {
     flexDirection: 'row',

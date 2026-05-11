@@ -97,6 +97,7 @@ function sanitizeSocialStateMap(value: SocialStateMap): SocialStateMap {
 
 function mapRemoteNotification(item: {
   id: string;
+  actor_user_id?: string | null;
   actor_username: string;
   actor_avatar_uri: string;
   title: string;

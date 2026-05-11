@@ -1,9 +1,16 @@
 import Constants from 'expo-constants';
+import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 
 interface ExpoConstantsHostShape {
+  linkingUri?: string | null;
+  experienceUrl?: string | null;
   expoGoConfig?: {
     debuggerHost?: string | null;
+    developer?: {
+      tool?: string | null;
+      projectRoot?: string | null;
+    } | null;
   };
   expoConfig?: {
     hostUri?: string | null;
@@ -18,6 +25,9 @@ interface ExpoConstantsHostShape {
   manifest?: {
     debuggerHost?: string | null;
   };
+  platform?: {
+    hostUri?: string | null;
+  } | null;
 }
 
 const BACKEND_PORT = 8000;
@@ -94,6 +104,10 @@ function getExpoHosts(): string[] {
     extractHost(constants.manifest?.debuggerHost),
     extractHost(constants.manifest2?.extra?.expoClient?.hostUri),
     extractHost(constants.expoConfig?.hostUri),
+    extractHost(constants.platform?.hostUri),
+    extractHost(constants.linkingUri),
+    extractHost(constants.experienceUrl),
+    extractHost(Linking.getLinkingURL()),
   ].filter((host): host is string => Boolean(host));
 
   return Array.from(new Set(hosts)).sort(
@@ -174,12 +188,17 @@ export function getBackendApiBaseUrlCandidates(): string[] {
     process.env.EXPO_PUBLIC_BACKEND_API_URL?.trim() ||
     process.env.EXPO_PUBLIC_DETECTION_API_URL?.trim();
   const candidates: string[] = [];
+  const configuredHost = extractHost(configuredUrl);
+  const shouldDeprioritizeConfiguredLoopback =
+    Platform.OS !== 'web' && Boolean(configuredHost && isLoopbackHost(configuredHost));
 
   if (configuredUrl) {
     if (isProductionLikeEnvironment() && !configuredUrl.startsWith('https://')) {
       throw new Error('Production builds require EXPO_PUBLIC_BACKEND_API_URL to use HTTPS.');
     }
-    candidates.push(trimTrailingSlash(configuredUrl));
+    if (!shouldDeprioritizeConfiguredLoopback) {
+      candidates.push(trimTrailingSlash(configuredUrl));
+    }
   } else if (isProductionLikeEnvironment()) {
     throw new Error('Production builds require EXPO_PUBLIC_BACKEND_API_URL to be set to an HTTPS backend URL.');
   }
@@ -204,6 +223,10 @@ export function getBackendApiBaseUrlCandidates(): string[] {
   candidates.push(`http://10.0.2.2:${BACKEND_PORT}`);
   candidates.push(`http://127.0.0.1:${BACKEND_PORT}`);
   candidates.push(`http://localhost:${BACKEND_PORT}`);
+
+  if (configuredUrl && shouldDeprioritizeConfiguredLoopback) {
+    candidates.push(trimTrailingSlash(configuredUrl));
+  }
 
   return Array.from(new Set(candidates.map(trimTrailingSlash)));
 }

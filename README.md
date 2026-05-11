@@ -622,8 +622,17 @@ Alembic is now the migration entrypoint for managed schema changes:
 
 1. Keep `EVENTCAPTURE_SCHEMA_MANAGEMENT_MODE=auto` for local development if you want automatic table creation.
 2. Set `EVENTCAPTURE_SCHEMA_MANAGEMENT_MODE=validate` in production.
-3. Run `backend/.venv/Scripts/python -m alembic upgrade head` before starting the production API.
+3. Run `npm run backend:migrate` before starting the production API.
 4. Production startup now fails fast if required tables are missing instead of silently calling `Base.metadata.create_all()`.
+
+Helpful local database commands:
+
+- `npm run backend:migrate`
+- `npm run backend:migration:current`
+- `npm run backend:verify-schema`
+- `npm run backend:seed`
+
+If your local SQLite file is outdated, see [docs/local-database.md](docs/local-database.md).
 
 Recommended PostgreSQL cutover path for multi-instance deployments:
 

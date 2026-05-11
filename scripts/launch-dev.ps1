@@ -140,6 +140,44 @@ function Get-ListeningProcessOnPort {
     return $null
 }
 
+function Get-LanIPv4Address {
+    try {
+        $candidates = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object {
+                $_.IPAddress -and
+                $_.PrefixOrigin -ne 'WellKnown' -and
+                $_.IPAddress -notlike '127.*' -and
+                $_.IPAddress -notlike '169.254.*'
+            } |
+            Sort-Object {
+                if ($_.IPAddress -like '192.168.*') { 0 }
+                elseif ($_.IPAddress -like '10.*') { 1 }
+                elseif ($_.IPAddress -match '^172\.(1[6-9]|2\d|3[0-1])\.') { 2 }
+                else { 3 }
+            }, InterfaceMetric
+
+        if ($candidates) {
+            return $candidates[0].IPAddress
+        }
+    } catch {
+    }
+
+    try {
+        $hostAddresses = [System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+            Where-Object {
+                $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork -and
+                $_.IPAddressToString -notlike '127.*' -and
+                $_.IPAddressToString -notlike '169.254.*'
+            }
+        if ($hostAddresses) {
+            return $hostAddresses[0].IPAddressToString
+        }
+    } catch {
+    }
+
+    return $null
+}
+
 function Test-IsRepoBackendProcess {
     param([object]$ProcessInfo)
 
@@ -280,7 +318,9 @@ Invoke-Step "Stopping stale backend processes..." {
 }
 
 $backendCommand = "Set-Location '$repoRoot'; & '$backendPython' -m uvicorn backend.app:app --host 0.0.0.0 --port 8000"
-$expoCommand = "Set-Location '$repoRoot'; `$env:EXPO_PUBLIC_BACKEND_API_URL='http://localhost:8000'; & '$npmCommand' start"
+$lanHost = Get-LanIPv4Address
+$frontendBackendUrl = if ($lanHost) { "http://${lanHost}:8000" } else { "http://localhost:8000" }
+$expoCommand = "Set-Location '$repoRoot'; `$env:EXPO_PUBLIC_BACKEND_API_URL='$frontendBackendUrl'; & '$npmCommand' start"
 
 Write-Host ""
 Write-Host "Starting backend in a new PowerShell window..." -ForegroundColor Cyan
@@ -291,6 +331,7 @@ Wait-BackendReady -HealthUrl $backendHealthUrl -TimeoutSeconds 45 -Process $back
 Write-Host "Backend is healthy." -ForegroundColor Green
 
 Write-Host "Starting Expo in a new PowerShell window..." -ForegroundColor Cyan
+Write-Host "Expo will use backend URL: $frontendBackendUrl" -ForegroundColor DarkYellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $expoCommand | Out-Null
 
 Write-Host ""

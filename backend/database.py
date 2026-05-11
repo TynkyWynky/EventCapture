@@ -537,6 +537,7 @@ def init_database() -> None:
     if settings.effective_schema_management_mode == "auto":
         Base.metadata.create_all(bind=engine)
         _run_schema_upgrades()
+        validate_database_schema()
         bootstrap_default_users()
         _cleanup_invalid_avatar_uris()
         cleanup_expired_revoked_access_tokens()
@@ -549,7 +550,8 @@ def init_database() -> None:
 
 def validate_database_schema() -> None:
     expected_tables = set(Base.metadata.tables.keys())
-    actual_tables = set(inspect(engine).get_table_names())
+    inspector = inspect(engine)
+    actual_tables = set(inspector.get_table_names())
     missing_tables = sorted(expected_tables - actual_tables)
     if missing_tables:
         raise RuntimeError(
@@ -558,18 +560,65 @@ def validate_database_schema() -> None:
             + ". Run Alembic migrations before starting the production API."
         )
 
+    missing_columns_by_table: dict[str, list[str]] = {}
+    for table_name, table in Base.metadata.tables.items():
+        actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        expected_columns = {column.name for column in table.columns}
+        missing_columns = sorted(expected_columns - actual_columns)
+        if missing_columns:
+            missing_columns_by_table[table_name] = missing_columns
+
+    if missing_columns_by_table:
+        details = ", ".join(
+            f"{table}({', '.join(columns)})"
+            for table, columns in sorted(missing_columns_by_table.items())
+        )
+        raise RuntimeError(
+            "Database schema is missing required columns: "
+            + details
+            + ". Run Alembic migrations or the dev schema repair flow before starting the API."
+        )
+
 
 def _run_schema_upgrades() -> None:
     if not settings.database_url.startswith("sqlite"):
         return
 
     with engine.begin() as connection:
+        event_comment_columns = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(event_comments)"))
+        }
+        if event_comment_columns and "time_label" not in event_comment_columns:
+            connection.execute(
+                text("ALTER TABLE event_comments ADD COLUMN time_label VARCHAR(64) DEFAULT 'Just now'")
+            )
+            connection.execute(
+                text("UPDATE event_comments SET time_label = 'Just now' WHERE time_label IS NULL OR time_label = ''")
+            )
+
         capture_columns = {
             row[1]
             for row in connection.execute(text("PRAGMA table_info(captures)"))
         }
         if capture_columns and "user_id" not in capture_columns:
             connection.execute(text("ALTER TABLE captures ADD COLUMN user_id TEXT"))
+
+        support_request_columns = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(support_requests)"))
+        }
+        if support_request_columns and "priority" not in support_request_columns:
+            connection.execute(
+                text("ALTER TABLE support_requests ADD COLUMN priority VARCHAR(16) DEFAULT 'normal'")
+            )
+        if support_request_columns:
+            connection.execute(
+                text("UPDATE support_requests SET status = 'new' WHERE status = 'open'")
+            )
+            connection.execute(
+                text("UPDATE support_requests SET priority = 'normal' WHERE priority IS NULL OR priority = ''")
+            )
 
 
 def check_database_connection() -> bool:
@@ -1130,6 +1179,12 @@ def search_users_for_friendship(query: str, current_user_id: str) -> list[dict[s
             results.append(entry)
 
         return results
+
+
+def list_users() -> list[dict[str, object]]:
+    with session_scope() as session:
+        users = session.scalars(select(User).order_by(User.created_at.desc(), User.username.asc())).all()
+        return [_serialize_user(user) for user in users]
 
 
 def list_friend_requests(user_id: str) -> dict[str, list[dict[str, object]]]:

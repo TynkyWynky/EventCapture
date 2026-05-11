@@ -244,6 +244,31 @@ class EventCaptureApiTests(unittest.TestCase):
         self.assertEqual(status, 200, payload)
         self.assertIn("/media/avatars/", payload["user"]["avatar_uri"])
 
+    def test_admin_user_listing_and_deletion_routes(self):
+        admin_status, admin_payload = self.api_request(
+            "POST",
+            "/api/auth/login",
+            {"email": "admin", "password": "admin"},
+        )
+        self.assertEqual(admin_status, 200, admin_payload)
+        admin_token = admin_payload["token"]
+
+        user = self.register_and_login("admin-delete@example.com", "admindelete")
+
+        status, payload = self.api_request("GET", "/api/users", token=admin_token)
+        self.assertEqual(status, 200, payload)
+        self.assertTrue(any(item["id"] == user["user_id"] for item in payload))
+
+        status, payload = self.api_request("GET", "/api/users", token=user["token"])
+        self.assertEqual(status, 403, payload)
+
+        status, payload = self.api_request("DELETE", f"/api/users/{user['user_id']}", token=admin_token)
+        self.assertEqual(status, 200, payload)
+        self.assertTrue(payload["deleted"])
+
+        status, payload = self.api_request("GET", "/api/auth/me", token=user["token"])
+        self.assertEqual(status, 401, payload)
+
     def test_password_reset_support_rewards_and_notifications(self):
         owner = self.register_and_login("reward-owner@example.com", "rewardowner")
         other = self.register_and_login("reward-other@example.com", "rewardother")

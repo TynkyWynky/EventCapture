@@ -60,6 +60,7 @@ try:
         list_group_members,
         list_groups,
         list_notifications,
+        list_users,
         list_event_plan_state,
         list_event_social_map,
         delete_post,
@@ -186,6 +187,7 @@ except ImportError:
         list_group_members,
         list_groups,
         list_notifications,
+        list_users,
         list_event_plan_state,
         list_event_social_map,
         delete_post,
@@ -1516,6 +1518,11 @@ async def search_users(request: Request, q: str = "", current_user: dict[str, ob
     return _resolve_user_search_payloads(request, payload)
 
 
+@app.get("/api/users", response_model=list[UserProfileResponse])
+async def get_users(_admin_user: dict[str, object] = Depends(get_admin_user)):
+    return await asyncio.to_thread(list_users)
+
+
 @app.get("/api/users/{user_id}/public", response_model=PublicUserProfileResponse)
 async def get_public_user_profile_route(
     request: Request,
@@ -1526,6 +1533,14 @@ async def get_public_user_profile_route(
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     return _serialize_public_user_profile_response(request, payload)
+
+
+@app.delete("/api/users/{user_id}", response_model=DeleteResponse)
+async def delete_user_route(user_id: str, _admin_user: dict[str, object] = Depends(get_admin_user)):
+    deleted = await asyncio.to_thread(delete_user, user_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    return DeleteResponse(deleted=True)
 
 
 @app.get("/api/friends", response_model=list[FriendListItemResponse])
