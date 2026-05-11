@@ -20,6 +20,7 @@ export default function ReviewFailScreen() {
     ? params.detectedDrinks.split('|').filter(Boolean)
     : [];
   const topDrink = params.topDrink as string | undefined;
+  const statusLabel = params.statusLabel as string | undefined;
   const { addPost } = usePosts();
   const { addActivity } = useSocial();
   const { showToast } = useToast();
@@ -73,6 +74,7 @@ export default function ReviewFailScreen() {
       analysisMessage={analysisMessage}
       detectedDrinks={detectedDrinks}
       topDrink={topDrink}
+      statusLabel={statusLabel}
     />
   );
 }

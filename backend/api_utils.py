@@ -41,7 +41,10 @@ def serialize_debug_regions(debug_regions: dict) -> DebugRegionsResponse:
 def build_analysis_summary(detections: list[Detection]) -> AnalysisSummaryResponse:
     has_detections = bool(detections)
     has_drinking_action = any(det.is_drinking for det in detections)
-    contains_beer = False
+    contains_beer = any(
+        "beer" in (det.drink_type or det.label).lower()
+        for det in detections
+    )
 
     drink_types: list[str] = []
     seen_types: set[str] = set()
@@ -58,20 +61,28 @@ def build_analysis_summary(detections: list[Detection]) -> AnalysisSummaryRespon
         top_drink = top_detection.drink_type or top_detection.label.title()
         top_confidence = round(top_detection.confidence, 3)
 
-    crown_eligible = has_drinking_action
+    success_confidence = 0.58
+    uncertain_confidence = 0.4
+    confident_container_detected = bool(top_detection and top_detection.confidence >= success_confidence)
+    possible_container_detected = bool(top_detection and top_detection.confidence >= uncertain_confidence)
+    crown_eligible = has_drinking_action or confident_container_detected
 
     if has_drinking_action:
         status_label = "drinking_detected"
         headline = "Drinking moment detected"
-        message = "The detector found a drink close enough to the head zone to count as an active drinking moment."
-    elif has_detections:
+        message = "A drink container is clearly visible and close enough to count as an active drinking moment."
+    elif crown_eligible:
         status_label = "drink_detected"
         headline = "Drink detected"
-        message = "The detector found drink candidates, but not a crown-eligible moment yet."
+        message = "Your drink container is clearly visible. Challenge validated."
+    elif possible_container_detected:
+        status_label = "drink_uncertain"
+        headline = "Almost there"
+        message = "We could not confirm the drink clearly. Try again with better light and keep the container fully visible."
     else:
         status_label = "no_drink_detected"
         headline = "No drink detected"
-        message = "No confident drink candidate was found in this capture."
+        message = "Make sure a glass, bottle, cup, or beverage can is clearly visible in the frame."
 
     return AnalysisSummaryResponse(
         has_detections=has_detections,

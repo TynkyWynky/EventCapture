@@ -64,6 +64,76 @@ DRINK_CLASS_IDS = {39, 40, 41}
 PERSON_CLASS_ID = 0
 
 GENERIC_DRINK_TYPE = "Drink"
+SUPPORTED_DRINK_TYPES = {
+    "bottle": "Bottle",
+    "plastic bottle": "Bottle",
+    "water bottle": "Water Bottle",
+    "wine glass": "Glass",
+    "glass": "Glass",
+    "cup": "Cup",
+    "mug": "Mug",
+    "cocktail": "Cocktail",
+    "beer": "Beer",
+    "beer bottle": "Beer Bottle",
+    "beer can": "Beer Can",
+    "soda": "Soft Drink",
+    "soft drink": "Soft Drink",
+    "cola": "Soft Drink",
+    "juice": "Juice",
+    "drink carton": "Drink Carton",
+    "juice carton": "Drink Carton",
+    "milk carton": "Drink Carton",
+    "beverage can": "Beverage Can",
+    "drink can": "Beverage Can",
+    "soda can": "Soft Drink Can",
+    "soft drink can": "Soft Drink Can",
+    "cola can": "Soft Drink Can",
+    "energy drink": "Energy Drink",
+    "energy drink can": "Energy Drink Can",
+}
+SOFT_DRINK_BRANDS = ("coca cola", "coca-cola", "coke", "fanta", "sprite", "pepsi", "7up")
+ENERGY_DRINK_BRANDS = ("red bull", "monster", "burn", "rockstar")
+NON_BEVERAGE_CAN_KEYWORDS = ("spray", "aerosol", "paint", "trash", "garbage", "food can", "tin food")
+
+
+def _slugify_label(label: str) -> str:
+    return " ".join(label.replace("_", " ").replace("-", " ").lower().split())
+
+
+def normalize_supported_drink_label(
+    label: str,
+    *,
+    beverage_evidence: bool = False,
+) -> tuple[str | None, str | None]:
+    normalized = _slugify_label(label)
+    if not normalized:
+        return None, None
+
+    if any(keyword in normalized for keyword in NON_BEVERAGE_CAN_KEYWORDS):
+        return None, None
+
+    if "can" in normalized:
+        if any(brand in normalized for brand in ENERGY_DRINK_BRANDS):
+            return "energy drink can", "Energy Drink Can"
+        if any(brand in normalized for brand in SOFT_DRINK_BRANDS):
+            return "soda can", "Soft Drink Can"
+        if any(keyword in normalized for keyword in ("beer", "lager", "ale", "stout", "pils")):
+            return "beer can", "Beer Can"
+        if any(keyword in normalized for keyword in ("soda", "soft drink", "cola", "drink", "beverage", "energy", "juice")):
+            return "beverage can", "Beverage Can"
+        if beverage_evidence:
+            return "beverage can", "Beverage Can"
+        return None, None
+
+    for canonical_label, drink_type in sorted(
+        SUPPORTED_DRINK_TYPES.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        if normalized == canonical_label or normalized.endswith(f" {canonical_label}") or canonical_label in normalized:
+            return canonical_label, drink_type
+
+    return None, None
 
 
 class DrinkDetector:
@@ -133,6 +203,7 @@ class DrinkDetector:
             imgsz=960,
         )
         detections = self._merge_drink_detections(detections, fallback_detections)
+        detections = self._merge_drink_detections(detections, self._detect_beverage_can_candidates(frame))
 
         if not persons:
             persons = self._detect_persons(frame, person_conf_threshold=0.08)
@@ -151,12 +222,26 @@ class DrinkDetector:
                     confidence = float(box.conf[0])
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     bbox = (int(x1), int(y1), int(x2), int(y2))
+                    if not self._is_reasonable_drink_bbox(frame, bbox):
+                        continue
+                    beverage_evidence = self._looks_like_beverage_container(frame, bbox)
+                    normalized_label, drink_type = normalize_supported_drink_label(
+                        str(result.names[cls_id]),
+                        beverage_evidence=beverage_evidence,
+                    )
+                    if normalized_label is None or drink_type is None:
+                        continue
+                    if normalized_label.endswith("can") and not beverage_evidence:
+                        continue
+                    rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
                     detections.append(
                         Detection(
-                            label=result.names[cls_id],
+                            label=normalized_label,
                             confidence=confidence,
                             bbox=bbox,
-                            drink_type=GENERIC_DRINK_TYPE,
+                            drink_type=drink_type,
+                            rotation_degrees=rotation_degrees,
+                            rotated_bbox=rotated_bbox,
                         )
                     )
 
@@ -375,6 +460,65 @@ class DrinkDetector:
 
         return detections
 
+    def _detect_beverage_can_candidates(self, frame: np.ndarray) -> list[Detection]:
+        frame_h, frame_w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 60, 160)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        candidates: list[Detection] = []
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area <= 0:
+                continue
+
+            x, y, w, h = cv2.boundingRect(contour)
+            bbox = (int(x), int(y), int(x + w), int(y + h))
+            if not self._is_reasonable_drink_bbox(frame, bbox):
+                continue
+
+            area_ratio = area / max(1.0, frame_w * frame_h)
+            rect_fill = area / max(1.0, w * h)
+            aspect_ratio = h / max(1.0, w)
+            center_x = x + w / 2
+            center_y = y + h / 2
+            center_offset_x = abs(center_x - frame_w / 2) / max(1.0, frame_w / 2)
+            center_offset_y = abs(center_y - frame_h / 2) / max(1.0, frame_h / 2)
+
+            if not (0.004 <= area_ratio <= 0.24):
+                continue
+            if not (0.95 <= aspect_ratio <= 4.0):
+                continue
+            if not (0.36 <= rect_fill <= 0.98):
+                continue
+            if center_offset_x > 0.78 or center_offset_y > 0.82:
+                continue
+            if not self._looks_like_beverage_container(frame, bbox):
+                continue
+
+            confidence = min(
+                0.88,
+                0.44
+                + rect_fill * 0.16
+                + min(aspect_ratio / 3.0, 1.0) * 0.14
+                + (1.0 - min(center_offset_x, 1.0)) * 0.08
+                + (1.0 - min(center_offset_y, 1.0)) * 0.05,
+            )
+            rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
+            candidates.append(
+                Detection(
+                    label="beverage can",
+                    confidence=float(confidence),
+                    bbox=bbox,
+                    drink_type="Beverage Can",
+                    rotation_degrees=rotation_degrees,
+                    rotated_bbox=rotated_bbox,
+                )
+            )
+
+        return self._merge_drink_detections([], candidates)
+
     def _rotate_frame(self, frame: np.ndarray, orientation: str) -> np.ndarray:
         if orientation == "rot90_cw":
             return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
@@ -508,6 +652,33 @@ class DrinkDetector:
             and area_ratio >= 0.0012
             and aspect_ratio <= 8.0
         )
+
+    def _looks_like_beverage_container(self, frame: np.ndarray, bbox: BBox) -> bool:
+        x1, y1, x2, y2 = bbox
+        frame_h, frame_w = frame.shape[:2]
+        x1 = max(0, min(x1, frame_w - 1))
+        y1 = max(0, min(y1, frame_h - 1))
+        x2 = max(x1 + 1, min(x2, frame_w))
+        y2 = max(y1 + 1, min(y2, frame_h))
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return False
+
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        saturation = hsv[:, :, 1]
+        value = hsv[:, :, 2]
+        mean_saturation = float(np.mean(saturation))
+        std_saturation = float(np.std(saturation))
+        mean_value = float(np.mean(value))
+        std_value = float(np.std(value))
+        aspect_ratio = (y2 - y1) / max(1.0, (x2 - x1))
+        bright_pixels = float(np.mean(value >= 150))
+        saturated_pixels = float(np.mean(saturation >= 70))
+
+        colorful_label = mean_saturation >= 24 or std_saturation >= 18 or saturated_pixels >= 0.16
+        readable_surface = mean_value >= 40 and std_value >= 14 and bright_pixels >= 0.08
+        container_shape = 0.9 <= aspect_ratio <= 4.2
+        return container_shape and readable_surface and colorful_label
 
     def _dedupe_boxes(self, boxes: list[BBox]) -> list[BBox]:
         deduped: list[BBox] = []

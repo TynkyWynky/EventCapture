@@ -59,6 +59,7 @@ export interface DrinkAnalysisResult extends DrinkAnalysisApiResponse {
   topDrink: string | null;
   captureId: string | null;
   storedImageUri: string | null;
+  analysisSource: 'backend' | 'local';
 }
 
 export interface DrinkAnalysisRequestOptions {
@@ -75,11 +76,16 @@ interface PixelSummary {
   centerAmberCount: number;
   upperAmberCount: number;
   warmDarkCount: number;
+  containerSampleCount: number;
+  containerBrightCount: number;
+  containerSaturatedCount: number;
+  containerContrastCount: number;
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
   rowBuckets: Set<number>;
+  columnBuckets: Set<number>;
 }
 
 const DEFAULT_LOCAL_BBOX = [0.2, 0.18, 0.8, 0.9] as const;
@@ -153,11 +159,16 @@ function createEmptyPixelSummary(): PixelSummary {
     centerAmberCount: 0,
     upperAmberCount: 0,
     warmDarkCount: 0,
+    containerSampleCount: 0,
+    containerBrightCount: 0,
+    containerSaturatedCount: 0,
+    containerContrastCount: 0,
     minX: Number.POSITIVE_INFINITY,
     minY: Number.POSITIVE_INFINITY,
     maxX: Number.NEGATIVE_INFINITY,
     maxY: Number.NEGATIVE_INFINITY,
     rowBuckets: new Set<number>(),
+    columnBuckets: new Set<number>(),
   };
 }
 
@@ -169,17 +180,23 @@ function updateBoundingBox(summary: PixelSummary, x: number, y: number) {
 }
 
 function buildLocalSummary({
-  beerScore,
-  containsBeer,
+  confidence,
+  containsDrink,
   crownEligible,
-  hasDrinkingAction,
+  statusLabel,
+  headline,
+  message,
+  topDrink,
 }: {
-  beerScore: number;
-  containsBeer: boolean;
+  confidence: number;
+  containsDrink: boolean;
   crownEligible: boolean;
-  hasDrinkingAction: boolean;
+  statusLabel: string;
+  headline: string;
+  message: string;
+  topDrink: string | null;
 }): DrinkAnalysisSummary {
-  if (!containsBeer) {
+  if (!containsDrink) {
     return {
       has_detections: false,
       has_drinking_action: false,
@@ -187,47 +204,38 @@ function buildLocalSummary({
       crown_eligible: false,
       drink_count: 0,
       drink_types: [],
-      top_drink: null,
-      top_confidence: Number(beerScore.toFixed(3)),
-      status_label: 'NO_MATCH',
-      headline: 'No beer match found',
-      message: 'On-device analysis did not find a strong beer-like color pattern in this photo.',
-    };
-  }
-
-  if (!crownEligible) {
-    return {
-      has_detections: true,
-      has_drinking_action: hasDrinkingAction,
-      contains_beer: true,
-      crown_eligible: false,
-      drink_count: 1,
-      drink_types: ['Beer'],
-      top_drink: 'Beer',
-      top_confidence: Number(beerScore.toFixed(3)),
-      status_label: 'CHECK_AGAIN',
-      headline: 'Possible beer detected',
-      message: 'The APK matched beer-like colors, but confidence was not high enough for a crown-eligible result.',
+      top_drink: topDrink,
+      top_confidence: Number(confidence.toFixed(3)),
+      status_label: statusLabel,
+      headline,
+      message,
     };
   }
 
   return {
     has_detections: true,
-    has_drinking_action: hasDrinkingAction,
-    contains_beer: true,
-    crown_eligible: true,
+    has_drinking_action: false,
+    contains_beer: topDrink === 'Beer',
+    crown_eligible: crownEligible,
     drink_count: 1,
-    drink_types: ['Beer'],
-    top_drink: 'Beer',
-    top_confidence: Number(beerScore.toFixed(3)),
-    status_label: 'CROWN_READY',
-    headline: 'Beer detected on-device',
-    message: 'This capture was analyzed locally inside the app and passed the embedded beer check.',
+    drink_types: topDrink ? [topDrink] : ['Drink'],
+    top_drink: topDrink,
+    top_confidence: Number(confidence.toFixed(3)),
+    status_label: statusLabel,
+    headline,
+    message,
   };
 }
 
-function buildLocalDetection(width: number, height: number, summary: PixelSummary, confidence: number): DrinkDetection[] {
-  if (summary.amberCount === 0) {
+function buildLocalDetection(
+  width: number,
+  height: number,
+  summary: PixelSummary,
+  confidence: number,
+  label: string,
+  drinkType: string
+): DrinkDetection[] {
+  if (summary.containerSampleCount === 0 && summary.amberCount === 0) {
     return [];
   }
 
@@ -243,8 +251,8 @@ function buildLocalDetection(width: number, height: number, summary: PixelSummar
 
   return [
     {
-      label: 'beer',
-      drink_type: 'Beer',
+      label,
+      drink_type: drinkType,
       confidence: Number(confidence.toFixed(3)),
       bbox: [
         Math.round(bbox[0] * width),
@@ -252,7 +260,7 @@ function buildLocalDetection(width: number, height: number, summary: PixelSummar
         Math.round(bbox[2] * width),
         Math.round(bbox[3] * height),
       ],
-      is_drinking: confidence >= 0.78,
+      is_drinking: false,
       rotation_degrees: 0,
       rotated_bbox: [],
     },
@@ -298,6 +306,12 @@ async function analyzeLocally(
       const isAmber = h >= 18 && h <= 56 && s >= 0.28 && v >= 0.18 && v <= 0.95;
       const isFoam = v >= 0.78 && s <= 0.22;
       const isWarmDark = h >= 18 && h <= 45 && s >= 0.2 && v >= 0.08 && v <= 0.35;
+      const isContainerColor =
+        (s >= 0.28 && v >= 0.18) ||
+        (v >= 0.62 && s <= 0.24) ||
+        (red >= 130 && red > green * 1.12 && red > blue * 1.18) ||
+        (blue >= 115 && blue > red * 0.95 && blue > green * 1.08) ||
+        (green >= 110 && green > red * 1.02 && green > blue * 1.02);
 
       if (isFoam) {
         summary.foamCount += 1;
@@ -305,6 +319,22 @@ async function analyzeLocally(
 
       if (isWarmDark) {
         summary.warmDarkCount += 1;
+      }
+
+      if (isContainerColor) {
+        summary.containerSampleCount += 1;
+        updateBoundingBox(summary, x, y);
+        summary.rowBuckets.add(Math.floor((y / height) * 12));
+        summary.columnBuckets.add(Math.floor((x / width) * 12));
+        if (v >= 0.62) {
+          summary.containerBrightCount += 1;
+        }
+        if (s >= 0.28) {
+          summary.containerSaturatedCount += 1;
+        }
+        if ((Math.abs(red - green) + Math.abs(green - blue) + Math.abs(red - blue)) / 3 >= 28) {
+          summary.containerContrastCount += 1;
+        }
       }
 
       if (!isAmber) {
@@ -330,6 +360,14 @@ async function analyzeLocally(
   const upperAmberRatio = summary.upperAmberCount / Math.max(1, summary.amberCount);
   const warmDarkRatio = summary.warmDarkCount / Math.max(1, summary.sampleCount);
   const verticalCoverage = summary.rowBuckets.size / 12;
+  const containerRatio = summary.containerSampleCount / Math.max(1, summary.sampleCount);
+  const brightRatio = summary.containerBrightCount / Math.max(1, summary.containerSampleCount);
+  const saturatedRatio = summary.containerSaturatedCount / Math.max(1, summary.containerSampleCount);
+  const contrastRatio = summary.containerContrastCount / Math.max(1, summary.containerSampleCount);
+  const horizontalCoverage = summary.columnBuckets.size / 12;
+  const bboxWidth = Number.isFinite(summary.minX) && Number.isFinite(summary.maxX) ? summary.maxX - summary.minX : 0;
+  const bboxHeight = Number.isFinite(summary.minY) && Number.isFinite(summary.maxY) ? summary.maxY - summary.minY : 0;
+  const aspectRatio = bboxHeight / Math.max(1, bboxWidth);
 
   const beerScore = clamp(
     amberRatio * 5.3 +
@@ -343,18 +381,55 @@ async function analyzeLocally(
   );
 
   const containsBeer = summary.amberCount >= 150 && beerScore >= 0.42;
-  const hasDrinkingAction = containsBeer && upperAmberRatio >= 0.18 && centerAmberRatio >= 0.45;
-  const crownEligible = containsBeer && (beerScore >= 0.68 || hasDrinkingAction);
+  const containsContainer =
+    summary.containerSampleCount >= 90 &&
+    containerRatio >= 0.03 &&
+    contrastRatio >= 0.2 &&
+    aspectRatio >= 0.9 &&
+    aspectRatio <= 4.1;
+  const containerScore = clamp(
+    containerRatio * 4.4 +
+      brightRatio * 0.9 +
+      saturatedRatio * 1.1 +
+      contrastRatio * 1.25 +
+      verticalCoverage * 0.65 +
+      horizontalCoverage * 0.35 +
+      (aspectRatio >= 0.95 && aspectRatio <= 4.0 ? 0.22 : -0.16) -
+      0.2,
+    0,
+    0.99
+  );
+  const crownEligible = containsBeer ? beerScore >= 0.68 : containsContainer && containerScore >= 0.58;
+  const uncertainContainer = !crownEligible && containsContainer && containerScore >= 0.4;
+  const confidence = Math.max(beerScore, containerScore);
+  const topDrink = containsBeer && beerScore >= containerScore ? 'Beer' : containsContainer ? 'Beverage Can' : null;
   const detectionSummary = buildLocalSummary({
-    beerScore,
-    containsBeer,
+    confidence,
+    containsDrink: containsBeer || containsContainer,
     crownEligible,
-    hasDrinkingAction,
+    statusLabel: crownEligible ? 'drink_detected' : uncertainContainer ? 'drink_uncertain' : 'no_drink_detected',
+    headline: crownEligible ? 'Drink detected' : uncertainContainer ? 'Almost there' : 'No drink detected',
+    message: crownEligible
+      ? 'Your drink container is clearly visible. Challenge validated.'
+      : uncertainContainer
+        ? 'We could not confirm the drink clearly. Try again with better light and keep the container fully visible.'
+        : 'Make sure a glass, bottle, cup, or beverage can is clearly visible in the frame.',
+    topDrink,
   });
 
   const now = new Date().toISOString();
   return {
-    detections: buildLocalDetection(width, height, summary, beerScore),
+    detections:
+      containsBeer || containsContainer
+        ? buildLocalDetection(
+            width,
+            height,
+            summary,
+            confidence,
+            topDrink === 'Beer' ? 'beer' : 'beverage can',
+            topDrink ?? 'Drink'
+          )
+        : [],
     summary: detectionSummary,
     debug: {
       persons: [],
@@ -381,7 +456,7 @@ function getDetectionMode(): DetectionMode {
     return rawValue;
   }
 
-  return Platform.OS === 'web' ? 'backend' : 'local';
+  return 'auto';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -458,7 +533,16 @@ function normalizeResult(payload: DrinkAnalysisApiResponse): DrinkAnalysisResult
     topDrink: payload.summary.top_drink,
     captureId: isOnDeviceCapture ? null : payload.capture.id,
     storedImageUri: payload.capture.original_image_url,
+    analysisSource: isOnDeviceCapture ? 'local' : 'backend',
   };
+}
+
+function logDetectionDebug(stage: string, details: Record<string, unknown>) {
+  if (!__DEV__) {
+    return;
+  }
+
+  console.info(`[capture-detection] ${stage}`, details);
 }
 
 export async function analyzeBeer(
@@ -468,24 +552,70 @@ export async function analyzeBeer(
   const mode = getDetectionMode();
 
   if (mode === 'local') {
-    return normalizeResult(await analyzeLocally(photoUri, options));
+    const result = normalizeResult(await analyzeLocally(photoUri, options));
+    logDetectionDebug('local-only-result', {
+      source: result.analysisSource,
+      statusLabel: result.summary.status_label,
+      headline: result.summary.headline,
+      topDrink: result.topDrink,
+      topConfidence: result.summary.top_confidence,
+      drinks: result.detectedDrinks,
+    });
+    return result;
   }
 
   if (mode === 'backend') {
-    return normalizeResult(await analyzeWithBackend(photoUri, options));
+    const result = normalizeResult(await analyzeWithBackend(photoUri, options));
+    logDetectionDebug('backend-only-result', {
+      source: result.analysisSource,
+      statusLabel: result.summary.status_label,
+      headline: result.summary.headline,
+      topDrink: result.topDrink,
+      topConfidence: result.summary.top_confidence,
+      drinks: result.detectedDrinks,
+    });
+    return result;
   }
 
   try {
-    return normalizeResult(await analyzeLocally(photoUri, options));
-  } catch (localError) {
+    const result = normalizeResult(await analyzeWithBackend(photoUri, options));
+    logDetectionDebug('backend-result', {
+      source: result.analysisSource,
+      statusLabel: result.summary.status_label,
+      headline: result.summary.headline,
+      topDrink: result.topDrink,
+      topConfidence: result.summary.top_confidence,
+      drinks: result.detectedDrinks,
+    });
+    return result;
+  } catch (backendError) {
+    logDetectionDebug('backend-failed', {
+      error: backendError instanceof Error ? backendError.message : String(backendError),
+    });
     try {
-      return normalizeResult(await analyzeWithBackend(photoUri, options));
-    } catch (backendError) {
+      const localResult = normalizeResult(await analyzeLocally(photoUri, options));
+      logDetectionDebug('local-fallback-result', {
+        source: localResult.analysisSource,
+        statusLabel: localResult.summary.status_label,
+        headline: localResult.summary.headline,
+        topDrink: localResult.topDrink,
+        topConfidence: localResult.summary.top_confidence,
+        drinks: localResult.detectedDrinks,
+      });
+      if (!localResult.summary.has_detections) {
+        throw new Error(
+          backendError instanceof Error
+            ? `Backend detection failed and local fallback was inconclusive: ${backendError.message}`
+            : 'Backend detection failed and local fallback was inconclusive.'
+        );
+      }
+      return localResult;
+    } catch (localError) {
       throw new Error(
-        backendError instanceof Error
-          ? backendError.message
-          : localError instanceof Error
-            ? localError.message
+        localError instanceof Error
+          ? localError.message
+          : backendError instanceof Error
+            ? backendError.message
             : 'Detection request failed.'
       );
     }

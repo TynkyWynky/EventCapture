@@ -710,6 +710,27 @@ def _run_image_analysis(
     response_debug = serialize_debug_regions(batch.debug_regions)
     response_summary = build_analysis_summary(batch.detections)
 
+    if settings.environment != "production":
+        logger.info(
+            "capture_detection backend_called detections=%s summary=%s",
+            [
+                {
+                    "label": det.label,
+                    "drink_type": det.drink_type,
+                    "confidence": round(det.confidence, 3),
+                    "is_drinking": det.is_drinking,
+                }
+                for det in batch.detections
+            ],
+            {
+                "status_label": response_summary.status_label,
+                "headline": response_summary.headline,
+                "top_drink": response_summary.top_drink,
+                "top_confidence": response_summary.top_confidence,
+                "crown_eligible": response_summary.crown_eligible,
+            },
+        )
+
     return {
         "detections": batch.detections,
         "annotated": annotated,

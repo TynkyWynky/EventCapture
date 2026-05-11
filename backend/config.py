@@ -136,7 +136,14 @@ class BackendSettings(BaseSettings):
     bootstrap_demo_avatar_uri: str = "https://i.pravatar.cc/160?img=64"
 
     supported_drinks: tuple[str, ...] = (
-        "Drink",
+        "Glass",
+        "Cup",
+        "Bottle",
+        "Beverage Can",
+        "Soft Drink Can",
+        "Beer Can",
+        "Energy Drink Can",
+        "Drink Carton",
     )
 
     @field_validator("cors_allowed_origins", mode="before")

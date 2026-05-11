@@ -21,6 +21,7 @@ interface CaptureReviewScreenProps {
   analysisMessage?: string;
   detectedDrinks?: string[];
   topDrink?: string | null;
+  statusLabel?: string;
 }
 
 export function CaptureReviewScreen({
@@ -31,6 +32,7 @@ export function CaptureReviewScreen({
   analysisMessage,
   detectedDrinks = [],
   topDrink,
+  statusLabel,
 }: CaptureReviewScreenProps) {
   const router = useRouter();
   const { t } = useLanguage();
@@ -75,8 +77,18 @@ export function CaptureReviewScreen({
     icon?: string;
   } = isBeerFinished ? BadgeThemes.mojito : BadgeThemes.stout;
   const accentColor = isBeerFinished ? Colors.light.tint : '#8a6a52';
-  const title = isBeerFinished ? t('reviewSuccessTitle') : t('reviewFailTitle');
-  const message = isBeerFinished ? t('reviewSuccessMsg') : t('reviewFailMsg');
+  const isUncertain = statusLabel === 'drink_uncertain';
+  const title = isBeerFinished
+    ? t('reviewSuccessTitle')
+    : isUncertain
+      ? (analysisHeadline ?? 'Almost there')
+      : t('reviewFailTitle');
+  const message = isBeerFinished
+    ? t('reviewSuccessMsg')
+    : isUncertain
+      ? (analysisMessage ??
+          'We could not confirm the drink clearly. Try again with better light and keep the container fully visible.')
+      : t('reviewFailMsg');
   const eventHint = isBeerFinished ? t('reviewSuccessHint') : t('reviewFailHint');
   const nextText = isBeerFinished ? t('reviewNextSuccessText') : t('reviewNextFailText');
   const hasAnalysis = Boolean(analysisHeadline || analysisMessage || detectedDrinks.length || topDrink);
