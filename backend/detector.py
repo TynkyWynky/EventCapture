@@ -49,6 +49,7 @@ class DetectionBatchResult:
     detections: list[Detection]
     debug_regions: DebugRegions
     session_state: DetectorSessionState
+    debug_trace: dict[str, object] = field(default_factory=dict)
 
 
 DRINK_COCO_CLASSES = {
@@ -94,6 +95,12 @@ SUPPORTED_DRINK_TYPES = {
 SOFT_DRINK_BRANDS = ("coca cola", "coca-cola", "coke", "fanta", "sprite", "pepsi", "7up")
 ENERGY_DRINK_BRANDS = ("red bull", "monster", "burn", "rockstar")
 NON_BEVERAGE_CAN_KEYWORDS = ("spray", "aerosol", "paint", "trash", "garbage", "food can", "tin food")
+LABEL_COLOR_RANGES = {
+    "red": ((0, 100, 60), (10, 255, 255), (170, 100, 60), (180, 255, 255)),
+    "orange": ((10, 95, 65), (24, 255, 255)),
+    "blue": ((92, 80, 60), (135, 255, 255)),
+    "green": ((35, 75, 60), (90, 255, 255)),
+}
 
 
 def _slugify_label(label: str) -> str:
@@ -203,7 +210,10 @@ class DrinkDetector:
             imgsz=960,
         )
         detections = self._merge_drink_detections(detections, fallback_detections)
-        detections = self._merge_drink_detections(detections, self._detect_beverage_can_candidates(frame))
+        contour_candidates, contour_candidate_debug = self._detect_beverage_can_candidates(frame, include_debug=True)
+        detections = self._merge_drink_detections(detections, contour_candidates)
+        color_candidates, color_candidate_debug = self._detect_color_label_beverage_candidates(frame, include_debug=True)
+        detections = self._merge_drink_detections(detections, color_candidates)
 
         if not persons:
             persons = self._detect_persons(frame, person_conf_threshold=0.08)
@@ -270,6 +280,19 @@ class DrinkDetector:
                 drinking_tracks=updated_tracks,
                 smoothed_head_bbox=smoothed_head_bbox,
             ),
+            debug_trace={
+                "contour_candidates": contour_candidate_debug,
+                "color_candidates": color_candidate_debug,
+                "fallback_drinks": [
+                    {
+                        "label": det.label,
+                        "drink_type": det.drink_type,
+                        "confidence": round(det.confidence, 3),
+                        "bbox": list(det.bbox),
+                    }
+                    for det in fallback_detections
+                ],
+            },
         )
 
     def annotate_frame(
@@ -460,7 +483,12 @@ class DrinkDetector:
 
         return detections
 
-    def _detect_beverage_can_candidates(self, frame: np.ndarray) -> list[Detection]:
+    def _detect_beverage_can_candidates(
+        self,
+        frame: np.ndarray,
+        *,
+        include_debug: bool = False,
+    ) -> list[Detection] | tuple[list[Detection], list[dict[str, object]]]:
         frame_h, frame_w = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -468,6 +496,7 @@ class DrinkDetector:
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         candidates: list[Detection] = []
+        candidate_debug: list[dict[str, object]] = []
         for contour in contours:
             area = cv2.contourArea(contour)
             if area <= 0:
@@ -494,7 +523,8 @@ class DrinkDetector:
                 continue
             if center_offset_x > 0.78 or center_offset_y > 0.82:
                 continue
-            if not self._looks_like_beverage_container(frame, bbox):
+            evidence = self._collect_beverage_container_evidence(frame, bbox)
+            if not evidence["beverage_like"]:
                 continue
 
             confidence = min(
@@ -504,6 +534,19 @@ class DrinkDetector:
                 + min(aspect_ratio / 3.0, 1.0) * 0.14
                 + (1.0 - min(center_offset_x, 1.0)) * 0.08
                 + (1.0 - min(center_offset_y, 1.0)) * 0.05,
+            )
+            candidate_debug.append(
+                {
+                    "source": "contour",
+                    "bbox": list(bbox),
+                    "confidence": round(float(confidence), 3),
+                    "area_ratio": round(float(area_ratio), 4),
+                    "rect_fill": round(float(rect_fill), 3),
+                    "aspect_ratio": round(float(aspect_ratio), 3),
+                    "center_offset_x": round(float(center_offset_x), 3),
+                    "center_offset_y": round(float(center_offset_y), 3),
+                    "evidence": evidence,
+                }
             )
             rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
             candidates.append(
@@ -517,7 +560,113 @@ class DrinkDetector:
                 )
             )
 
-        return self._merge_drink_detections([], candidates)
+        merged = self._merge_drink_detections([], candidates)
+        if include_debug:
+            return merged, candidate_debug
+        return merged
+
+    def _detect_color_label_beverage_candidates(
+        self,
+        frame: np.ndarray,
+        *,
+        include_debug: bool = False,
+    ) -> list[Detection] | tuple[list[Detection], list[dict[str, object]]]:
+        frame_h, frame_w = frame.shape[:2]
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        frame_area = max(1.0, float(frame_h * frame_w))
+        candidates: list[Detection] = []
+        candidate_debug: list[dict[str, object]] = []
+
+        for color_name, ranges in LABEL_COLOR_RANGES.items():
+            mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
+            for index in range(0, len(ranges), 2):
+                lower = np.array(ranges[index], dtype=np.uint8)
+                upper = np.array(ranges[index + 1], dtype=np.uint8)
+                mask = cv2.bitwise_or(mask, cv2.inRange(hsv, lower, upper))
+
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((7, 7), np.uint8), iterations=2)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8), iterations=1)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if area <= frame_area * 0.0018:
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                bbox = (int(x), int(y), int(x + w), int(y + h))
+                if not self._is_reasonable_drink_bbox(frame, bbox):
+                    continue
+
+                bbox_area_ratio = (w * h) / frame_area
+                component_fill = area / max(1.0, w * h)
+                aspect_ratio = h / max(1.0, w)
+                center_x = x + w / 2
+                center_y = y + h / 2
+                center_offset_x = abs(center_x - frame_w / 2) / max(1.0, frame_w / 2)
+                center_offset_y = abs(center_y - frame_h / 2) / max(1.0, frame_h / 2)
+                if not (0.008 <= bbox_area_ratio <= 0.18):
+                    continue
+                if not (1.15 <= aspect_ratio <= 4.8):
+                    continue
+                if not (0.18 <= component_fill <= 0.92):
+                    continue
+                if center_offset_x > 0.78 or center_offset_y > 0.84:
+                    continue
+
+                evidence = self._collect_beverage_container_evidence(frame, bbox, color_mask=mask[y : y + h, x : x + w])
+                if not evidence["beverage_like"]:
+                    continue
+
+                if color_name in {"red", "orange"}:
+                    label = "soda can"
+                    drink_type = "Soft Drink Can"
+                elif color_name == "blue":
+                    label = "energy drink can"
+                    drink_type = "Energy Drink Can"
+                else:
+                    label = "beverage can"
+                    drink_type = "Beverage Can"
+
+                confidence = min(
+                    0.94,
+                    0.42
+                    + float(evidence["score"]) * 0.44
+                    + component_fill * 0.08
+                    + (1.0 - min(center_offset_x, 1.0)) * 0.05
+                    + (1.0 - min(center_offset_y, 1.0)) * 0.03,
+                )
+                candidate_debug.append(
+                    {
+                        "source": "color_label",
+                        "color": color_name,
+                        "bbox": list(bbox),
+                        "label": label,
+                        "confidence": round(float(confidence), 3),
+                        "bbox_area_ratio": round(float(bbox_area_ratio), 4),
+                        "component_fill": round(float(component_fill), 3),
+                        "aspect_ratio": round(float(aspect_ratio), 3),
+                        "center_offset_x": round(float(center_offset_x), 3),
+                        "center_offset_y": round(float(center_offset_y), 3),
+                        "evidence": evidence,
+                    }
+                )
+                rotation_degrees, rotated_bbox = self._estimate_drink_pose(frame, bbox)
+                candidates.append(
+                    Detection(
+                        label=label,
+                        confidence=float(confidence),
+                        bbox=bbox,
+                        drink_type=drink_type,
+                        rotation_degrees=rotation_degrees,
+                        rotated_bbox=rotated_bbox,
+                    )
+                )
+
+        merged = self._merge_drink_detections([], candidates)
+        if include_debug:
+            return merged, candidate_debug
+        return merged
 
     def _rotate_frame(self, frame: np.ndarray, orientation: str) -> np.ndarray:
         if orientation == "rot90_cw":
@@ -654,6 +803,15 @@ class DrinkDetector:
         )
 
     def _looks_like_beverage_container(self, frame: np.ndarray, bbox: BBox) -> bool:
+        return bool(self._collect_beverage_container_evidence(frame, bbox)["beverage_like"])
+
+    def _collect_beverage_container_evidence(
+        self,
+        frame: np.ndarray,
+        bbox: BBox,
+        *,
+        color_mask: np.ndarray | None = None,
+    ) -> dict[str, object]:
         x1, y1, x2, y2 = bbox
         frame_h, frame_w = frame.shape[:2]
         x1 = max(0, min(x1, frame_w - 1))
@@ -667,6 +825,7 @@ class DrinkDetector:
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
         saturation = hsv[:, :, 1]
         value = hsv[:, :, 2]
+        hue = hsv[:, :, 0]
         mean_saturation = float(np.mean(saturation))
         std_saturation = float(np.std(saturation))
         mean_value = float(np.mean(value))
@@ -674,11 +833,63 @@ class DrinkDetector:
         aspect_ratio = (y2 - y1) / max(1.0, (x2 - x1))
         bright_pixels = float(np.mean(value >= 150))
         saturated_pixels = float(np.mean(saturation >= 70))
+        red_ratio = float(np.mean(((hue <= 10) | (hue >= 170)) & (saturation >= 90) & (value >= 60)))
+        orange_ratio = float(np.mean((hue >= 10) & (hue <= 24) & (saturation >= 90) & (value >= 65)))
+        blue_ratio = float(np.mean((hue >= 92) & (hue <= 135) & (saturation >= 75) & (value >= 60)))
+        green_ratio = float(np.mean((hue >= 35) & (hue <= 90) & (saturation >= 75) & (value >= 60)))
+        silver_ratio = float(np.mean((saturation <= 55) & (value >= 130)))
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        edge_density = float(np.mean(cv2.Canny(gray, 60, 160) > 0))
+        top_band = crop[: max(1, crop.shape[0] // 6), :]
+        bottom_band = crop[max(0, crop.shape[0] - max(1, crop.shape[0] // 6)) :, :]
+        top_hsv = cv2.cvtColor(top_band, cv2.COLOR_BGR2HSV)
+        bottom_hsv = cv2.cvtColor(bottom_band, cv2.COLOR_BGR2HSV)
+        top_silver_ratio = float(np.mean((top_hsv[:, :, 1] <= 60) & (top_hsv[:, :, 2] >= 135)))
+        bottom_silver_ratio = float(np.mean((bottom_hsv[:, :, 1] <= 60) & (bottom_hsv[:, :, 2] >= 135)))
+        color_fill_ratio = float(np.mean(color_mask > 0)) if color_mask is not None and color_mask.size else 0.0
 
-        colorful_label = mean_saturation >= 24 or std_saturation >= 18 or saturated_pixels >= 0.16
-        readable_surface = mean_value >= 40 and std_value >= 14 and bright_pixels >= 0.08
-        container_shape = 0.9 <= aspect_ratio <= 4.2
-        return container_shape and readable_surface and colorful_label
+        dominant_label_ratio = max(red_ratio, orange_ratio, blue_ratio, green_ratio)
+        rim_signal = max(top_silver_ratio, bottom_silver_ratio, silver_ratio * 0.7)
+        shape_ok = 1.0 if 1.05 <= aspect_ratio <= 4.6 else 0.0
+        readable_surface = mean_value >= 42 and std_value >= 14 and bright_pixels >= 0.08
+        colorful_label = dominant_label_ratio >= 0.08 or mean_saturation >= 24 or std_saturation >= 18 or saturated_pixels >= 0.16
+        score = (
+            min(max((aspect_ratio - 0.95) / 2.2, 0.0), 1.0) * 0.14
+            + min(dominant_label_ratio / 0.24, 1.0) * 0.22
+            + min(edge_density / 0.09, 1.0) * 0.16
+            + min(std_value / 36.0, 1.0) * 0.12
+            + min(std_saturation / 42.0, 1.0) * 0.1
+            + min(bright_pixels / 0.42, 1.0) * 0.08
+            + min(rim_signal / 0.18, 1.0) * 0.1
+            + min(color_fill_ratio / 0.42, 1.0) * 0.08
+        )
+        if not shape_ok:
+            score -= 0.14
+        if not readable_surface:
+            score -= 0.08
+        if not colorful_label:
+            score -= 0.08
+        beverage_like = shape_ok > 0 and readable_surface and colorful_label and score >= 0.5
+        return {
+            "aspect_ratio": round(float(aspect_ratio), 3),
+            "mean_saturation": round(mean_saturation, 2),
+            "std_saturation": round(std_saturation, 2),
+            "mean_value": round(mean_value, 2),
+            "std_value": round(std_value, 2),
+            "bright_pixels": round(bright_pixels, 3),
+            "saturated_pixels": round(saturated_pixels, 3),
+            "red_ratio": round(red_ratio, 3),
+            "orange_ratio": round(orange_ratio, 3),
+            "blue_ratio": round(blue_ratio, 3),
+            "green_ratio": round(green_ratio, 3),
+            "silver_ratio": round(silver_ratio, 3),
+            "edge_density": round(edge_density, 3),
+            "top_silver_ratio": round(top_silver_ratio, 3),
+            "bottom_silver_ratio": round(bottom_silver_ratio, 3),
+            "color_fill_ratio": round(color_fill_ratio, 3),
+            "score": round(float(max(0.0, min(score, 1.0))), 3),
+            "beverage_like": beverage_like,
+        }
 
     def _dedupe_boxes(self, boxes: list[BBox]) -> list[BBox]:
         deduped: list[BBox] = []
@@ -702,7 +913,7 @@ class DrinkDetector:
         for candidate in secondary:
             duplicate_idx = None
             for idx, existing in enumerate(merged):
-                if existing.label != candidate.label:
+                if not self._are_compatible_drink_labels(existing.label, candidate.label):
                     continue
                 if self._bbox_iou(existing.bbox, candidate.bbox) >= 0.45:
                     duplicate_idx = idx
@@ -716,6 +927,20 @@ class DrinkDetector:
                 merged[duplicate_idx] = candidate
 
         return merged
+
+    def _are_compatible_drink_labels(self, left: str, right: str) -> bool:
+        if left == right:
+            return True
+
+        left_normalized = _slugify_label(left)
+        right_normalized = _slugify_label(right)
+        left_can = "can" in left_normalized
+        right_can = "can" in right_normalized
+        if left_can and right_can:
+            return True
+        left_bottle = "bottle" in left_normalized
+        right_bottle = "bottle" in right_normalized
+        return left_bottle and right_bottle
 
     def _get_head_bbox(self, person_bbox: BBox) -> BBox:
         px1, py1, px2, py2 = person_bbox

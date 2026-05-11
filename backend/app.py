@@ -712,7 +712,8 @@ def _run_image_analysis(
 
     if settings.environment != "production":
         logger.info(
-            "capture_detection backend_called detections=%s summary=%s",
+            "capture_detection backend_called frame_shape=%s detections=%s summary=%s candidate_debug=%s",
+            tuple(int(value) for value in frame.shape[:2]),
             [
                 {
                     "label": det.label,
@@ -729,6 +730,7 @@ def _run_image_analysis(
                 "top_confidence": response_summary.top_confidence,
                 "crown_eligible": response_summary.crown_eligible,
             },
+            batch.debug_trace,
         )
 
     return {
@@ -1479,6 +1481,15 @@ async def analyze_and_store_capture(
     if frame is None:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="Invalid image.")
 
+    if settings.environment != "production":
+        logger.info(
+            "capture_detection request content_type=%s bytes=%s frame_shape=%s event_id=%s",
+            file.content_type,
+            len(contents),
+            tuple(int(value) for value in frame.shape[:2]),
+            event_id.strip() if event_id else None,
+        )
+
     analysis = await _run_image_analysis_async(frame)
     await asyncio.to_thread(
         _save_debug_artifacts,
@@ -2043,6 +2054,10 @@ async def create_post(
         rewards_before = await asyncio.to_thread(get_rewards_summary, str(current_user["id"]))
         post = await asyncio.to_thread(upsert_post, dict(payload), str(current_user["id"]))
         rewards_after = await asyncio.to_thread(get_rewards_summary, str(current_user["id"]))
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except KeyError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User profile not found.") from error
     except PermissionError as error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
     post["crown_count"] = int(rewards_after["crown_count"])

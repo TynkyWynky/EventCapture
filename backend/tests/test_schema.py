@@ -60,6 +60,19 @@ class SchemaMigrationTests(unittest.TestCase):
                         updated_at TEXT
                     );
 
+                    CREATE TABLE posts (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        image_uri TEXT NOT NULL,
+                        date TEXT NOT NULL,
+                        is_beer_finished INTEGER NOT NULL DEFAULT 0,
+                        event_id TEXT,
+                        event_title TEXT,
+                        capture_id TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+
                     CREATE TABLE event_comments (
                         id TEXT PRIMARY KEY,
                         event_id TEXT NOT NULL,
@@ -116,13 +129,18 @@ class SchemaMigrationTests(unittest.TestCase):
                 support_request_columns = {
                     row[1] for row in connection.execute("PRAGMA table_info(support_requests)").fetchall()
                 }
+                post_columns = {
+                    row[1] for row in connection.execute("PRAGMA table_info(posts)").fetchall()
+                }
                 alembic_revision = connection.execute("SELECT version_num FROM alembic_version").fetchone()
             finally:
                 connection.close()
 
             self.assertIn("time_label", event_comment_columns)
             self.assertIn("priority", support_request_columns)
-            self.assertEqual(alembic_revision[0], "20260511_0003")
+            self.assertIn("username", post_columns)
+            self.assertIn("avatar_uri", post_columns)
+            self.assertEqual(alembic_revision[0], "20260511_0004")
 
 
 if __name__ == "__main__":

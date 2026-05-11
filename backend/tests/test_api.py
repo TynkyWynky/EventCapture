@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import socket
 import subprocess
 import tempfile
@@ -107,6 +108,72 @@ class EventCaptureApiTests(unittest.TestCase):
         except urllib.error.HTTPError as error:
             content = error.read().decode("utf-8")
             return error.code, json.loads(content) if content else {}
+
+    def execute_sql(self, sql: str, parameters: tuple[object, ...] = ()) -> None:
+        db_path = Path(self.base_server_env["EVENTCAPTURE_DATABASE_PATH"])
+        connection = sqlite3.connect(db_path)
+        try:
+            connection.execute(sql, parameters)
+            connection.commit()
+        finally:
+            connection.close()
+
+    def seed_capture(
+        self,
+        *,
+        capture_id: str,
+        user_id: str,
+        username: str = "captureowner",
+        crown_eligible: bool = True,
+    ) -> None:
+        self.execute_sql(
+            """
+            INSERT INTO captures (
+                id,
+                user_id,
+                username,
+                event_id,
+                event_title,
+                original_media_path,
+                annotated_media_path,
+                status_label,
+                headline,
+                message,
+                has_detections,
+                has_drinking_action,
+                contains_beer,
+                crown_eligible,
+                drink_count,
+                drink_types_json,
+                top_drink,
+                top_confidence,
+                source,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                capture_id,
+                user_id,
+                username,
+                None,
+                None,
+                "file://capture-original.jpg",
+                "file://capture-annotated.jpg",
+                "drink_detected" if crown_eligible else "drink_uncertain",
+                "Drink detected" if crown_eligible else "Almost there",
+                "Seeded capture for API tests.",
+                1,
+                1,
+                1,
+                1 if crown_eligible else 0,
+                1,
+                json.dumps(["beverage can"]),
+                "beverage can",
+                0.94 if crown_eligible else 0.55,
+                "test",
+                "2026-05-11T10:00:00+00:00",
+            ),
+        )
 
     def websocket_url(self, path: str, token: str | None = None) -> str:
         suffix = f"{path}?token={token}" if token else path
@@ -380,6 +447,8 @@ class EventCaptureApiTests(unittest.TestCase):
             token=owner["token"],
         )
         self.assertEqual(status, 403)
+
+        self.seed_capture(capture_id="capture-reward-1", user_id=owner["user_id"], username="rewardowner")
 
         status, post_payload = self.api_request(
             "POST",
@@ -755,7 +824,34 @@ class EventCaptureApiTests(unittest.TestCase):
             },
             token=alice["token"],
         )
+        self.assertEqual(status, 403, post_payload)
+        self.assertEqual(post_payload["detail"], "You can only post captures to events you marked as going.")
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/plan",
+            {"status": "going"},
+            token=alice["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+        self.assertEqual(plan_payload["plan_status"], "going")
+
+        status, post_payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/post.jpg",
+                "date": "10/10/2026",
+                "is_beer_finished": True,
+                "event_id": event_id,
+                "event_title": "API Test Event",
+                "likes": [],
+                "comments": [],
+            },
+            token=alice["token"],
+        )
         self.assertEqual(status, 200, post_payload)
+        self.assertEqual(post_payload["user"]["username"], "owner")
         post_id = post_payload["id"]
 
         status, like_payload = self.api_request(
@@ -785,6 +881,245 @@ class EventCaptureApiTests(unittest.TestCase):
         status, posts_payload = self.api_request("GET", "/api/posts")
         self.assertEqual(status, 200, posts_payload)
         self.assertFalse(any(post["id"] == post_id for post in posts_payload))
+
+    def test_post_creation_derives_username_and_returns_safe_errors(self):
+        session = self.register_and_login("post-owner@example.com", "postowner")
+        other = self.register_and_login("post-other@example.com", "postother")
+
+        status, event_payload = self.api_request(
+            "POST",
+            "/api/events",
+            {
+                "title": "Seed Rooftop Session",
+                "short_title": "Seed Rooftop",
+                "date": "11 May",
+                "full_date": "Monday 11 May 2026",
+                "time": "20:00 - 23:00",
+                "place": "Brussels",
+                "address": "Seed Rooftop",
+                "attendees": "0 going",
+                "attendee_count": 0,
+                "price": "Free",
+                "price_label": "Free entry",
+                "vibe": "Rooftop",
+                "experience": "Capture event",
+                "hero_image": "https://example.com/event.jpg",
+                "host_name": "Host",
+                "host_avatar": "https://example.com/host.jpg",
+                "badge": "TEST",
+                "description": "Created during post tests.",
+                "tags": ["test"],
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, event_payload)
+        event_id = event_payload["id"]
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/plan",
+            {"status": "going"},
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+
+        self.seed_capture(capture_id="capture-post-owner-1", user_id=session["user_id"], username="postowner")
+        self.seed_capture(capture_id="capture-post-other-1", user_id=other["user_id"], username="postother")
+        self.seed_capture(
+            capture_id="capture-post-uncertain-1",
+            user_id=session["user_id"],
+            username="postowner",
+            crown_eligible=False,
+        )
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/capture-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": True,
+                "event_id": event_id,
+                "event_title": "Seed Rooftop Session",
+                "capture_id": "capture-post-owner-1",
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["user"]["username"], "postowner")
+        self.assertEqual(payload["capture_id"], "capture-post-owner-1")
+        self.assertEqual(payload["event_id"], event_id)
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/plan",
+            {"status": "maybe"},
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+        self.assertEqual(plan_payload["plan_status"], "maybe")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/not-going-anymore-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+                "event_id": event_id,
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 403, payload)
+        self.assertEqual(payload["detail"], "You can only post captures to events you marked as going.")
+
+        status, plan_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/plan",
+            {"status": "going"},
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, plan_payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/non-going-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+                "event_id": event_id,
+            },
+            token=other["token"],
+        )
+        self.assertEqual(status, 403, payload)
+        self.assertEqual(payload["detail"], "You can only post captures to events you marked as going.")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/saved-only-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+                "event_id": event_id,
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 200, payload)
+
+        status, save_payload = self.api_request(
+            "POST",
+            f"/api/events/{event_id}/save-toggle",
+            body={},
+            token=other["token"],
+        )
+        self.assertEqual(status, 200, save_payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/saved-only-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+                "event_id": event_id,
+            },
+            token=other["token"],
+        )
+        self.assertEqual(status, 403, payload)
+        self.assertEqual(payload["detail"], "You can only post captures to events you marked as going.")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/invalid-event-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+                "event_id": "missing-event",
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 400, payload)
+        self.assertEqual(payload["detail"], "Event not found.")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "date": "11/05/2026",
+                "is_beer_finished": True,
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 400, payload)
+        self.assertIn("image_uri", payload["detail"])
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/no-auth-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+            },
+        )
+        self.assertEqual(status, 401, payload)
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/foreign-capture-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": True,
+                "capture_id": "capture-post-other-1",
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 403, payload)
+        self.assertEqual(payload["detail"], "You can only post your own captures.")
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/uncertain-capture-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": True,
+                "capture_id": "capture-post-uncertain-1",
+            },
+            token=session["token"],
+        )
+        self.assertEqual(status, 403, payload)
+        self.assertEqual(payload["detail"], "Only validated captures can be posted as reward-eligible.")
+
+        fallback_session = self.register_and_login("fallback-owner@example.com", "fallbackowner")
+        self.execute_sql(
+            "UPDATE users SET username = '', full_name = 'Fallback Person' WHERE id = ?",
+            (fallback_session["user_id"],),
+        )
+        self.seed_capture(
+            capture_id="capture-fallback-post-1",
+            user_id=fallback_session["user_id"],
+            username="fallbackowner",
+            crown_eligible=False,
+        )
+
+        status, payload = self.api_request(
+            "POST",
+            "/api/posts",
+            {
+                "image_uri": "https://example.com/fallback-post.jpg",
+                "date": "11/05/2026",
+                "is_beer_finished": False,
+                "capture_id": "capture-fallback-post-1",
+            },
+            token=fallback_session["token"],
+        )
+        self.assertEqual(status, 200, payload)
+        self.assertEqual(payload["user"]["username"], "Fallback Person")
 
     def test_friendship_search_requests_accept_decline_and_remove(self):
         alice = self.register_and_login("friends-alice@example.com", "friendsalice")
@@ -942,6 +1277,10 @@ class EventCaptureApiTests(unittest.TestCase):
             token=member["token"],
         )
         self.assertEqual(status, 403, payload)
+
+        self.seed_capture(capture_id="group-capture-owner-1", user_id=owner["user_id"], username="groupowner")
+        self.seed_capture(capture_id="group-capture-owner-2", user_id=owner["user_id"], username="groupowner")
+        self.seed_capture(capture_id="group-capture-member-1", user_id=member["user_id"], username="groupmember")
 
         status, payload = self.api_request(
             "POST",

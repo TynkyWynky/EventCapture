@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+
+import cv2
+import numpy as np
 
 try:
     from backend.api_utils import build_analysis_summary
-    from backend.detector import Detection, normalize_supported_drink_label
+    from backend.detector import Detection, DrinkDetector, normalize_supported_drink_label
 except ImportError:
     from api_utils import build_analysis_summary
-    from detector import Detection, normalize_supported_drink_label
+    from detector import Detection, DrinkDetector, normalize_supported_drink_label
 
 
 class DrinkDetectionRuleTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture_dir = Path(__file__).resolve().parent / "fixtures"
+        self.detector = DrinkDetector.__new__(DrinkDetector)
+
     def test_normalize_supported_drink_label_accepts_beverage_cans(self):
         accepted_cases = {
             "coca-cola can": ("soda can", "Soft Drink Can"),
@@ -83,6 +91,27 @@ class DrinkDetectionRuleTests(unittest.TestCase):
         self.assertFalse(summary.crown_eligible)
         self.assertEqual(summary.headline, "No drink detected")
         self.assertIn("beverage can", summary.message.lower())
+
+    def test_color_label_fallback_detects_real_cola_can_fixture(self):
+        frame = cv2.imread(str(self.fixture_dir / "cola_can_real.jpg"))
+        self.assertIsNotNone(frame)
+
+        detections = self.detector._detect_color_label_beverage_candidates(frame)
+        self.assertTrue(detections)
+        top_detection = max(detections, key=lambda det: det.confidence)
+        self.assertIn(top_detection.label, {"soda can", "beverage can", "cola can"})
+        self.assertGreaterEqual(top_detection.confidence, 0.75)
+
+        summary = build_analysis_summary(detections)
+        self.assertEqual(summary.status_label, "drink_detected")
+        self.assertTrue(summary.crown_eligible)
+
+    def test_color_label_fallback_rejects_random_red_object(self):
+        frame = np.full((480, 640, 3), 245, dtype=np.uint8)
+        cv2.rectangle(frame, (290, 150), (360, 320), (25, 25, 220), thickness=-1)
+
+        detections = self.detector._detect_color_label_beverage_candidates(frame)
+        self.assertEqual(detections, [])
 
 
 if __name__ == "__main__":

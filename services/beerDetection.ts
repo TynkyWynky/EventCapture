@@ -1,4 +1,4 @@
-import { apiPostFormData } from '@/services/backendApi';
+import { apiPostFormData, getBackendApiBaseUrl, getBackendApiBaseUrlCandidates } from '@/services/backendApi';
 import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import jpeg from 'jpeg-js';
@@ -517,10 +517,22 @@ async function analyzeWithBackend(
   options: DrinkAnalysisRequestOptions
 ): Promise<DrinkAnalysisApiResponse> {
   const formData = await buildDetectionFormData(photoUri, options);
+  logDetectionDebug('backend-request', {
+    apiBaseUrl: getBackendApiBaseUrl(),
+    apiBaseUrlCandidates: getBackendApiBaseUrlCandidates(),
+    eventId: options.eventId?.trim() || null,
+    eventTitle: options.eventTitle?.trim() || null,
+  });
   const payload = await apiPostFormData<unknown>('/api/captures/analyze', formData);
   if (!isDrinkAnalysisApiResponse(payload)) {
     throw new Error(getErrorMessage(payload) ?? 'Detection response was missing expected fields.');
   }
+  logDetectionDebug('backend-response', {
+    source: payload.capture.source,
+    summary: payload.summary,
+    detections: payload.detections,
+    debug: payload.debug,
+  });
   return payload;
 }
 
@@ -550,6 +562,13 @@ export async function analyzeBeer(
   options: DrinkAnalysisRequestOptions = {}
 ): Promise<DrinkAnalysisResult> {
   const mode = getDetectionMode();
+  logDetectionDebug('start', {
+    mode,
+    apiBaseUrl: getBackendApiBaseUrl(),
+    apiBaseUrlCandidates: getBackendApiBaseUrlCandidates(),
+    eventId: options.eventId?.trim() || null,
+    eventTitle: options.eventTitle?.trim() || null,
+  });
 
   if (mode === 'local') {
     const result = normalizeResult(await analyzeLocally(photoUri, options));
@@ -604,19 +623,17 @@ export async function analyzeBeer(
       });
       if (!localResult.summary.has_detections) {
         throw new Error(
-          backendError instanceof Error
-            ? `Backend detection failed and local fallback was inconclusive: ${backendError.message}`
-            : 'Backend detection failed and local fallback was inconclusive.'
+          'We could not analyze the photo. Check your connection and try again.'
         );
       }
       return localResult;
     } catch (localError) {
+      logDetectionDebug('local-fallback-failed', {
+        backendError: backendError instanceof Error ? backendError.message : String(backendError),
+        localError: localError instanceof Error ? localError.message : String(localError),
+      });
       throw new Error(
-        localError instanceof Error
-          ? localError.message
-          : backendError instanceof Error
-            ? backendError.message
-            : 'Detection request failed.'
+        'We could not analyze the photo. Check your connection and try again.'
       );
     }
   }

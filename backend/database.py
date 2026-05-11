@@ -142,6 +142,8 @@ class Post(Base):
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    username: Mapped[str] = mapped_column(String(64), default="EventCapture user")
+    avatar_uri: Mapped[str] = mapped_column(Text, default="")
     image_uri: Mapped[str] = mapped_column(Text)
     date: Mapped[str] = mapped_column(String(64))
     is_beer_finished: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -604,6 +606,46 @@ def _run_schema_upgrades() -> None:
         if capture_columns and "user_id" not in capture_columns:
             connection.execute(text("ALTER TABLE captures ADD COLUMN user_id TEXT"))
 
+        post_columns = {
+            row[1]
+            for row in connection.execute(text("PRAGMA table_info(posts)"))
+        }
+        if post_columns:
+            if "username" not in post_columns:
+                connection.execute(
+                    text("ALTER TABLE posts ADD COLUMN username TEXT NOT NULL DEFAULT 'EventCapture user'")
+                )
+            if "avatar_uri" not in post_columns:
+                connection.execute(
+                    text("ALTER TABLE posts ADD COLUMN avatar_uri TEXT NOT NULL DEFAULT ''")
+                )
+            connection.execute(
+                text(
+                    """
+                    UPDATE posts
+                    SET username = COALESCE(
+                        NULLIF(TRIM((SELECT users.username FROM users WHERE users.id = posts.user_id)), ''),
+                        NULLIF(TRIM((SELECT users.full_name FROM users WHERE users.id = posts.user_id)), ''),
+                        NULLIF(TRIM((SELECT users.email FROM users WHERE users.id = posts.user_id)), ''),
+                        'EventCapture user'
+                    )
+                    WHERE username IS NULL OR TRIM(username) = ''
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    UPDATE posts
+                    SET avatar_uri = COALESCE(
+                        (SELECT users.avatar_uri FROM users WHERE users.id = posts.user_id),
+                        ''
+                    )
+                    WHERE avatar_uri IS NULL
+                    """
+                )
+            )
+
         support_request_columns = {
             row[1]
             for row in connection.execute(text("PRAGMA table_info(support_requests)"))
@@ -799,13 +841,14 @@ def _serialize_event_social_state(
 
 
 def _serialize_post(post: Post) -> dict[str, object]:
+    user_payload = {
+        "id": post.user.id,
+        "username": post.user.username or post.username,
+        "avatar_uri": post.user.avatar_uri or post.avatar_uri,
+    }
     return {
         "id": post.id,
-        "user": {
-            "id": post.user.id,
-            "username": post.user.username,
-            "avatar_uri": post.user.avatar_uri,
-        },
+        "user": user_payload,
         "image_uri": post.image_uri,
         "date": post.date,
         "is_beer_finished": post.is_beer_finished,
@@ -879,6 +922,28 @@ def _serialize_support_request_note(note: SupportRequestNote) -> dict[str, objec
 
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def _resolve_post_display_username(user: User) -> str:
+    username = (user.username or "").strip()
+    if username:
+        return username
+
+    full_name = (user.full_name or "").strip()
+    if full_name:
+        return full_name
+
+    email = (user.email or "").strip().lower()
+    if email and "@" in email:
+        local_part = email.split("@", 1)[0].strip()
+        if local_part:
+            return local_part
+
+    return "EventCapture user"
+
+
+def _resolve_post_avatar_uri(user: User) -> str:
+    return _sanitize_avatar_uri(user.avatar_uri or "")
 
 
 def _friend_pair_key(user_a_id: str, user_b_id: str) -> str:
@@ -1730,6 +1795,46 @@ def _load_event_or_raise(session: Session, event_id: str) -> Event:
     return event
 
 
+def _normalize_optional_identifier(value: object) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
+def _load_post_event_for_user(session: Session, *, user_id: str, event_id: str | None) -> Event | None:
+    if event_id is None:
+        return None
+
+    try:
+        event = _load_event_or_raise(session, event_id)
+    except KeyError as error:
+        raise ValueError("Event not found.") from error
+
+    plan = session.get(EventPlan, {"event_id": event_id, "user_id": user_id})
+    plan_status = (plan.status or "").strip().lower() if plan is not None else ""
+    if plan_status != "going":
+        raise PermissionError("You can only post captures to events you marked as going.")
+
+    return event
+
+
+def _load_capture_for_post(session: Session, *, user_id: str, capture_id: str | None, is_reward_post: bool) -> Capture | None:
+    if capture_id is None:
+        return None
+
+    capture = session.get(Capture, capture_id)
+    if capture is None:
+        raise ValueError("Capture not found.")
+
+    capture_owner_id = (capture.user_id or "").strip()
+    if not capture_owner_id or capture_owner_id != user_id:
+        raise PermissionError("You can only post your own captures.")
+
+    if is_reward_post and not capture.crown_eligible:
+        raise PermissionError("Only validated captures can be posted as reward-eligible.")
+
+    return capture
+
+
 def _get_post(session: Session, post_id: str) -> Post:
     statement = (
         select(Post)
@@ -2400,34 +2505,63 @@ def list_posts() -> list[dict[str, object]]:
 
 
 def upsert_post(post: dict[str, object], acting_user_id: str) -> dict[str, object]:
+    image_uri = str(post.get("image_uri") or "").strip()
+    if not image_uri:
+        raise ValueError("Post image_uri is required.")
+
+    date_label = str(post.get("date") or "").strip()
+    if not date_label:
+        raise ValueError("Post date is required.")
+
     with session_scope() as session:
         user = _get_user(session, acting_user_id)
+        is_beer_finished = bool(post.get("is_beer_finished"))
+        event_id = _normalize_optional_identifier(post.get("event_id"))
+        capture_id = _normalize_optional_identifier(post.get("capture_id"))
+        validated_event = _load_post_event_for_user(session, user_id=user.id, event_id=event_id)
+        capture = _load_capture_for_post(
+            session,
+            user_id=user.id,
+            capture_id=capture_id,
+            is_reward_post=is_beer_finished,
+        )
         post_id = str(post.get("id") or "").strip() or _new_prefixed_id("post")
         record = _get_post_optional(session, post_id)
+        resolved_username = _resolve_post_display_username(user)
+        resolved_avatar_uri = _resolve_post_avatar_uri(user)
 
         if record is None:
-            record = Post(id=post_id, user_id=user.id)
+            record = Post(
+                id=post_id,
+                user_id=user.id,
+                username=resolved_username,
+                avatar_uri=resolved_avatar_uri,
+            )
             session.add(record)
         elif record.user_id != user.id and user.role != "admin":
             raise PermissionError("You do not have permission to edit this post.")
 
         record.user_id = user.id
-        record.image_uri = str(post["image_uri"])
-        record.date = str(post["date"])
-        record.is_beer_finished = bool(post["is_beer_finished"])
-        record.event_id = post.get("event_id")
-        record.event_title = post.get("event_title")
-        record.capture_id = post.get("capture_id")
+        record.username = resolved_username
+        record.avatar_uri = resolved_avatar_uri
+        record.image_uri = image_uri
+        record.date = date_label
+        record.is_beer_finished = is_beer_finished
+        record.event_id = event_id
+        record.event_title = validated_event.title if validated_event is not None else _normalize_optional_identifier(post.get("event_title"))
+        record.capture_id = capture_id
         record.updated_at = _utc_now()
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError as error:
+            logger.exception("Post insert/update failed for user %s", user.id)
+            raise ValueError("We could not save the post. Please refresh your account profile and try again.") from error
 
-        if record.capture_id:
-            capture = session.get(Capture, record.capture_id)
-            if capture is not None:
-                capture.user_id = user.id
-                capture.username = user.username
-                capture.event_id = record.event_id
-                capture.event_title = record.event_title
+        if capture is not None:
+            capture.user_id = user.id
+            capture.username = resolved_username
+            capture.event_id = record.event_id
+            capture.event_title = record.event_title
 
         session.flush()
         post_record = _get_post(session, record.id)
