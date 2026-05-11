@@ -4,6 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "start:go": "expo start --go",
+    "start:dev-client": "expo start --dev-client",
     "check": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/launch-dev.ps1 -CheckOnly",
     "start:all": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/launch-dev.ps1",
     "start:services": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/launch-dev.ps1",

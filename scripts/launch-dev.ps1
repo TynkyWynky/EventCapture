@@ -1,7 +1,8 @@
 param(
     [switch]$CheckOnly,
     [switch]$SkipFrontendInstall,
-    [switch]$SkipBackendInstall
+    [switch]$SkipBackendInstall,
+    [switch]$UseDevClient
 )
 
 $ErrorActionPreference = "Stop"
@@ -320,7 +321,9 @@ Invoke-Step "Stopping stale backend processes..." {
 $backendCommand = "Set-Location '$repoRoot'; & '$backendPython' -m uvicorn backend.app:app --host 0.0.0.0 --port 8000"
 $lanHost = Get-LanIPv4Address
 $frontendBackendUrl = if ($lanHost) { "http://${lanHost}:8000" } else { "http://localhost:8000" }
-$expoCommand = "Set-Location '$repoRoot'; `$env:EXPO_PUBLIC_BACKEND_API_URL='$frontendBackendUrl'; & '$npmCommand' start"
+$expoStartScript = if ($UseDevClient) { "start:dev-client" } else { "start:go" }
+$expoModeLabel = if ($UseDevClient) { "development build" } else { "Expo Go" }
+$expoCommand = "Set-Location '$repoRoot'; `$env:EXPO_PUBLIC_BACKEND_API_URL='$frontendBackendUrl'; & '$npmCommand' run $expoStartScript"
 
 Write-Host ""
 Write-Host "Starting backend in a new PowerShell window..." -ForegroundColor Cyan
@@ -332,8 +335,14 @@ Write-Host "Backend is healthy." -ForegroundColor Green
 
 Write-Host "Starting Expo in a new PowerShell window..." -ForegroundColor Cyan
 Write-Host "Expo will use backend URL: $frontendBackendUrl" -ForegroundColor DarkYellow
+Write-Host "Expo launch mode: $expoModeLabel" -ForegroundColor DarkYellow
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $expoCommand | Out-Null
 
 Write-Host ""
 Write-Host "Backend and Expo are running in separate windows." -ForegroundColor Green
+if (-not $UseDevClient) {
+    Write-Host "Scan the QR code with the Expo Go app on your phone." -ForegroundColor Yellow
+} else {
+    Write-Host "Scan the QR code with your installed development build." -ForegroundColor Yellow
+}
 Write-Host "Use .\scripts\launch-dev.ps1 -CheckOnly for a dry run." -ForegroundColor Yellow
